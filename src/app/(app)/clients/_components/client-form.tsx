@@ -1,9 +1,9 @@
 "use client"
 
-import { useTransition } from "react"
-import { useRouter } from "next/navigation"
-import { useForm } from "react-hook-form"
+import { useState, useTransition } from "react"
+import { useForm, type SubmitHandler } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
+import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import {
   ClientBusinessType,
@@ -11,8 +11,13 @@ import {
   ClientSize,
   ClientStatus,
   LeadSource,
+  PaymentTermType,
 } from "@prisma/client"
-
+import {
+  clientBaseSchema,
+  type ClientBaseInput,
+} from "@/lib/validators/client"
+import { createClient, updateClient } from "@/lib/actions/clients"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -24,13 +29,6 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
-import {
   Form,
   FormControl,
   FormDescription,
@@ -39,35 +37,48 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form"
-
 import {
-  clientBaseSchema,
-  type ClientBaseInput,
-} from "@/lib/validators/client"
-import { createClient, updateClient } from "@/lib/actions/clients"
-
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import {
   BUSINESS_TYPE_LABEL,
   CLIENT_SIZE_LABEL,
-  CLIENT_STATUS_LABEL,
   DISPLAY_PATTERN_LABEL,
+  JP_PREFECTURES,
   LEAD_SOURCE_LABEL,
+  PAYMENT_TERM_LABEL,
+  STATUS_LABEL,
 } from "./labels"
 
-type ClientFormProps =
+export type AssignableUser = {
+  id: string
+  name: string
+  email: string
+}
+
+type Props =
   | {
       mode: "create"
+      assignableUsers: AssignableUser[]
       defaultValues?: Partial<ClientBaseInput>
     }
   | {
       mode: "edit"
-      clientId: string
+      id: string
+      assignableUsers: AssignableUser[]
       defaultValues: ClientBaseInput
     }
 
-export function ClientForm(props: ClientFormProps) {
+const PAYMENT_TERMS = Object.keys(PaymentTermType) as Array<keyof typeof PaymentTermType>
+
+export function ClientForm(props: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [serverError, setServerError] = useState<string | null>(null)
 
   const form = useForm<ClientBaseInput>({
     resolver: zodResolver(clientBaseSchema) as never,
@@ -76,38 +87,74 @@ export function ClientForm(props: ClientFormProps) {
       companyName: "",
       legalEntity: "",
       businessType: ClientBusinessType.APPAREL_BRAND,
+      clientSize: undefined,
       country: "JP",
       phone: "",
       email: "",
       website: "",
+      postalCode: "",
+      prefecture: "",
+      city: "",
       address: "",
+      addressLine2: "",
+      useSeparateBillingAddress: false,
+      billingPostalCode: "",
+      billingPrefecture: "",
+      billingCity: "",
+      billingAddress: "",
+      billingAddressLine2: "",
+      useSeparateShippingAddress: false,
+      shippingPostalCode: "",
+      shippingPrefecture: "",
+      shippingCity: "",
+      shippingAddress: "",
+      shippingAddressLine2: "",
       displayPattern: ClientDisplayPattern.B,
+      leadSource: undefined,
       referrer: "",
+      paymentTermType: PaymentTermType.DEPOSIT_COD,
+      closingDay: undefined,
+      paymentDays: undefined,
+      depositRequired: true,
+      depositPercentage: 30,
+      assignedToUserId: "",
+      primaryContact: {
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        jobTitle: "",
+        department: "",
+      },
       status: ClientStatus.ACTIVE,
       notes: "",
       ...props.defaultValues,
     },
   })
 
-  function onSubmit(values: ClientBaseInput) {
-    startTransition(async () => {
-      const result =
-        props.mode === "create"
-          ? await createClient(values)
-          : await updateClient(props.clientId, values)
+  const useSeparateBilling = form.watch("useSeparateBillingAddress")
+  const useSeparateShipping = form.watch("useSeparateShippingAddress")
+  const paymentTermType = form.watch("paymentTermType")
 
+  const onSubmit: SubmitHandler<ClientBaseInput> = (data) => {
+    setServerError(null)
+    startTransition(async () => {
+      const action =
+        props.mode === "create"
+          ? () => createClient(data)
+          : () => updateClient(props.id, data)
+      const result = await action()
       if (!result.ok) {
-        toast.error(result.error)
+        setServerError(result.error)
         if (result.fieldErrors) {
-          Object.entries(result.fieldErrors).forEach(([name, messages]) => {
-            form.setError(name as keyof ClientBaseInput, {
-              message: messages?.[0] ?? "入力エラー",
-            })
-          })
+          for (const [k, msgs] of Object.entries(result.fieldErrors)) {
+            const msg = Array.isArray(msgs) ? msgs[0] : String(msgs)
+            form.setError(k as keyof ClientBaseInput, { message: msg })
+          }
         }
+        toast.error(result.error)
         return
       }
-
       toast.success(
         props.mode === "create"
           ? "クライアントを作成しました"
@@ -121,6 +168,12 @@ export function ClientForm(props: ClientFormProps) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {serverError && (
+          <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm text-destructive">
+            {serverError}
+          </div>
+        )}
+
         {/* 基本情報 */}
         <Card>
           <CardHeader>
@@ -134,7 +187,7 @@ export function ClientForm(props: ClientFormProps) {
                 <FormItem>
                   <FormLabel>クライアントコード *</FormLabel>
                   <FormControl>
-                    <Input placeholder="例: MARKA" {...field} />
+                    <Input placeholder="MARKA" {...field} />
                   </FormControl>
                   <FormDescription>英数字・ハイフン・アンダースコア</FormDescription>
                   <FormMessage />
@@ -148,7 +201,7 @@ export function ClientForm(props: ClientFormProps) {
                 <FormItem>
                   <FormLabel>会社名 *</FormLabel>
                   <FormControl>
-                    <Input placeholder="例: 株式会社マルカ" {...field} />
+                    <Input placeholder="株式会社マルカ" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -158,10 +211,10 @@ export function ClientForm(props: ClientFormProps) {
               control={form.control}
               name="legalEntity"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="md:col-span-2">
                   <FormLabel>法人格 / 正式名称</FormLabel>
                   <FormControl>
-                    <Input placeholder="例: MARKA Co., Ltd." {...field} />
+                    <Input placeholder="MARUKA Co., Ltd." {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -185,14 +238,12 @@ export function ClientForm(props: ClientFormProps) {
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="業態を選択" />
+                        <SelectValue />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.entries(BUSINESS_TYPE_LABEL).map(([v, label]) => (
-                        <SelectItem key={v} value={v}>
-                          {label}
-                        </SelectItem>
+                      {Object.entries(BUSINESS_TYPE_LABEL).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -207,19 +258,18 @@ export function ClientForm(props: ClientFormProps) {
                 <FormItem>
                   <FormLabel>規模</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    value={field.value ?? ""}
+                    onValueChange={(v) => field.onChange(v === "_none" ? undefined : v)}
+                    value={field.value ?? "_none"}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="規模を選択（任意）" />
+                        <SelectValue placeholder="規模を選択(任意)" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.entries(CLIENT_SIZE_LABEL).map(([v, label]) => (
-                        <SelectItem key={v} value={v}>
-                          {label}
-                        </SelectItem>
+                      <SelectItem value="_none">未選択</SelectItem>
+                      {Object.entries(CLIENT_SIZE_LABEL).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -230,10 +280,10 @@ export function ClientForm(props: ClientFormProps) {
           </CardContent>
         </Card>
 
-        {/* 連絡先 */}
+        {/* 連絡先・住所 */}
         <Card>
           <CardHeader>
-            <CardTitle>連絡先</CardTitle>
+            <CardTitle>連絡先・住所</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
@@ -243,19 +293,20 @@ export function ClientForm(props: ClientFormProps) {
                 <FormItem>
                   <FormLabel>国コード *</FormLabel>
                   <FormControl>
-                    <Input placeholder="JP" maxLength={2} {...field} />
+                    <Input maxLength={2} {...field} />
                   </FormControl>
-                  <FormDescription>ISO 3166-1 alpha-2（例: JP, US, CN, VN）</FormDescription>
+                  <FormDescription>ISO 3166-1 alpha-2(例: JP, US)</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            <div />
             <FormField
               control={form.control}
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>電話番号</FormLabel>
+                  <FormLabel>電話番号 *</FormLabel>
                   <FormControl>
                     <Input placeholder="03-1234-5678" {...field} />
                   </FormControl>
@@ -268,7 +319,7 @@ export function ClientForm(props: ClientFormProps) {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>メールアドレス</FormLabel>
+                  <FormLabel>メールアドレス *</FormLabel>
                   <FormControl>
                     <Input type="email" placeholder="info@example.com" {...field} />
                   </FormControl>
@@ -280,10 +331,60 @@ export function ClientForm(props: ClientFormProps) {
               control={form.control}
               name="website"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Webサイト</FormLabel>
+                <FormItem className="md:col-span-2">
+                  <FormLabel>Web サイト</FormLabel>
                   <FormControl>
-                    <Input type="url" placeholder="https://example.com" {...field} />
+                    <Input placeholder="https://example.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="postalCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>郵便番号 *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="150-0043" {...field} />
+                  </FormControl>
+                  <FormDescription>7桁(ハイフンの有無いずれも可)</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="prefecture"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>都道府県 *</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="都道府県を選択" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {JP_PREFECTURES.map((p) => (
+                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="city"
+              render={({ field }) => (
+                <FormItem className="md:col-span-2">
+                  <FormLabel>市区町村 *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="渋谷区道玄坂" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -294,14 +395,388 @@ export function ClientForm(props: ClientFormProps) {
               name="address"
               render={({ field }) => (
                 <FormItem className="md:col-span-2">
-                  <FormLabel>住所</FormLabel>
+                  <FormLabel>住所1(番地) *</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="〒XXX-XXXX 東京都..."
-                      rows={2}
-                      {...field}
-                    />
+                    <Input placeholder="1-22-10" {...field} />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="addressLine2"
+              render={({ field }) => (
+                <FormItem className="md:col-span-2">
+                  <FormLabel>住所2(建物名・部屋番号)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="見真ビル 1F" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        {/* 請求書発送先住所(任意) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>請求書発送先住所</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="useSeparateBillingAddress"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-3 space-y-0">
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <FormLabel className="!mt-0">マスター住所と別にする</FormLabel>
+                </FormItem>
+              )}
+            />
+            {useSeparateBilling && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="billingPostalCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>郵便番号 *</FormLabel>
+                      <FormControl><Input placeholder="150-0043" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="billingPrefecture"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>都道府県 *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="都道府県を選択" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          {JP_PREFECTURES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="billingCity"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>市区町村 *</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="billingAddress"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>住所1(番地) *</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="billingAddressLine2"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>住所2(建物名)</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 商品配送先住所(任意) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>商品配送先住所</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="useSeparateShippingAddress"
+              render={({ field }) => (
+                <FormItem className="flex items-center gap-3 space-y-0">
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                  <FormLabel className="!mt-0">マスター住所と別にする</FormLabel>
+                </FormItem>
+              )}
+            />
+            {useSeparateShipping && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="shippingPostalCode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>郵便番号 *</FormLabel>
+                      <FormControl><Input placeholder="150-0043" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="shippingPrefecture"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>都道府県 *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ""}>
+                        <FormControl><SelectTrigger><SelectValue placeholder="都道府県を選択" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          {JP_PREFECTURES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="shippingCity"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>市区町村 *</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="shippingAddress"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>住所1(番地) *</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="shippingAddressLine2"
+                  render={({ field }) => (
+                    <FormItem className="md:col-span-2">
+                      <FormLabel>住所2(建物名)</FormLabel>
+                      <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 取引条件 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>取引条件</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="paymentTermType"
+              render={({ field }) => (
+                <FormItem className="md:col-span-2">
+                  <FormLabel>支払条件 *</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      {PAYMENT_TERMS.map((k) => (
+                        <SelectItem key={k} value={k}>{PAYMENT_TERM_LABEL[k as PaymentTermType]}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>新規取引は「デポジット + COD」が推奨です</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {paymentTermType === PaymentTermType.MONTHLY_CLOSING && (
+              <>
+                <FormField
+                  control={form.control}
+                  name="closingDay"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>締め日 *</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number" min={1} max={31}
+                          placeholder="31"
+                          value={typeof field.value === "number" ? field.value : ""}
+                          onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormDescription>例: 月末 = 31</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="paymentDays"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>支払いサイト(日) *</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number" min={0} max={365}
+                          placeholder="30"
+                          value={typeof field.value === "number" ? field.value : ""}
+                          onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+                        />
+                      </FormControl>
+                      <FormDescription>締めから何日後の支払いか</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </>
+            )}
+            {paymentTermType === PaymentTermType.DEPOSIT_COD && (
+              <FormField
+                control={form.control}
+                name="depositPercentage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>デポジット比率 (%) *</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number" min={0} max={100} step="0.01"
+                        placeholder="30"
+                        value={typeof field.value === "number" ? field.value : ""}
+                        onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+                      />
+                    </FormControl>
+                    <FormDescription>新規取引のデフォルト 30 %</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* shunya 側担当者 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>shunya 側担当</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FormField
+              control={form.control}
+              name="assignedToUserId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>担当者 *</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="担当者を選択" /></SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {props.assignableUsers.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>{u.name}({u.email})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        {/* 先方担当者(主担当) */}
+        <Card>
+          <CardHeader>
+            <CardTitle>先方担当者(主担当)</CardTitle>
+          </CardHeader>
+          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="primaryContact.lastName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>姓 *</FormLabel>
+                  <FormControl><Input placeholder="山田" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="primaryContact.firstName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>名 *</FormLabel>
+                  <FormControl><Input placeholder="太郎" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="primaryContact.email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>メール *</FormLabel>
+                  <FormControl><Input type="email" placeholder="t.yamada@example.com" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="primaryContact.phone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>電話 *</FormLabel>
+                  <FormControl><Input placeholder="03-1234-5678" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="primaryContact.department"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>部署</FormLabel>
+                  <FormControl><Input placeholder="商品企画部" {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="primaryContact.jobTitle"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>役職</FormLabel>
+                  <FormControl><Input placeholder="ディレクター" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -314,7 +789,7 @@ export function ClientForm(props: ClientFormProps) {
           <CardHeader>
             <CardTitle>表示</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <CardContent>
             <FormField
               control={form.control}
               name="displayPattern"
@@ -323,15 +798,11 @@ export function ClientForm(props: ClientFormProps) {
                   <FormLabel>表示パターン *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="表示パターンを選択" />
-                      </SelectTrigger>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.entries(DISPLAY_PATTERN_LABEL).map(([v, label]) => (
-                        <SelectItem key={v} value={v}>
-                          {label}
-                        </SelectItem>
+                      {Object.entries(DISPLAY_PATTERN_LABEL).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -356,19 +827,18 @@ export function ClientForm(props: ClientFormProps) {
                 <FormItem>
                   <FormLabel>流入経路</FormLabel>
                   <Select
-                    onValueChange={field.onChange}
-                    value={field.value ?? ""}
+                    onValueChange={(v) => field.onChange(v === "_none" ? undefined : v)}
+                    value={field.value ?? "_none"}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="流入経路を選択（任意）" />
+                        <SelectValue placeholder="流入経路を選択(任意)" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {Object.entries(LEAD_SOURCE_LABEL).map(([v, label]) => (
-                        <SelectItem key={v} value={v}>
-                          {label}
-                        </SelectItem>
+                      <SelectItem value="_none">未選択</SelectItem>
+                      {Object.entries(LEAD_SOURCE_LABEL).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -405,16 +875,10 @@ export function ClientForm(props: ClientFormProps) {
                 <FormItem>
                   <FormLabel>ステータス *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="ステータスを選択" />
-                      </SelectTrigger>
-                    </FormControl>
+                    <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
                     <SelectContent>
-                      {Object.entries(CLIENT_STATUS_LABEL).map(([v, label]) => (
-                        <SelectItem key={v} value={v}>
-                          {label}
-                        </SelectItem>
+                      {Object.entries(STATUS_LABEL).map(([k, v]) => (
+                        <SelectItem key={k} value={k}>{v}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -429,11 +893,7 @@ export function ClientForm(props: ClientFormProps) {
                 <FormItem className="md:col-span-2">
                   <FormLabel>メモ</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="社内メモ（取引履歴、特殊条件など）"
-                      rows={4}
-                      {...field}
-                    />
+                    <Textarea rows={4} placeholder="社内メモ(取引履歴、特殊条件など)" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -442,8 +902,7 @@ export function ClientForm(props: ClientFormProps) {
           </CardContent>
         </Card>
 
-        {/* アクション */}
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex justify-end gap-3">
           <Button
             type="button"
             variant="outline"
@@ -453,11 +912,7 @@ export function ClientForm(props: ClientFormProps) {
             キャンセル
           </Button>
           <Button type="submit" disabled={isPending}>
-            {isPending
-              ? "保存中..."
-              : props.mode === "create"
-              ? "作成"
-              : "保存"}
+            {isPending ? "送信中..." : props.mode === "create" ? "作成" : "保存"}
           </Button>
         </div>
       </form>

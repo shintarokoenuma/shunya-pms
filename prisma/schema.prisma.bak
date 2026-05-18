@@ -307,26 +307,11 @@ model Client {
   country    String  @default("JP") @db.VarChar(2) // ISO 3166-1 alpha-2
   prefecture String? @db.VarChar(50)
   city       String? @db.VarChar(100)
-  address       String? @db.Text
-  addressLine2  String? @map("address_line2") @db.VarChar(255) // 建物名・部屋番号
-  phone         String? @db.VarChar(50)
-  fax           String? @db.VarChar(50)
-  email         String? @db.VarChar(255)
-  website       String? @db.VarChar(500)
-
-  // 請求書発送先住所（マスター住所と異なる場合のみ入力）
-  billingPostalCode    String? @map("billing_postal_code") @db.VarChar(20)
-  billingPrefecture    String? @map("billing_prefecture") @db.VarChar(50)
-  billingCity          String? @map("billing_city") @db.VarChar(100)
-  billingAddress       String? @map("billing_address") @db.Text
-  billingAddressLine2  String? @map("billing_address_line2") @db.VarChar(255)
-
-  // 商品配送先住所（マスター住所と異なる場合のみ入力）
-  shippingPostalCode   String? @map("shipping_postal_code") @db.VarChar(20)
-  shippingPrefecture   String? @map("shipping_prefecture") @db.VarChar(50)
-  shippingCity         String? @map("shipping_city") @db.VarChar(100)
-  shippingAddress      String? @map("shipping_address") @db.Text
-  shippingAddressLine2 String? @map("shipping_address_line2") @db.VarChar(255)
+  address    String? @db.Text
+  phone      String? @db.VarChar(50)
+  fax        String? @db.VarChar(50)
+  email      String? @db.VarChar(255)
+  website    String? @db.VarChar(500)
 
   // SNS
   instagram String? @db.VarChar(255)

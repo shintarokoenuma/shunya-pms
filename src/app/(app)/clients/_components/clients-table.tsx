@@ -15,8 +15,8 @@ import { Pencil } from "lucide-react"
 
 import {
   BUSINESS_TYPE_LABEL,
-  CLIENT_STATUS_LABEL,
-  CLIENT_STATUS_VARIANT,
+  STATUS_LABEL,
+  STATUS_BADGE_VARIANT,
 } from "./labels"
 import { ClientDeleteButton } from "./client-delete-button"
 
@@ -72,8 +72,8 @@ export function ClientsTable({ items }: Props) {
                 {c.country}
               </TableCell>
               <TableCell>
-                <Badge variant={CLIENT_STATUS_VARIANT[c.status]}>
-                  {CLIENT_STATUS_LABEL[c.status]}
+                <Badge variant={STATUS_BADGE_VARIANT[c.status]}>
+                  {STATUS_LABEL[c.status]}
                 </Badge>
               </TableCell>
               <TableCell className="text-right">
