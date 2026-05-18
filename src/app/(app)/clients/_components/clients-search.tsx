@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import {
   BUSINESS_TYPE_LABEL,
-  CLIENT_STATUS_LABEL,
+  STATUS_LABEL,
 } from "./labels"
 
 const ALL = "__all__"
@@ -95,7 +95,7 @@ export function ClientsSearch() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>全ステータス</SelectItem>
-            {Object.entries(CLIENT_STATUS_LABEL).map(([v, label]) => (
+            {Object.entries(STATUS_LABEL).map(([v, label]) => (
               <SelectItem key={v} value={v}>
                 {label}
               </SelectItem>

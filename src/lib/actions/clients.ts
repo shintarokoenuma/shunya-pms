@@ -5,6 +5,7 @@ import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { withTenantContext } from "@/lib/with-tenant"
 import { writeAuditLog } from "@/lib/audit-log"
+import { getEffectiveCompanyId } from "@/lib/tenant-context"
 import {
   createClientSchema,
   listClientsQuerySchema,
@@ -14,17 +15,56 @@ import {
   type UpdateClientInput,
 } from "@/lib/validators/client"
 
-// =============================================================================
-// 共通型：Server Action の結果
-// =============================================================================
-
 export type ActionResult<T> =
   | { ok: true; data: T }
   | { ok: false; error: string; fieldErrors?: Record<string, string[]> }
 
-// =============================================================================
-// 一覧取得
-// =============================================================================
+function normalizeForDb<T extends Record<string, unknown>>(data: T): T {
+  const result: Record<string, unknown> = { ...data }
+  const stringFields = [
+    "legalEntity",
+    "phone",
+    "email",
+    "website",
+    "address",
+    "addressLine2",
+    "billingPostalCode",
+    "billingPrefecture",
+    "billingCity",
+    "billingAddress",
+    "billingAddressLine2",
+    "shippingPostalCode",
+    "shippingPrefecture",
+    "shippingCity",
+    "shippingAddress",
+    "shippingAddressLine2",
+    "referrer",
+    "notes",
+  ] as const
+  for (const f of stringFields) {
+    const v = result[f]
+    if (typeof v === "string") {
+      const trimmed = v.trim()
+      result[f] = trimmed === "" ? null : trimmed
+    }
+  }
+  return result as T
+}
+
+function normalizeContactForDb(
+  c: NonNullable<CreateClientInput["primaryContact"]>
+) {
+  return {
+    firstName: c.firstName.trim(),
+    lastName: c.lastName.trim(),
+    displayName: `${c.lastName.trim()} ${c.firstName.trim()}`,
+    email: c.email.trim() === "" ? null : c.email.trim(),
+    phone: c.phone.trim() === "" ? null : c.phone.trim(),
+    jobTitle: (c.jobTitle ?? "").trim() === "" ? null : (c.jobTitle ?? "").trim(),
+    department: (c.department ?? "").trim() === "" ? null : (c.department ?? "").trim(),
+    isPrimary: true,
+  }
+}
 
 export async function listClients(rawQuery: ListClientsQuery = {}) {
   return withTenantContext(async () => {
@@ -38,11 +78,8 @@ export async function listClients(rawQuery: ListClientsQuery = {}) {
         totalPages: 0,
       }
     }
-
     const { q, status, businessType, country, sort, order, page, perPage } =
       parsed.data
-
-    // Prisma Extension が companyId と deletedAt: null を自動付与する
     const where: Prisma.ClientWhereInput = {
       ...(status && { status }),
       ...(businessType && { businessType }),
@@ -55,7 +92,6 @@ export async function listClients(rawQuery: ListClientsQuery = {}) {
         ],
       }),
     }
-
     const [items, total] = await Promise.all([
       prisma.client.findMany({
         where,
@@ -65,7 +101,6 @@ export async function listClients(rawQuery: ListClientsQuery = {}) {
       }),
       prisma.client.count({ where }),
     ])
-
     return {
       items,
       total,
@@ -76,20 +111,19 @@ export async function listClients(rawQuery: ListClientsQuery = {}) {
   })
 }
 
-// =============================================================================
-// 詳細取得
-// =============================================================================
-
 export async function getClient(id: string) {
   return withTenantContext(async () => {
-    // findUnique は Extension で「クエリ後検証」されるので他テナント漏れなし
-    return prisma.client.findUnique({ where: { id } })
+    return prisma.client.findUnique({
+      where: { id },
+      include: {
+        contacts: {
+          where: { isPrimary: true, deletedAt: null },
+          take: 1,
+        },
+      },
+    })
   })
 }
-
-// =============================================================================
-// 新規作成
-// =============================================================================
 
 export async function createClient(
   input: CreateClientInput
@@ -100,15 +134,38 @@ export async function createClient(
       return {
         ok: false,
         error: "入力内容に誤りがあります",
-        fieldErrors: parsed.error.flatten().fieldErrors,
+        fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]>,
       }
     }
+    const {
+      primaryContact,
+      useSeparateBillingAddress,
+      useSeparateShippingAddress,
+      ...rest
+    } = parsed.data
 
-    const data = parsed.data
+    // トグルOFFのときは billing*/shipping* を強制的に空文字に（normalizeForDb で null 化される）
+    if (!useSeparateBillingAddress) {
+      rest.billingPostalCode = ""
+      rest.billingPrefecture = ""
+      rest.billingCity = ""
+      rest.billingAddress = ""
+      rest.billingAddressLine2 = ""
+    }
+    if (!useSeparateShippingAddress) {
+      rest.shippingPostalCode = ""
+      rest.shippingPrefecture = ""
+      rest.shippingCity = ""
+      rest.shippingAddress = ""
+      rest.shippingAddressLine2 = ""
+    }
 
-    // clientCode の重複チェック（@@unique([companyId, clientCode])）
+    const data = normalizeForDb(rest)
+    const contactData = normalizeContactForDb(primaryContact)
+    const cid = getEffectiveCompanyId()
+
     const exists = await prisma.client.findFirst({
-      where: { clientCode: data.clientCode },
+      where: { clientCode: data.clientCode as string },
     })
     if (exists) {
       return {
@@ -121,21 +178,41 @@ export async function createClient(
     }
 
     try {
-      const { getTenantContext } = await import("@/lib/tenant-context")
-      const created = await prisma.client.create({ data: data as Prisma.ClientUncheckedCreateInput })
+      const created = await prisma.client.create({
+        data: data as unknown as Prisma.ClientUncheckedCreateInput,
+      })
+
+      const contact = await prisma.clientContact.create({
+        data: {
+          ...contactData,
+          companyId: cid,
+          clientId: created.id,
+        } as Prisma.ClientContactUncheckedCreateInput,
+      })
+
+      await prisma.client.update({
+        where: { id: created.id },
+        data: { primaryContactId: contact.id },
+      })
 
       await writeAuditLog({
         action: "CREATE",
         entityType: "Client",
         entityId: created.id,
-        afterData: { clientCode: created.clientCode, companyName: created.companyName },
+        afterData: {
+          clientCode: created.clientCode,
+          companyName: created.companyName,
+        },
         description: `クライアント新規作成: ${created.companyName}`,
       })
 
       revalidatePath("/clients")
       return { ok: true, data: { id: created.id } }
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === "P2002"
+      ) {
         return {
           ok: false,
           error: "クライアントコードが重複しています",
@@ -147,10 +224,6 @@ export async function createClient(
   })
 }
 
-// =============================================================================
-// 編集
-// =============================================================================
-
 export async function updateClient(
   id: string,
   input: UpdateClientInput
@@ -161,21 +234,52 @@ export async function updateClient(
       return {
         ok: false,
         error: "入力内容に誤りがあります",
-        fieldErrors: parsed.error.flatten().fieldErrors,
+        fieldErrors: parsed.error.flatten().fieldErrors as Record<string, string[]>,
       }
     }
+    const {
+      primaryContact,
+      useSeparateBillingAddress,
+      useSeparateShippingAddress,
+      ...rest
+    } = parsed.data
 
-    const data = parsed.data
+    // トグルOFFのときは billing*/shipping* を強制的に空文字に
+    if (!useSeparateBillingAddress) {
+      rest.billingPostalCode = ""
+      rest.billingPrefecture = ""
+      rest.billingCity = ""
+      rest.billingAddress = ""
+      rest.billingAddressLine2 = ""
+    }
+    if (!useSeparateShippingAddress) {
+      rest.shippingPostalCode = ""
+      rest.shippingPrefecture = ""
+      rest.shippingCity = ""
+      rest.shippingAddress = ""
+      rest.shippingAddressLine2 = ""
+    }
 
-    const before = await prisma.client.findUnique({ where: { id } })
+    const data = normalizeForDb(rest)
+    const contactData = normalizeContactForDb(primaryContact)
+    const cid = getEffectiveCompanyId()
+
+    const before = await prisma.client.findUnique({
+      where: { id },
+      include: {
+        contacts: {
+          where: { isPrimary: true, deletedAt: null },
+          take: 1,
+        },
+      },
+    })
     if (!before) {
       return { ok: false, error: "対象のクライアントが見つかりません" }
     }
 
-    // clientCode を変更する場合、重複チェック
     if (data.clientCode && data.clientCode !== before.clientCode) {
       const exists = await prisma.client.findFirst({
-        where: { clientCode: data.clientCode },
+        where: { clientCode: data.clientCode as string },
       })
       if (exists) {
         return {
@@ -189,11 +293,36 @@ export async function updateClient(
     }
 
     try {
-      const { getTenantContext } = await import("@/lib/tenant-context")
       const after = await prisma.client.update({
         where: { id },
-        data: data as Prisma.ClientUncheckedUpdateInput,
+        data: data as unknown as Prisma.ClientUncheckedUpdateInput,
       })
+
+      const existingContact = before.contacts[0]
+      let contactId: string
+      if (existingContact) {
+        const updatedContact = await prisma.clientContact.update({
+          where: { id: existingContact.id },
+          data: contactData,
+        })
+        contactId = updatedContact.id
+      } else {
+        const newContact = await prisma.clientContact.create({
+          data: {
+            ...contactData,
+            companyId: cid,
+            clientId: id,
+          } as Prisma.ClientContactUncheckedCreateInput,
+        })
+        contactId = newContact.id
+      }
+
+      if (after.primaryContactId !== contactId) {
+        await prisma.client.update({
+          where: { id },
+          data: { primaryContactId: contactId },
+        })
+      }
 
       await writeAuditLog({
         action: "UPDATE",
@@ -216,7 +345,10 @@ export async function updateClient(
       revalidatePath(`/clients/${id}`)
       return { ok: true, data: { id } }
     } catch (e) {
-      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === "P2002"
+      ) {
         return {
           ok: false,
           error: "クライアントコードが重複しています",
@@ -228,10 +360,6 @@ export async function updateClient(
   })
 }
 
-// =============================================================================
-// 論理削除（status=ARCHIVED + deletedAt セット）
-// =============================================================================
-
 export async function softDeleteClient(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
@@ -241,7 +369,6 @@ export async function softDeleteClient(
       return { ok: false, error: "対象のクライアントが見つかりません" }
     }
 
-    // Prisma Extension により delete() は禁止されているため、update で deletedAt を立てる
     await prisma.client.update({
       where: { id },
       data: {
@@ -264,5 +391,30 @@ export async function softDeleteClient(
 
     revalidatePath("/clients")
     return { ok: true, data: { id } }
+  })
+}
+
+export async function listAssignableUsers() {
+  return withTenantContext(async () => {
+    const users = await prisma.user.findMany({
+      where: {
+        status: "ACTIVE",
+        deletedAt: null,
+        isExternalUser: false,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        displayName: true,
+        email: true,
+      },
+      orderBy: { createdAt: "asc" },
+    })
+    return users.map((u) => ({
+      id: u.id,
+      name: u.displayName ?? `${u.lastName} ${u.firstName}`,
+      email: u.email,
+    }))
   })
 }
