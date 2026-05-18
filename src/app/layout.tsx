@@ -2,10 +2,10 @@ import type { Metadata } from "next"
 import { Inter, Geist } from "next/font/google"
 import "./globals.css"
 import NextAuthSessionProvider from "@/components/session-provider"
-import { cn } from "@/lib/utils";
+import { Toaster } from "@/components/ui/sonner"
+import { cn } from "@/lib/utils"
 
-const geist = Geist({subsets:['latin'],variable:'--font-sans'});
-
+const geist = Geist({ subsets: ["latin"], variable: "--font-sans" })
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
@@ -22,6 +22,7 @@ export default function RootLayout({
     <html lang="ja" className={cn("font-sans", geist.variable)}>
       <body className={inter.className}>
         <NextAuthSessionProvider>{children}</NextAuthSessionProvider>
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   )

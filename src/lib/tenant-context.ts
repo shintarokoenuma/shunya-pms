@@ -1,32 +1,33 @@
 import { AsyncLocalStorage } from "node:async_hooks"
 import type { TenantType, UserRole } from "@prisma/client"
 
-/**
- * リクエスト単位で持ち回るテナントコンテキスト。
- *
- * - 通常テナントのユーザー：companyId = 自テナントID、accessedTenantId は未指定
- * - shunya（MASTER_ADMIN）のユーザー：
- *     - 自テナントを操作中：accessedTenantId は未指定
- *     - 顧客テナントを覗き見中：accessedTenantId に対象顧客テナントID、accessReason は記録必須
- */
 export type TenantContext = {
   userId: string
   companyId: string
   tenantType: TenantType
   role: UserRole
-  /** 特権アクセス中の閲覧対象テナントID */
   accessedTenantId?: string
-  /** 特権アクセスの理由（AuditLog に記録） */
   accessReason?: string
-  /** 特権アクセスの顧客同意フラグ */
   customerConsent?: boolean
-  /** リクエストメタ（AuditLog 用） */
   ipAddress?: string
   userAgent?: string
 }
 
-const tenantStorage = new AsyncLocalStorage<TenantContext>()
-const bypassStorage = new AsyncLocalStorage<true>()
+// AsyncLocalStorage を globalThis に保持して、Turbopack のバンドル分離問題を回避
+type GlobalWithTenantStore = typeof globalThis & {
+  __shunyaTenantStorage?: AsyncLocalStorage<TenantContext>
+  __shunyaBypassStorage?: AsyncLocalStorage<true>
+}
+
+const g = globalThis as GlobalWithTenantStore
+
+const tenantStorage =
+  g.__shunyaTenantStorage ??
+  (g.__shunyaTenantStorage = new AsyncLocalStorage<TenantContext>())
+
+const bypassStorage =
+  g.__shunyaBypassStorage ??
+  (g.__shunyaBypassStorage = new AsyncLocalStorage<true>())
 
 export function getTenantContext(): TenantContext | undefined {
   return tenantStorage.getStore()
@@ -42,19 +43,11 @@ export function requireTenantContext(): TenantContext {
   return ctx
 }
 
-/**
- * クエリ対象として使う実効テナントID。
- * 特権アクセス中なら accessedTenantId、それ以外は自テナントの companyId。
- */
 export function getEffectiveCompanyId(): string {
   const ctx = requireTenantContext()
   return ctx.accessedTenantId ?? ctx.companyId
 }
 
-/**
- * 現在のリクエストが MASTER_ADMIN の特権アクセス中か。
- * AuditLog.isPrivilegedAccess に直結。
- */
 export function isPrivilegedAccess(): boolean {
   const ctx = tenantStorage.getStore()
   if (!ctx) return false
@@ -72,10 +65,6 @@ export function runWithTenantContext<T>(
   return tenantStorage.run(context, fn)
 }
 
-/**
- * テナント分離をバイパスして実行（シード・マイグレーション・cron 専用）。
- * Server Action / API Route からは決して呼ばないこと。
- */
 export function isBypassed(): boolean {
   return bypassStorage.getStore() === true
 }
