@@ -338,8 +338,9 @@ model Client {
 
   // 支払い条件
   paymentTermType PaymentTermType @default(MONTHLY_CLOSING) @map("payment_term_type")
-  closingDay      Int?            @map("closing_day") // 締め日（例：月末=31）
-  paymentDays     Int?            @map("payment_days") // 締めから何日後支払い
+  closingDay         Int?            @map("closing_day") // 締日（1-31、31=月末）
+  paymentMonthOffset Int?            @map("payment_month_offset") // 1=翌月、2=翌々月
+  paymentDay         Int?            @map("payment_day") // 支払日（1-31、31=月末）
 
   // デポジット設定
   depositRequired   Boolean  @default(false) @map("deposit_required")
@@ -573,8 +574,9 @@ model Supplier {
   taxId                    String?         @map("tax_id") @db.VarChar(50) // 適格請求書発行事業者番号
   isQualifiedInvoiceIssuer Boolean         @default(true) @map("is_qualified_invoice_issuer")
   paymentTermType          PaymentTermType @default(MONTHLY_CLOSING) @map("payment_term_type")
-  closingDay               Int?            @map("closing_day")
-  paymentDays              Int?            @map("payment_days")
+  closingDay               Int?            @map("closing_day") // 締日（1-31、31=月末）
+  paymentMonthOffset       Int?            @map("payment_month_offset") // 1=翌月、2=翌々月
+  paymentDay               Int?            @map("payment_day") // 支払日（1-31、31=月末）
 
   // 国際送金情報
   bankName        String? @map("bank_name") @db.VarChar(255)
@@ -696,8 +698,9 @@ model Factory {
   taxId                    String?         @map("tax_id") @db.VarChar(50)
   isQualifiedInvoiceIssuer Boolean         @default(true) @map("is_qualified_invoice_issuer")
   paymentTermType          PaymentTermType @default(MONTHLY_CLOSING) @map("payment_term_type")
-  closingDay               Int?            @map("closing_day")
-  paymentDays              Int?            @map("payment_days")
+  closingDay               Int?            @map("closing_day") // 締日（1-31、31=月末）
+  paymentMonthOffset       Int?            @map("payment_month_offset") // 1=翌月、2=翌々月
+  paymentDay               Int?            @map("payment_day") // 支払日（1-31、31=月末）
 
   // 国際送金情報
   bankName        String? @map("bank_name") @db.VarChar(255)
@@ -850,8 +853,9 @@ model Contractor {
   taxId                    String?         @map("tax_id") @db.VarChar(50)
   isQualifiedInvoiceIssuer Boolean         @default(false) @map("is_qualified_invoice_issuer")
   paymentTermType          PaymentTermType @default(MONTHLY_CLOSING) @map("payment_term_type")
-  closingDay               Int?            @map("closing_day")
-  paymentDays              Int?            @map("payment_days")
+  closingDay               Int?            @map("closing_day") // 締日（1-31、31=月末）
+  paymentMonthOffset       Int?            @map("payment_month_offset") // 1=翌月、2=翌々月
+  paymentDay               Int?            @map("payment_day") // 支払日（1-31、31=月末）
 
   // 著作権・所有権
   defaultPatternOwnership OwnershipType @default(SHUNYA) @map("default_pattern_ownership")
