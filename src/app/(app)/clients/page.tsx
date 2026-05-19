@@ -4,6 +4,7 @@ import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { listClients } from "@/lib/actions/clients"
 import { ClientsTable } from "./_components/clients-table"
+import { auth } from "@/lib/auth"
 import { ClientsSearch } from "./_components/clients-search"
 import { ClientsPagination } from "./_components/clients-pagination"
 
@@ -24,6 +25,8 @@ export default async function ClientsListPage({
   searchParams: SearchParams
 }) {
   const sp = await searchParams
+  const session = await auth()
+  const isMasterAdmin = session?.user?.tenantType === "MASTER_ADMIN"
 
   const result = await listClients({
     q: sp.q,
@@ -59,7 +62,7 @@ export default async function ClientsListPage({
 
       <ClientsSearch />
 
-      <ClientsTable items={result.items} />
+      <ClientsTable items={result.items} isMasterAdmin={isMasterAdmin} />
 
       <ClientsPagination
         page={result.page}

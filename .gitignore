@@ -44,3 +44,6 @@ next-env.d.ts
 
 # Prisma backups
 prisma/*.bak
+
+# Prisma backups
+prisma/*.bak

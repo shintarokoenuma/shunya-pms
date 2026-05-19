@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { withTenantContext } from "@/lib/with-tenant"
+import { requireTenantContext, runWithoutTenantContext } from "@/lib/tenant-context"
 import { writeAuditLog } from "@/lib/audit-log"
 import { getEffectiveCompanyId } from "@/lib/tenant-context"
 import {
@@ -360,7 +361,7 @@ export async function updateClient(
   })
 }
 
-export async function softDeleteClient(
+export async function archiveClient(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   return withTenantContext(async () => {
@@ -369,13 +370,131 @@ export async function softDeleteClient(
       return { ok: false, error: "対象のクライアントが見つかりません" }
     }
 
+    if (before.status === "ARCHIVED") {
+      return { ok: false, error: "既にアーカイブされています" }
+    }
+
     await prisma.client.update({
       where: { id },
-      data: {
-        deletedAt: new Date(),
-        status: "ARCHIVED",
-      },
+      data: { status: "ARCHIVED" },
     })
+
+    await writeAuditLog({
+      action: "UPDATE",
+      entityType: "Client",
+      entityId: id,
+      beforeData: { status: before.status },
+      afterData: { status: "ARCHIVED" },
+      description: `クライアントアーカイブ: ${before.companyName}`,
+    })
+
+    revalidatePath("/clients")
+    revalidatePath(`/clients/${id}`)
+    return { ok: true, data: { id } }
+  })
+}
+
+export async function restoreClient(
+  id: string
+): Promise<ActionResult<{ id: string }>> {
+  return withTenantContext(async () => {
+    const before = await prisma.client.findUnique({ where: { id } })
+    if (!before) {
+      return { ok: false, error: "対象のクライアントが見つかりません" }
+    }
+
+    if (before.status !== "ARCHIVED") {
+      return {
+        ok: false,
+        error: "アーカイブされていないクライアントは復元できません",
+      }
+    }
+
+    await prisma.client.update({
+      where: { id },
+      data: { status: "ACTIVE" },
+    })
+
+    await writeAuditLog({
+      action: "UPDATE",
+      entityType: "Client",
+      entityId: id,
+      beforeData: { status: "ARCHIVED" },
+      afterData: { status: "ACTIVE" },
+      description: `クライアント復元: ${before.companyName}`,
+    })
+
+    revalidatePath("/clients")
+    revalidatePath(`/clients/${id}`)
+    return { ok: true, data: { id } }
+  })
+}
+
+export type ClientUsage = {
+  brandCount: number
+  inquiryCount: number
+  productCount: number
+  totalRefs: number
+}
+
+export async function checkClientUsage(id: string): Promise<ClientUsage> {
+  return withTenantContext(async () => {
+    const [brandCount, inquiryCount, productCount] = await Promise.all([
+      prisma.brand.count({ where: { clientId: id } }),
+      prisma.inquiry.count({ where: { existingClientId: id } }),
+      prisma.product.count({ where: { clientId: id } }),
+    ])
+    return {
+      brandCount,
+      inquiryCount,
+      productCount,
+      totalRefs: brandCount + inquiryCount + productCount,
+    }
+  })
+}
+
+export async function deleteClientPermanently(
+  id: string,
+  confirmName: string
+): Promise<ActionResult<{ id: string }>> {
+  return withTenantContext(async () => {
+    const ctx = requireTenantContext()
+    if (ctx.tenantType !== "MASTER_ADMIN") {
+      return { ok: false, error: "本削除は MASTER_ADMIN のみ実行できます" }
+    }
+
+    const before = await prisma.client.findUnique({ where: { id } })
+    if (!before) {
+      return { ok: false, error: "対象のクライアントが見つかりません" }
+    }
+
+    if (before.status !== "ARCHIVED") {
+      return {
+        ok: false,
+        error: "アーカイブ済みのクライアントのみ本削除できます",
+      }
+    }
+
+    if (confirmName.trim() !== before.companyName) {
+      return { ok: false, error: "入力された会社名が一致しません" }
+    }
+
+    const [brandCount, inquiryCount, productCount] = await Promise.all([
+      prisma.brand.count({ where: { clientId: id } }),
+      prisma.inquiry.count({ where: { existingClientId: id } }),
+      prisma.product.count({ where: { clientId: id } }),
+    ])
+
+    if (brandCount + inquiryCount + productCount > 0) {
+      const parts: string[] = []
+      if (brandCount > 0) parts.push(`ブランド: ${brandCount} 件`)
+      if (inquiryCount > 0) parts.push(`問い合わせ: ${inquiryCount} 件`)
+      if (productCount > 0) parts.push(`品番: ${productCount} 件`)
+      return {
+        ok: false,
+        error: `紐付くデータがあるため削除できません（${parts.join("、")}）`,
+      }
+    }
 
     await writeAuditLog({
       action: "DELETE",
@@ -386,7 +505,11 @@ export async function softDeleteClient(
         companyName: before.companyName,
         status: before.status,
       },
-      description: `クライアント論理削除: ${before.companyName}`,
+      description: `クライアント本削除: ${before.companyName}（${before.clientCode}）`,
+    })
+
+    await runWithoutTenantContext(async () => {
+      await prisma.client.delete({ where: { id } })
     })
 
     revalidatePath("/clients")

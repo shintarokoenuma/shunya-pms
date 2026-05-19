@@ -514,7 +514,7 @@ model Brand {
   defaultMarginRate Decimal? @map("default_margin_rate") @db.Decimal(5, 2)
 
   // ステータス
-  status String @default("ACTIVE") @db.VarChar(20)
+  status BrandStatus @default(ACTIVE)
 
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
@@ -527,6 +527,12 @@ model Brand {
   @@unique([companyId, brandCode])
   @@index([clientId])
   @@map("brands")
+}
+
+enum BrandStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
 }
 
 // =====================================================

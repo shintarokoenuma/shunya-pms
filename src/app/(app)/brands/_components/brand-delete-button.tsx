@@ -4,14 +4,14 @@ import { useState, useTransition, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Archive, RotateCcw, Trash2, AlertTriangle, MoreHorizontal } from "lucide-react"
-import { ClientStatus } from "@prisma/client"
+import { BrandStatus } from "@prisma/client"
 import {
-  archiveClient,
-  restoreClient,
-  deleteClientPermanently,
-  checkClientUsage,
-  type ClientUsage,
-} from "@/lib/actions/clients"
+  archiveBrand,
+  restoreBrand,
+  deleteBrandPermanently,
+  checkBrandUsage,
+  type BrandUsage,
+} from "@/lib/actions/brands"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -33,7 +33,7 @@ import {
 type Props = {
   id: string
   name: string
-  status: ClientStatus
+  status: BrandStatus
   isMasterAdmin: boolean
   variant?: "icon" | "menu"
   onChanged?: () => void
@@ -41,7 +41,7 @@ type Props = {
 
 type DialogMode = null | "archive" | "restore" | "delete"
 
-export function ClientActions({
+export function BrandActions({
   id,
   name,
   status,
@@ -53,14 +53,15 @@ export function ClientActions({
   const [mode, setMode] = useState<DialogMode>(null)
   const [isPending, startTransition] = useTransition()
   const [confirmName, setConfirmName] = useState("")
-  const [usage, setUsage] = useState<ClientUsage | null>(null)
+  const [usage, setUsage] = useState<BrandUsage | null>(null)
   const [usageLoading, setUsageLoading] = useState(false)
 
+  // 削除ダイアログを開いたタイミングで紐付きチェック
   useEffect(() => {
     if (mode === "delete") {
       setUsageLoading(true)
       setUsage(null)
-      checkClientUsage(id)
+      checkBrandUsage(id)
         .then(setUsage)
         .finally(() => setUsageLoading(false))
     } else {
@@ -73,12 +74,12 @@ export function ClientActions({
 
   const onArchive = () => {
     startTransition(async () => {
-      const result = await archiveClient(id)
+      const result = await archiveBrand(id)
       if (!result.ok) {
         toast.error(result.error)
         return
       }
-      toast.success("クライアントをアーカイブしました")
+      toast.success("ブランドをアーカイブしました")
       close()
       if (onChanged) onChanged()
       else router.refresh()
@@ -87,12 +88,12 @@ export function ClientActions({
 
   const onRestore = () => {
     startTransition(async () => {
-      const result = await restoreClient(id)
+      const result = await restoreBrand(id)
       if (!result.ok) {
         toast.error(result.error)
         return
       }
-      toast.success("クライアントを復元しました")
+      toast.success("ブランドを復元しました")
       close()
       if (onChanged) onChanged()
       else router.refresh()
@@ -101,24 +102,28 @@ export function ClientActions({
 
   const onDelete = () => {
     startTransition(async () => {
-      const result = await deleteClientPermanently(id, confirmName)
+      const result = await deleteBrandPermanently(id, confirmName)
       if (!result.ok) {
         toast.error(result.error)
         return
       }
-      toast.success("クライアントを本削除しました")
+      toast.success("ブランドを本削除しました")
       close()
       if (onChanged) onChanged()
-      else router.push("/clients")
+      else router.push("/brands")
       router.refresh()
     })
   }
+
+  // ===========================================================================
+  // トリガー（メニュー or アイコン）
+  // ===========================================================================
 
   const trigger = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         {variant === "icon" ? (
-          <Button variant="ghost" size="icon" aria-label="クライアント操作">
+          <Button variant="ghost" size="icon" aria-label="ブランド操作">
             <MoreHorizontal className="h-4 w-4" />
           </Button>
         ) : (
@@ -165,7 +170,7 @@ export function ClientActions({
       <Dialog open={mode === "archive"} onOpenChange={(o) => !o && close()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>クライアントをアーカイブしますか？</DialogTitle>
+            <DialogTitle>ブランドをアーカイブしますか？</DialogTitle>
             <DialogDescription>
               「{name}」をアーカイブします。一覧から「稼働中」では非表示になりますが、
               「アーカイブ」絞り込みで再表示・復元が可能です。
@@ -186,8 +191,10 @@ export function ClientActions({
       <Dialog open={mode === "restore"} onOpenChange={(o) => !o && close()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>クライアントを復元しますか？</DialogTitle>
-            <DialogDescription>「{name}」を稼働中に戻します。</DialogDescription>
+            <DialogTitle>ブランドを復元しますか？</DialogTitle>
+            <DialogDescription>
+              「{name}」を稼働中に戻します。
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={close} disabled={isPending}>
@@ -206,7 +213,7 @@ export function ClientActions({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              クライアントを本削除しますか？
+              ブランドを本削除しますか？
             </DialogTitle>
             <DialogDescription>
               「{name}」を物理的に削除します。
@@ -223,15 +230,14 @@ export function ClientActions({
           {usage && usage.totalRefs > 0 && (
             <div className="rounded-md border border-destructive bg-destructive/10 p-3 text-sm">
               <div className="font-medium text-destructive mb-1">
-                このクライアントは本削除できません
+                このブランドは本削除できません
               </div>
               <div className="text-foreground">
                 以下のデータが紐付いています：
               </div>
               <ul className="list-disc list-inside mt-1 text-foreground">
-                {usage.brandCount > 0 && <li>ブランド: {usage.brandCount} 件</li>}
-                {usage.inquiryCount > 0 && (
-                  <li>問い合わせ: {usage.inquiryCount} 件</li>
+                {usage.modelCodeCount > 0 && (
+                  <li>モデルコード: {usage.modelCodeCount} 件</li>
                 )}
                 {usage.productCount > 0 && (
                   <li>品番カルテ: {usage.productCount} 件</li>
@@ -250,7 +256,7 @@ export function ClientActions({
               </div>
               <div className="space-y-2">
                 <div className="text-sm">
-                  確認のため、会社名「<strong>{name}</strong>」を入力してください：
+                  確認のため、ブランド名「<strong>{name}</strong>」を入力してください：
                 </div>
                 <Input
                   value={confirmName}
