@@ -18,13 +18,14 @@ import {
   STATUS_LABEL,
   STATUS_BADGE_VARIANT,
 } from "./labels"
-import { ClientDeleteButton } from "./client-delete-button"
+import { ClientActions } from "./client-delete-button"
 
 type Props = {
   items: Client[]
+  isMasterAdmin: boolean
 }
 
-export function ClientsTable({ items }: Props) {
+export function ClientsTable({ items, isMasterAdmin }: Props) {
   if (items.length === 0) {
     return (
       <div className="border rounded-md py-16 text-center text-sm text-muted-foreground">
@@ -84,9 +85,12 @@ export function ClientsTable({ items }: Props) {
                       <span className="sr-only">編集</span>
                     </Link>
                   </Button>
-                  <ClientDeleteButton
+                  <ClientActions
                     id={c.id}
                     name={c.companyName}
+                    status={c.status}
+                    isMasterAdmin={isMasterAdmin}
+                    variant="icon"
                   />
                 </div>
               </TableCell>

@@ -13,7 +13,10 @@ import {
 
 import { prisma } from "@/lib/prisma"
 import { getClient } from "@/lib/actions/clients"
-import { ClientDeleteButton } from "../_components/client-delete-button"
+import { listBrandsByClient } from "@/lib/actions/brands"
+import { ClientActions } from "../_components/client-delete-button"
+import { auth } from "@/lib/auth"
+import { Plus } from "lucide-react"
 import {
   BUSINESS_TYPE_LABEL,
   CLIENT_SIZE_LABEL,
@@ -23,6 +26,10 @@ import {
   LEAD_SOURCE_LABEL,
   PAYMENT_TERM_LABEL,
 } from "../_components/labels"
+import {
+  BRAND_STATUS_LABEL,
+  BRAND_STATUS_BADGE_VARIANT,
+} from "../../brands/_components/labels"
 
 function Dl({ children }: { children: React.ReactNode }) {
   return <dl className="grid grid-cols-[120px_1fr] gap-y-3 gap-x-4 text-sm">{children}</dl>
@@ -71,11 +78,16 @@ export default async function ClientDetailPage({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
+  const session = await auth()
+  const isMasterAdmin = session?.user?.tenantType === "MASTER_ADMIN"
   const client = await getClient(id)
 
   if (!client) {
     notFound()
   }
+
+  // このクライアントのブランド一覧を取得
+  const brands = await listBrandsByClient(id)
 
   // shunya 側担当者の名前を取得
   const assignedUser = client.assignedToUserId
@@ -142,7 +154,7 @@ export default async function ClientDetailPage({
               編集
             </Link>
           </Button>
-          <ClientDeleteButton id={id} name={client.companyName} />
+          <ClientActions id={id} name={client.companyName} status={client.status} isMasterAdmin={isMasterAdmin} variant="menu" />
         </div>
       </div>
 
@@ -348,6 +360,51 @@ export default async function ClientDetailPage({
           </CardContent>
         </Card>
       </div>
+
+      {/* ブランド一覧 */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base">ブランド一覧</CardTitle>
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/brands/new?clientId=${id}`}>
+              <Plus className="mr-1 h-4 w-4" />
+              ブランド追加
+            </Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {brands.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-4 text-center">
+              このクライアントにはまだブランドが登録されていません。
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {brands.map((b) => (
+                <Link
+                  key={b.id}
+                  href={`/brands/${b.id}`}
+                  className="flex items-center justify-between gap-3 rounded-md border p-3 hover:bg-accent transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="font-mono text-sm text-muted-foreground">
+                      {b.brandCode}
+                    </span>
+                    <span className="font-medium">{b.brandName}</span>
+                    {b.brandNameEn && (
+                      <span className="text-xs text-muted-foreground">
+                        ({b.brandNameEn})
+                      </span>
+                    )}
+                  </div>
+                  <Badge variant={BRAND_STATUS_BADGE_VARIANT[b.status]}>
+                    {BRAND_STATUS_LABEL[b.status]}
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {client.notes && (
         <Card>
