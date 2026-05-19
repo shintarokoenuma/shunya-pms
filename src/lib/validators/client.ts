@@ -169,11 +169,17 @@ export const clientBaseSchema = z
       .min(1, "1〜31で入力してください")
       .max(31, "1〜31で入力してください")
       .optional(),
-    paymentDays: z.coerce
+    paymentMonthOffset: z.coerce
       .number()
       .int()
       .min(0, "0以上で入力してください")
-      .max(365, "365以下で入力してください")
+      .max(12, "12以下で入力してください")
+      .optional(),
+    paymentDay: z.coerce
+      .number()
+      .int()
+      .min(1, "1〜31で入力してください")
+      .max(31, "1〜31で入力してください")
       .optional(),
     depositRequired: z.boolean().default(false),
     depositPercentage: z.coerce
@@ -265,11 +271,21 @@ export const clientBaseSchema = z
           message: "締め日は必須です",
         })
       }
-      if (data.paymentDays === undefined || data.paymentDays === null) {
+      if (
+        data.paymentMonthOffset === undefined ||
+        data.paymentMonthOffset === null
+      ) {
         ctx.addIssue({
           code: "custom",
-          path: ["paymentDays"],
-          message: "支払いサイトは必須です",
+          path: ["paymentMonthOffset"],
+          message: "支払い月（オフセット）は必須です",
+        })
+      }
+      if (data.paymentDay === undefined || data.paymentDay === null) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["paymentDay"],
+          message: "支払日は必須です",
         })
       }
     }

@@ -64,7 +64,8 @@ export default async function EditClientPage({
     referrer: client.referrer ?? "",
     paymentTermType: client.paymentTermType,
     closingDay: client.closingDay ?? undefined,
-    paymentDays: client.paymentDays ?? undefined,
+    paymentMonthOffset: client.paymentMonthOffset ?? undefined,
+    paymentDay: client.paymentDay ?? undefined,
     depositRequired: client.depositRequired,
     depositPercentage: client.depositPercentage
       ? Number(client.depositPercentage)

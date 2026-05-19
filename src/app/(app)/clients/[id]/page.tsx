@@ -242,14 +242,32 @@ export default async function ClientDetailPage({
               {client.paymentTermType === "MONTHLY_CLOSING" && (
                 <>
                   <Item
-                    label="締め日"
-                    value={client.closingDay ? `${client.closingDay} 日` : null}
+                    label="締日"
+                    value={
+                      client.closingDay
+                        ? client.closingDay === 31
+                          ? "月末"
+                          : `${client.closingDay} 日`
+                        : null
+                    }
                   />
                   <Item
-                    label="支払いサイト"
+                    label="支払い月"
                     value={
-                      client.paymentDays !== null
-                        ? `${client.paymentDays} 日後`
+                      client.paymentMonthOffset !== null
+                        ? client.paymentMonthOffset === 0
+                          ? "当月"
+                          : `${client.paymentMonthOffset}ヶ月後`
+                        : null
+                    }
+                  />
+                  <Item
+                    label="支払日"
+                    value={
+                      client.paymentDay !== null
+                        ? client.paymentDay === 31
+                          ? "月末"
+                          : `${client.paymentDay} 日`
                         : null
                     }
                   />

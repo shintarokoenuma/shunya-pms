@@ -19,6 +19,7 @@ import {
 } from "@/lib/validators/client"
 import { createClient, updateClient } from "@/lib/actions/clients"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Switch } from "@/components/ui/switch"
@@ -75,6 +76,18 @@ type Props =
 
 const PAYMENT_TERMS = Object.keys(PaymentTermType) as Array<keyof typeof PaymentTermType>
 
+const PAYMENT_PRESETS: Array<{
+  label: string
+  closingDay: number
+  paymentMonthOffset: number
+  paymentDay: number
+}> = [
+  { label: "月末締翌月末払", closingDay: 31, paymentMonthOffset: 1, paymentDay: 31 },
+  { label: "月末締翌々月末払", closingDay: 31, paymentMonthOffset: 2, paymentDay: 31 },
+  { label: "20日締翌月末払", closingDay: 20, paymentMonthOffset: 1, paymentDay: 31 },
+  { label: "20日締翌月10日払", closingDay: 20, paymentMonthOffset: 1, paymentDay: 10 },
+]
+
 export function ClientForm(props: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -114,7 +127,8 @@ export function ClientForm(props: Props) {
       referrer: "",
       paymentTermType: PaymentTermType.DEPOSIT_COD,
       closingDay: undefined,
-      paymentDays: undefined,
+      paymentMonthOffset: undefined,
+      paymentDay: undefined,
       depositRequired: true,
       depositPercentage: 30,
       assignedToUserId: "",
@@ -616,6 +630,46 @@ export function ClientForm(props: Props) {
             />
             {paymentTermType === PaymentTermType.MONTHLY_CLOSING && (
               <>
+                <div className="md:col-span-2 space-y-2">
+                  <Label>プリセット</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {PAYMENT_PRESETS.map((preset) => {
+                      const isActive =
+                        form.watch("closingDay") === preset.closingDay &&
+                        form.watch("paymentMonthOffset") ===
+                          preset.paymentMonthOffset &&
+                        form.watch("paymentDay") === preset.paymentDay
+                      return (
+                        <Button
+                          key={preset.label}
+                          type="button"
+                          size="sm"
+                          variant={isActive ? "default" : "outline"}
+                          onClick={() => {
+                            form.setValue("closingDay", preset.closingDay, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                            form.setValue(
+                              "paymentMonthOffset",
+                              preset.paymentMonthOffset,
+                              { shouldDirty: true, shouldValidate: true }
+                            )
+                            form.setValue("paymentDay", preset.paymentDay, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            })
+                          }}
+                        >
+                          {preset.label}
+                        </Button>
+                      )
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    プリセットを選ぶと下の3項目が自動入力されます。微調整も可能です。
+                  </p>
+                </div>
                 <FormField
                   control={form.control}
                   name="closingDay"
@@ -630,26 +684,59 @@ export function ClientForm(props: Props) {
                           onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
                         />
                       </FormControl>
-                      <FormDescription>例: 月末 = 31</FormDescription>
+                      <FormDescription>1〜31。31を入力すると月末扱い</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
                 <FormField
                   control={form.control}
-                  name="paymentDays"
+                  name="paymentMonthOffset"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>支払いサイト(日) *</FormLabel>
+                      <FormLabel>支払い月 *</FormLabel>
+                      <FormControl>
+                        <Select
+                          value={
+                            field.value === undefined || field.value === null
+                              ? ""
+                              : String(field.value)
+                          }
+                          onValueChange={(v) =>
+                            field.onChange(v === "" ? undefined : Number(v))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="選択" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">当月</SelectItem>
+                            <SelectItem value="1">翌月</SelectItem>
+                            <SelectItem value="2">翌々月</SelectItem>
+                            <SelectItem value="3">3ヶ月後</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </FormControl>
+                      <FormDescription>締日からどの月の支払いか</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="paymentDay"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>支払日 *</FormLabel>
                       <FormControl>
                         <Input
-                          type="number" min={0} max={365}
-                          placeholder="30"
+                          type="number" min={1} max={31}
+                          placeholder="31"
                           value={typeof field.value === "number" ? field.value : ""}
                           onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
                         />
                       </FormControl>
-                      <FormDescription>締めから何日後の支払いか</FormDescription>
+                      <FormDescription>1〜31。31を入力すると月末扱い</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
