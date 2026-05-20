@@ -26,7 +26,8 @@ export const TIMEZONE_OPTIONS: TimezoneOption[] = [
   { value: "Asia/Manila",        label: "Asia/Manila (UTC+8) フィリピン",        country: "フィリピン",     utcOffset: "+08:00" },
   { value: "Asia/Tokyo",         label: "Asia/Tokyo (UTC+9) 日本",               country: "日本",           utcOffset: "+09:00" },
   { value: "Asia/Seoul",         label: "Asia/Seoul (UTC+9) 韓国",               country: "韓国",           utcOffset: "+09:00" },
-  { value: "America/New_York",   label: "America/New_York (UTC-5) アメリカ東部", country: "アメリカ",       utcOffset: "-05:00" },
+  { value: "America/New_York",    label: "America/New_York (UTC-5) アメリカ東部",    country: "アメリカ", utcOffset: "-05:00" },
+  { value: "America/Los_Angeles", label: "America/Los_Angeles (UTC-8) アメリカ西部", country: "アメリカ", utcOffset: "-08:00" },
 ]
 
 /** Other 用の特殊値（Select 内部で使用、DB には保存しない） */
