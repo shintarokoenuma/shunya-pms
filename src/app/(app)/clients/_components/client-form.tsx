@@ -49,11 +49,12 @@ import {
   BUSINESS_TYPE_LABEL,
   CLIENT_SIZE_LABEL,
   DISPLAY_PATTERN_LABEL,
-  JP_PREFECTURES,
   LEAD_SOURCE_LABEL,
   PAYMENT_TERM_LABEL,
   STATUS_LABEL,
 } from "./labels"
+import { AddressFields } from "@/components/forms/address-fields"
+import { COUNTRY_OPTIONS } from "@/lib/constants/countries"
 
 export type AssignableUser = {
   id: string
@@ -146,6 +147,7 @@ export function ClientForm(props: Props) {
     },
   })
 
+  const country = (form.watch("country") ?? "") as string
   const useSeparateBilling = form.watch("useSeparateBillingAddress")
   const useSeparateShipping = form.watch("useSeparateShippingAddress")
   const paymentTermType = form.watch("paymentTermType")
@@ -305,11 +307,21 @@ export function ClientForm(props: Props) {
               name="country"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>国コード *</FormLabel>
+                  <FormLabel>国 *</FormLabel>
                   <FormControl>
-                    <Input maxLength={2} {...field} />
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className="md:w-[240px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COUNTRY_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </FormControl>
-                  <FormDescription>ISO 3166-1 alpha-2(例: JP, US)</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -355,81 +367,9 @@ export function ClientForm(props: Props) {
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="postalCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>郵便番号 *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="150-0043" {...field} />
-                  </FormControl>
-                  <FormDescription>7桁(ハイフンの有無いずれも可)</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="prefecture"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>都道府県 *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value || ""}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="都道府県を選択" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {JP_PREFECTURES.map((p) => (
-                        <SelectItem key={p} value={p}>{p}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="city"
-              render={({ field }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel>市区町村 *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="渋谷区道玄坂" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="address"
-              render={({ field }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel>住所1(番地) *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="1-22-10" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="addressLine2"
-              render={({ field }) => (
-                <FormItem className="md:col-span-2">
-                  <FormLabel>住所2(建物名・部屋番号)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="見真ビル 1F" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="md:col-span-2">
+              <AddressFields country={country} />
+            </div>
           </CardContent>
         </Card>
 
@@ -452,68 +392,7 @@ export function ClientForm(props: Props) {
               )}
             />
             {useSeparateBilling && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="billingPostalCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>郵便番号 *</FormLabel>
-                      <FormControl><Input placeholder="150-0043" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="billingPrefecture"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>都道府県 *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="都道府県を選択" /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          {JP_PREFECTURES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="billingCity"
-                  render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>市区町村 *</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="billingAddress"
-                  render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>住所1(番地) *</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="billingAddressLine2"
-                  render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>住所2(建物名)</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <AddressFields prefix="billing" country={country} />
             )}
           </CardContent>
         </Card>
@@ -537,68 +416,7 @@ export function ClientForm(props: Props) {
               )}
             />
             {useSeparateShipping && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="shippingPostalCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>郵便番号 *</FormLabel>
-                      <FormControl><Input placeholder="150-0043" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="shippingPrefecture"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>都道府県 *</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value || ""}>
-                        <FormControl><SelectTrigger><SelectValue placeholder="都道府県を選択" /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          {JP_PREFECTURES.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="shippingCity"
-                  render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>市区町村 *</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="shippingAddress"
-                  render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>住所1(番地) *</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="shippingAddressLine2"
-                  render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>住所2(建物名)</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+              <AddressFields prefix="shipping" country={country} />
             )}
           </CardContent>
         </Card>

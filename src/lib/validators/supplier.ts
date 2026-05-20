@@ -156,8 +156,25 @@ export const supplierInputSchema = z
     notes: optionalString(5000),
   })
   .superRefine((data, ctx) => {
-    // taxId: 国内仕入先（country === "JP"）のみ必須
+    // 国内仕入先（country === "JP"）のみ必須・形式チェック
     if (data.country === "JP") {
+      // 郵便番号
+      if (data.postalCode && !/^\d{3}-?\d{4}$/.test(data.postalCode)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["postalCode"],
+          message: "郵便番号は7桁（例：150-0043）で入力してください",
+        })
+      }
+      // 都道府県
+      if (!data.prefecture || data.prefecture === "") {
+        ctx.addIssue({
+          code: "custom",
+          path: ["prefecture"],
+          message: "国内仕入先は都道府県が必須です",
+        })
+      }
+      // taxId（既存）
       if (!data.taxId || data.taxId === "") {
         ctx.addIssue({
           code: "custom",

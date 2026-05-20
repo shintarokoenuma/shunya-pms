@@ -55,6 +55,8 @@ import {
   CHAT_TOOL_PRESETS,
   PAYMENT_PRESETS,
 } from "./labels"
+import { AddressFields } from "@/components/forms/address-fields"
+import { TimezoneField } from "@/components/forms/timezone-field"
 
 export type AssignableUser = {
   id: string
@@ -315,75 +317,7 @@ export function SupplierForm(props: Props) {
               )}
             />
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <FormField
-                control={form.control}
-                name="postalCode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>郵便番号</FormLabel>
-                    <FormControl>
-                      <Input placeholder="100-0001" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="prefecture"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>都道府県/州</FormLabel>
-                    <FormControl>
-                      <Input placeholder="東京都" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="city"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>市区町村</FormLabel>
-                    <FormControl>
-                      <Input placeholder="千代田区" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="address"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>住所</FormLabel>
-                  <FormControl>
-                    <Input placeholder="丸の内 1-1-1" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="addressLine2"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>建物名・部屋番号</FormLabel>
-                  <FormControl>
-                    <Input placeholder="サンプルビル 5F" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <AddressFields country={country} />
 
             <FormField
               control={form.control}
@@ -560,20 +494,7 @@ export function SupplierForm(props: Props) {
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="timezone"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>タイムゾーン</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Asia/Tokyo" {...field} />
-                    </FormControl>
-                    <FormDescription>IANA形式 例: Asia/Shanghai</FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              <TimezoneField />
             </div>
           </CardContent>
         </Card>

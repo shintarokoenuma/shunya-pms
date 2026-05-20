@@ -132,8 +132,8 @@ export const clientBaseSchema = z
     website: optionalUrl,
 
     // マスター住所（必須）
-    postalCode: requiredPostalCodeJp,
-    prefecture: requiredString(50, "都道府県"),
+    postalCode: optionalPostalCode,
+    prefecture: optionalString(50),
     city: requiredString(100, "市区町村"),
     address: requiredString(500, "住所1"),
     addressLine2: optionalString(255),
@@ -201,12 +201,42 @@ export const clientBaseSchema = z
   })
   // 別住所チェックボックス ON のとき各フィールド必須
   .superRefine((data, ctx) => {
+    // メイン住所: country === "JP" のときのみ郵便番号・都道府県を必須・形式チェック
+    if (data.country === "JP") {
+      if (!data.postalCode) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["postalCode"],
+          message: "郵便番号は必須です",
+        })
+      } else if (!/^\d{3}-?\d{4}$/.test(data.postalCode)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["postalCode"],
+          message: "郵便番号は7桁（例：150-0043）で入力してください",
+        })
+      }
+      if (!data.prefecture) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["prefecture"],
+          message: "都道府県は必須です",
+        })
+      }
+    }
+
     if (data.useSeparateBillingAddress) {
       if (!data.billingPostalCode) {
         ctx.addIssue({
           code: "custom",
           path: ["billingPostalCode"],
           message: "請求書発送先の郵便番号は必須です",
+        })
+      } else if (data.country === "JP" && !/^\d{3}-?\d{4}$/.test(data.billingPostalCode)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["billingPostalCode"],
+          message: "請求書発送先の郵便番号は7桁（例：150-0043）で入力してください",
         })
       }
       if (!data.billingPrefecture) {
@@ -237,6 +267,12 @@ export const clientBaseSchema = z
           code: "custom",
           path: ["shippingPostalCode"],
           message: "配送先の郵便番号は必須です",
+        })
+      } else if (data.country === "JP" && !/^\d{3}-?\d{4}$/.test(data.shippingPostalCode)) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["shippingPostalCode"],
+          message: "配送先の郵便番号は7桁（例：150-0043）で入力してください",
         })
       }
       if (!data.shippingPrefecture) {

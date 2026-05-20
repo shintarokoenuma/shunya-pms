@@ -115,26 +115,4 @@ export const PAYMENT_PRESETS: Array<{
   { label: "20日締翌月10日払", closingDay: 20, paymentMonthOffset: 1, paymentDay: 10 },
 ]
 
-// 国コード（ISO 3166-1 alpha-2）の主要なもの
-export const COUNTRY_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "JP", label: "日本" },
-  { value: "CN", label: "中国" },
-  { value: "VN", label: "ベトナム" },
-  { value: "KR", label: "韓国" },
-  { value: "TH", label: "タイ" },
-  { value: "TW", label: "台湾" },
-  { value: "HK", label: "香港" },
-  { value: "ID", label: "インドネシア" },
-  { value: "IN", label: "インド" },
-  { value: "MY", label: "マレーシア" },
-  { value: "MM", label: "ミャンマー" },
-  { value: "BD", label: "バングラデシュ" },
-  { value: "KH", label: "カンボジア" },
-  { value: "LK", label: "スリランカ" },
-  { value: "PH", label: "フィリピン" },
-  { value: "PK", label: "パキスタン" },
-  { value: "TR", label: "トルコ" },
-  { value: "IT", label: "イタリア" },
-  { value: "US", label: "アメリカ" },
-  { value: "OTHER", label: "その他" },
-]
+export { COUNTRY_OPTIONS, type CountryOption } from "@/lib/constants/countries"
