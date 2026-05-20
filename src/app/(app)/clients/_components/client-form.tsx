@@ -327,6 +327,10 @@ export function ClientForm(props: Props) {
               )}
             />
             <div />
+
+            <div className="md:col-span-2">
+              <AddressFields country={country} />
+            </div>
             <FormField
               control={form.control}
               name="phone"
@@ -366,10 +370,6 @@ export function ClientForm(props: Props) {
                 </FormItem>
               )}
             />
-
-            <div className="md:col-span-2">
-              <AddressFields country={country} />
-            </div>
           </CardContent>
         </Card>
 
