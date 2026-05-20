@@ -303,23 +303,23 @@ model Client {
   clientSize   ClientSize?        @map("client_size")
 
   // 連絡先
-  postalCode String? @map("postal_code") @db.VarChar(20)
-  country    String  @default("JP") @db.VarChar(2) // ISO 3166-1 alpha-2
-  prefecture String? @db.VarChar(50)
-  city       String? @db.VarChar(100)
-  address       String? @db.Text
-  addressLine2  String? @map("address_line2") @db.VarChar(255) // 建物名・部屋番号
-  phone         String? @db.VarChar(50)
-  fax           String? @db.VarChar(50)
-  email         String? @db.VarChar(255)
-  website       String? @db.VarChar(500)
+  postalCode   String? @map("postal_code") @db.VarChar(20)
+  country      String  @default("JP") @db.VarChar(2) // ISO 3166-1 alpha-2
+  prefecture   String? @db.VarChar(50)
+  city         String? @db.VarChar(100)
+  address      String? @db.Text
+  addressLine2 String? @map("address_line2") @db.VarChar(255) // 建物名・部屋番号
+  phone        String? @db.VarChar(50)
+  fax          String? @db.VarChar(50)
+  email        String? @db.VarChar(255)
+  website      String? @db.VarChar(500)
 
   // 請求書発送先住所（マスター住所と異なる場合のみ入力）
-  billingPostalCode    String? @map("billing_postal_code") @db.VarChar(20)
-  billingPrefecture    String? @map("billing_prefecture") @db.VarChar(50)
-  billingCity          String? @map("billing_city") @db.VarChar(100)
-  billingAddress       String? @map("billing_address") @db.Text
-  billingAddressLine2  String? @map("billing_address_line2") @db.VarChar(255)
+  billingPostalCode   String? @map("billing_postal_code") @db.VarChar(20)
+  billingPrefecture   String? @map("billing_prefecture") @db.VarChar(50)
+  billingCity         String? @map("billing_city") @db.VarChar(100)
+  billingAddress      String? @map("billing_address") @db.Text
+  billingAddressLine2 String? @map("billing_address_line2") @db.VarChar(255)
 
   // 商品配送先住所（マスター住所と異なる場合のみ入力）
   shippingPostalCode   String? @map("shipping_postal_code") @db.VarChar(20)
@@ -337,7 +337,7 @@ model Client {
   isQualifiedInvoiceIssuer Boolean @default(true) @map("is_qualified_invoice_issuer")
 
   // 支払い条件
-  paymentTermType PaymentTermType @default(MONTHLY_CLOSING) @map("payment_term_type")
+  paymentTermType    PaymentTermType @default(MONTHLY_CLOSING) @map("payment_term_type")
   closingDay         Int?            @map("closing_day") // 締日（1-31、31=月末）
   paymentMonthOffset Int?            @map("payment_month_offset") // 1=翌月、2=翌々月
   paymentDay         Int?            @map("payment_day") // 支払日（1-31、31=月末）
@@ -554,14 +554,17 @@ model Supplier {
   supplierType SupplierType[] @map("supplier_type") // 複数選択可
 
   // 連絡先
-  country    String  @default("JP") @db.VarChar(2)
-  postalCode String? @map("postal_code") @db.VarChar(20)
-  address    String? @db.Text
-  addressEn  String? @map("address_en") @db.Text
-  phone      String? @db.VarChar(50)
-  fax        String? @db.VarChar(50)
-  email      String? @db.VarChar(255)
-  website    String? @db.VarChar(500)
+  country      String  @default("JP") @db.VarChar(2)
+  postalCode   String? @map("postal_code") @db.VarChar(20)
+  prefecture   String? @db.VarChar(50)
+  city         String? @db.VarChar(100)
+  address      String? @db.Text
+  addressLine2 String? @map("address_line2") @db.VarChar(255)
+  addressEn    String? @map("address_en") @db.Text
+  phone        String? @db.VarChar(50)
+  fax          String? @db.VarChar(50)
+  email        String? @db.VarChar(255)
+  website      String? @db.VarChar(500)
 
   // 海外取引用
   chatTool          String?  @map("chat_tool") @db.VarChar(50) // WeChat / LINE / Zalo
@@ -592,11 +595,14 @@ model Supplier {
   deliveryRating Int? @map("delivery_rating") // 1-5
   priceRating    Int? @map("price_rating") // 1-5
 
+  // 担当者
+  assignedToUserId String? @map("assigned_to_user_id")
+
   // メモ
   notes String? @db.Text
 
   // ステータス
-  status String @default("ACTIVE") @db.VarChar(20)
+  status SupplierStatus @default(ACTIVE)
 
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
@@ -609,35 +615,39 @@ model Supplier {
   @@unique([companyId, supplierCode])
   @@index([companyId, status])
   @@index([companyId, country])
+  @@index([assignedToUserId])
   @@map("suppliers")
+}
+
+enum SupplierStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
 }
 
 enum SupplierType {
   FABRIC // 生地
-  LINING // 裏地
-  INTERLINING // 芯地
-  TRIM // 副資材
-  ZIPPER // ファスナー
-  BUTTON // ボタン
+  TRIM // 付属
   THREAD // 糸
+  ACCESSORY // 副資材
   LABEL // ネーム
-  HANG_TAG // 下げ札
-  PACKAGING // 包装材
-  ORIGINAL_FABRIC // オリジナル生地
+  PATTERN // パターン
+  BODY // ボディ
   USED_CLOTHING // 古着
-  PRE_MADE // ありボディ
-  OTHER
+  OTHER // その他
 }
 
 /// 仕入先担当者
 model SupplierContact {
   id         String @id @default(uuid())
+  companyId  String @map("company_id")
   supplierId String @map("supplier_id")
 
   firstName   String  @map("first_name") @db.VarChar(100)
   lastName    String  @map("last_name") @db.VarChar(100)
   displayName String? @map("display_name") @db.VarChar(200)
   jobTitle    String? @map("job_title") @db.VarChar(255)
+  department  String? @db.VarChar(255)
 
   email  String? @db.VarChar(255)
   phone  String? @db.VarChar(50)
@@ -654,7 +664,7 @@ model SupplierContact {
 
   supplier Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
 
-  @@index([supplierId])
+  @@index([supplierId, isPrimary])
   @@map("supplier_contacts")
 }
 
