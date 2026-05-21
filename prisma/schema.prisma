@@ -689,13 +689,16 @@ model Factory {
   contractTypes FactoryContractType[] @map("contract_types")
 
   // 連絡先（仕入先と同様）
-  country    String  @default("JP") @db.VarChar(2)
-  postalCode String? @map("postal_code") @db.VarChar(20)
-  address    String? @db.Text
-  addressEn  String? @map("address_en") @db.Text
-  phone      String? @db.VarChar(50)
-  fax        String? @db.VarChar(50)
-  email      String? @db.VarChar(255)
+  country      String  @default("JP") @db.VarChar(2)
+  postalCode   String? @map("postal_code") @db.VarChar(20)
+  prefecture   String? @db.VarChar(50)
+  city         String? @db.VarChar(100)
+  address      String? @db.Text
+  addressLine2 String? @map("address_line2") @db.VarChar(255)
+  addressEn    String? @map("address_en") @db.Text
+  phone        String? @db.VarChar(50)
+  fax          String? @db.VarChar(50)
+  email        String? @db.VarChar(255)
 
   // 海外取引用
   chatTool          String?  @map("chat_tool") @db.VarChar(50)
@@ -735,8 +738,11 @@ model Factory {
   // メモ
   notes String? @db.Text
 
+  // 担当者（shunya 側）
+  assignedToUserId String? @map("assigned_to_user_id")
+
   // ステータス
-  status String @default("ACTIVE") @db.VarChar(20)
+  status FactoryStatus @default(ACTIVE)
 
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
@@ -749,6 +755,7 @@ model Factory {
   @@unique([companyId, factoryCode])
   @@index([companyId, status])
   @@index([companyId, country])
+  @@index([assignedToUserId])
   @@map("factories")
 }
 
@@ -776,15 +783,23 @@ enum FactoryContractType {
   CUSTOM // カスタム契約
 }
 
+enum FactoryStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
 /// 工場担当者
 model FactoryContact {
   id        String @id @default(uuid())
+  companyId String @map("company_id")
   factoryId String @map("factory_id")
 
   firstName   String  @map("first_name") @db.VarChar(100)
   lastName    String  @map("last_name") @db.VarChar(100)
   displayName String? @map("display_name") @db.VarChar(200)
   jobTitle    String? @map("job_title") @db.VarChar(255)
+  department  String? @db.VarChar(255)
 
   email  String? @db.VarChar(255)
   phone  String? @db.VarChar(50)
@@ -801,7 +816,7 @@ model FactoryContact {
 
   factory Factory @relation(fields: [factoryId], references: [id], onDelete: Cascade)
 
-  @@index([factoryId])
+  @@index([factoryId, isPrimary])
   @@map("factory_contacts")
 }
 
