@@ -473,7 +473,8 @@ model ClientContact {
   mobile String? @db.VarChar(50)
 
   // ロール
-  isPrimary Boolean @default(false) @map("is_primary")
+  isPrimary         Boolean   @default(false) @map("is_primary")
+  preferredLanguage Language? @map("preferred_language")
 
   // メモ
   notes String? @db.Text
@@ -654,7 +655,7 @@ model SupplierContact {
   mobile String? @db.VarChar(50)
 
   isPrimary         Boolean   @default(false) @map("is_primary")
-  preferredLanguage Language?
+  preferredLanguage Language? @map("preferred_language")
 
   notes String? @db.Text
 
@@ -806,7 +807,7 @@ model FactoryContact {
   mobile String? @db.VarChar(50)
 
   isPrimary         Boolean   @default(false) @map("is_primary")
-  preferredLanguage Language?
+  preferredLanguage Language? @map("preferred_language")
 
   notes String? @db.Text
 
@@ -842,11 +843,17 @@ model Contractor {
   // 専門分野
   specialties ContractorSpecialty[]
 
-  // 連絡先
-  country String  @default("JP") @db.VarChar(2)
-  address String? @db.Text
-  phone   String? @db.VarChar(50)
-  email   String? @db.VarChar(255)
+  // 連絡先（住所4分割）
+  country      String  @default("JP") @db.VarChar(2)
+  postalCode   String? @map("postal_code") @db.VarChar(20)
+  prefecture   String? @db.VarChar(50)
+  city         String? @db.VarChar(100)
+  address      String? @db.Text
+  addressLine2 String? @map("address_line2") @db.VarChar(255)
+  addressEn    String? @map("address_en") @db.Text
+  phone        String? @db.VarChar(50)
+  fax          String? @db.VarChar(50)
+  email        String? @db.VarChar(255)
 
   // 海外取引用
   chatTool          String?  @map("chat_tool") @db.VarChar(50)
@@ -876,11 +883,11 @@ model Contractor {
 
   // 取引条件
   taxId                    String?         @map("tax_id") @db.VarChar(50)
-  isQualifiedInvoiceIssuer Boolean         @default(false) @map("is_qualified_invoice_issuer")
+  isQualifiedInvoiceIssuer Boolean         @default(true) @map("is_qualified_invoice_issuer")
   paymentTermType          PaymentTermType @default(MONTHLY_CLOSING) @map("payment_term_type")
-  closingDay               Int?            @map("closing_day") // 締日（1-31、31=月末）
-  paymentMonthOffset       Int?            @map("payment_month_offset") // 1=翌月、2=翌々月
-  paymentDay               Int?            @map("payment_day") // 支払日（1-31、31=月末）
+  closingDay               Int?            @map("closing_day")
+  paymentMonthOffset       Int?            @map("payment_month_offset")
+  paymentDay               Int?            @map("payment_day")
 
   // 著作権・所有権
   defaultPatternOwnership OwnershipType @default(SHUNYA) @map("default_pattern_ownership")
@@ -889,20 +896,65 @@ model Contractor {
   // システムユーザーとしての招待
   invitedUserId String? @map("invited_user_id") // 招待時のユーザーID
 
+  // 担当者
+  assignedToUserId String? @map("assigned_to_user_id")
+
   // メモ
   notes String? @db.Text
 
   // ステータス
-  status String @default("ACTIVE") @db.VarChar(20)
+  status ContractorStatus @default(ACTIVE)
 
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
+  // リレーション
+  contacts ContractorContact[]
+
   @@unique([companyId, contractorCode])
   @@index([companyId, status])
+  @@index([companyId, country])
+  @@index([assignedToUserId])
   @@map("contractors")
+}
+
+enum ContractorStatus {
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+/// 外注先担当者（法人外注先の主担当者を管理）
+model ContractorContact {
+  id           String @id @default(uuid())
+  companyId    String @map("company_id")
+  contractorId String @map("contractor_id")
+
+  firstName   String  @map("first_name") @db.VarChar(100)
+  lastName    String  @map("last_name") @db.VarChar(100)
+  displayName String? @map("display_name") @db.VarChar(200)
+  jobTitle    String? @map("job_title") @db.VarChar(255)
+  department  String? @db.VarChar(255)
+
+  email  String? @db.VarChar(255)
+  phone  String? @db.VarChar(50)
+  mobile String? @db.VarChar(50)
+
+  isPrimary         Boolean   @default(false) @map("is_primary")
+  preferredLanguage Language? @map("preferred_language")
+
+  notes String? @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  contractor Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  @@index([contractorId, isPrimary])
+  @@map("contractor_contacts")
 }
 
 enum ContractorSpecialty {
