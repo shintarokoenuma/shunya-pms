@@ -6,6 +6,19 @@
 
 ---
 
+## 仕様確定（2026年5月22日 セッションで確定）
+
+| Q | 内容 | 決定 |
+|---|---|---|
+| Q1 | `isQualifiedInvoiceIssuer` デフォルト | **`true`**（Factory/Supplier と統一、個人事業主はフォーム入力時に手動で false に）|
+| Q2 | ロイヤリティ UI | **Phase 2 へ**（DB 列だけ保持）|
+| Q3 | 著作権・所有権 UI | **Phase 2 へ**（DB 列だけ保持）|
+| Q4 | システムユーザー招待 (`invitedUserId`) | **Phase 2 へ**（DB 列だけ保持）|
+
+→ Q2/Q3/Q4 は **DB 列は維持、フォーム UI のみ非表示**。Phase 2 で横断機能として統合実装する想定。
+
+---
+
 ## 完了済み
 
 ### Phase 1: スキーマ ✅
@@ -17,17 +30,21 @@
 - assignedToUserId 担当者カラム追加
 - ContractorContact モデル新設（法人外注先の主担当者用）
 - インデックス追加（country / assignedToUserId）
+- **isQualifiedInvoiceIssuer デフォルトを true に変更**（Q1=B 反映、2026-05-22）
 
 #### 副次成果: Contact 系命名統一
 ClientContact / SupplierContact / FactoryContact / ContractorContact の preferredLanguage カラムに `@map("preferred_language")` を追加。ClientContact には preferredLanguage 自体を新規追加。
 
-#### Migration ファイル（2件、適用済み）
+#### Migration ファイル（3件、適用済み）
 - `20260521155255_add_contractor_master_fields`
 - `20260521163304_unify_contact_preferred_language_naming`
+- `20260522053450_phase_1a_6_contractor_invoice_issuer_default_true`（Q1=B 反映）
 
 #### コミット
 - `7d537a9` feat(phase1a-6): contractor master schema + unify Contact preferred_language
 - `885bc3b` Merge branch 'main' into feat/contractor-master
+- `f749408` docs: Phase 1A-6 進捗メモ追加
+- `7b20d41` feat(phase1a-6): is_qualified_invoice_issuer デフォルトを true に変更
 
 ### shunya-master-patterns v1.1 + phase2-roadmap v0.1 ✅
 - PR #12 マージ済み（main に反映済み）
@@ -51,7 +68,7 @@ shunya-master-patterns §12 Phase 2 のチェックリスト:
 
 ## Phase 3: UI
 
-- [ ] `contractor-form.tsx` 作成（7-8カード）
+- [ ] `contractor-form.tsx` 作成（**7カード**、ロイヤリティ・著作権カードは省略）
 - [ ] `contractor-delete-button.tsx` 作成
 - [ ] `contractors-table.tsx` 作成
 - [ ] `contractors-search.tsx` 作成
@@ -91,29 +108,26 @@ shunya-master-patterns §12 Phase 2 のチェックリスト:
 - contractType 切替時は値を自動クリアしない
 - 非表示中の値があれば「※ 現在非表示: パッケージ料金 ¥XX,XXX が登録されています」のような注意書きを契約形態セレクト下に表示
 
-### ロイヤリティ
-- 5項目全部フォームに含める（royaltyType / royaltyRate / royaltyMinimum / royaltyMinimumCurrency / royaltyPaymentCycle）
-
-### Phase 2 送り
-- `unitFees`（JSON）は DB 列だけ残し、UI は Phase 2 へ
-- `invitedUserId` も Phase 1A-6 では UI 非表示（DB 列のみ）
+### Phase 2 送り（DB 列は保持、UI は作らない）
+- `royaltyType` / `royaltyRate` / `royaltyMinimum` / `royaltyMinimumCurrency` / `royaltyPaymentCycle`（ロイヤリティ 5項目）
+- `defaultPatternOwnership` / `defaultDesignOwnership`（著作権・所有権）
+- `invitedUserId`（システム招待）
+- `unitFees` (JSON、個別作業単価)
 
 ### その他
-- `isQualifiedInvoiceIssuer` デフォルト false（個人事業主の免税が多い実態を踏まえ、他マスターと違える）
-- `defaultPatternOwnership` / `defaultDesignOwnership` はデフォルト `SHUNYA`、フォームに含める
+- `isQualifiedInvoiceIssuer` デフォルト **true**（Factory/Supplier と統一、個人事業主はフォーム入力時に手動で false に切替）
 
 ---
 
-## フォーム構成案（7-8カード）
+## フォーム構成（7カード、MVP 確定版）
 
 1. 基本情報: contractorCode / contractorName / contractorNameEn / isIndividual
 2. 専門分野・契約形態: specialties[] / contractType
 3. 連絡先: 住所4分割 / phone / fax / email
 4. 海外取引: chatTool / chatToolId / preferredLanguage / preferredCurrency / timezone
 5. 料金体系: contractType に応じて条件表示
-6. ロイヤリティ・著作権: royaltyType / royaltyRate / royaltyMinimum / royaltyMinimumCurrency / royaltyPaymentCycle / defaultPatternOwnership / defaultDesignOwnership
-7. 取引条件: taxId / isQualifiedInvoiceIssuer / paymentTermType / closingDay / paymentMonthOffset / paymentDay
-8. 担当者・ステータス・メモ: assignedToUserId / status / notes
+6. 取引条件: taxId / isQualifiedInvoiceIssuer / paymentTermType / closingDay / paymentMonthOffset / paymentDay
+7. 担当者・ステータス・メモ: assignedToUserId / status / notes
 + 主担当カード（isIndividual=false の時のみ表示）
 
 ---
@@ -122,7 +136,7 @@ shunya-master-patterns §12 Phase 2 のチェックリスト:
 
 新しいセッションでこう言うだけで再開できます:
 
-> Phase 1A-6 の Phase 2（論理層）から再開します。前回までに Phase 1（スキーマ）と shunya-master-patterns v1.1 更新は完了済み。feat/contractor-master ブランチで作業中。`docs/phase1a-6-progress.md` を参照してください。
+> Phase 1A-6 の Phase 2（論理層）から再開します。前回までに Phase 1（スキーマ）と shunya-master-patterns v1.1 更新は完了済み。feat/contractor-master ブランチで作業中。`docs/phase1a-6-progress.md` を参照してください。仕様確定は Q1=B / Q2=B / Q3=B / Q4=A。
 
 ---
 

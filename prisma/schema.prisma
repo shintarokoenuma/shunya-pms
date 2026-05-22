@@ -883,7 +883,7 @@ model Contractor {
 
   // 取引条件
   taxId                    String?         @map("tax_id") @db.VarChar(50)
-  isQualifiedInvoiceIssuer Boolean         @default(false) @map("is_qualified_invoice_issuer")
+  isQualifiedInvoiceIssuer Boolean         @default(true) @map("is_qualified_invoice_issuer")
   paymentTermType          PaymentTermType @default(MONTHLY_CLOSING) @map("payment_term_type")
   closingDay               Int?            @map("closing_day")
   paymentMonthOffset       Int?            @map("payment_month_offset")
