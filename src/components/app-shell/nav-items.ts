@@ -52,7 +52,7 @@ export const NAV_SECTIONS: NavSection[] = [
         label: "Inquiry（営業先DB）",
         href: "/inquiries",
         icon: MessageSquare,
-        enabled: true,
+        enabled: false,
       },
     ],
   },
