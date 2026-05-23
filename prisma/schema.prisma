@@ -1218,7 +1218,7 @@ model ProductCategory {
   defaultSizeOptions Json? @map("default_size_options") // ["S", "M", "L", "XL"]
 
   // ステータス
-  status String @default("ACTIVE") @db.VarChar(20)
+  status ProductCategoryStatus @default(ACTIVE)
 
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
@@ -1230,8 +1230,16 @@ model ProductCategory {
   children ProductCategory[] @relation("ProductCategoryHierarchy")
 
   @@unique([companyId, categoryCode])
+  @@unique([companyId, categoryName])
   @@index([companyId, parentCategoryId])
+  @@index([companyId, status])
+  @@index([companyId, level])
   @@map("product_categories")
+}
+
+enum ProductCategoryStatus {
+  ACTIVE
+  ARCHIVED
 }
 
 // =====================================================
