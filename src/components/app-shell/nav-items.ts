@@ -3,6 +3,7 @@ import {
   Calculator,
   ClipboardCheck,
   Factory,
+  FolderTree,
   Layers,
   LayoutDashboard,
   MessageSquare,
@@ -48,6 +49,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "仕入先", href: "/suppliers", icon: Truck, enabled: true },
       { label: "工場", href: "/factories", icon: Factory, enabled: true },
       { label: "外注先", href: "/contractors", icon: UserCog, enabled: true },
+      { label: "商品カテゴリ", href: "/product-categories", icon: FolderTree, enabled: true },
       {
         label: "Inquiry（営業先DB）",
         href: "/inquiries",
