@@ -1252,8 +1252,8 @@ model ExpenseCategory {
   companyId String @map("company_id")
 
   expenseCode   String  @map("expense_code") @db.VarChar(50)
-  expenseName   String  @map("expense_name") @db.VarChar(255)
-  expenseNameEn String? @map("expense_name_en") @db.VarChar(255)
+  expenseName   String  @map("expense_name") @db.VarChar(100)
+  expenseNameEn String? @map("expense_name_en") @db.VarChar(100)
 
   expenseType ExpenseType @map("expense_type")
 
@@ -1268,7 +1268,7 @@ model ExpenseCategory {
   notes String? @db.Text
 
   // ステータス
-  status String @default("ACTIVE") @db.VarChar(20)
+  status ExpenseCategoryStatus @default(ACTIVE)
 
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
@@ -1276,6 +1276,8 @@ model ExpenseCategory {
   deletedAt DateTime? @map("deleted_at")
 
   @@unique([companyId, expenseCode])
+  @@index([companyId, status])
+  @@index([companyId, expenseType])
   @@map("expense_categories")
 }
 
@@ -1302,9 +1304,11 @@ enum CalculationType {
   FIXED // 固定額
   PER_UNIT // 単価×数量
   PERCENTAGE // 売上の％
-  WEIGHT_BASED // 重量ベース
-  VOLUME_BASED // 体積ベース
-  DISTANCE_BASED // 距離ベース
+}
+
+enum ExpenseCategoryStatus {
+  ACTIVE
+  ARCHIVED
 }
 
 // =====================================================
