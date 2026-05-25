@@ -2,6 +2,7 @@ import {
   Building2,
   Calculator,
   ClipboardCheck,
+  Coins,
   Factory,
   FolderTree,
   Layers,
@@ -50,6 +51,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "工場", href: "/factories", icon: Factory, enabled: true },
       { label: "外注先", href: "/contractors", icon: UserCog, enabled: true },
       { label: "商品カテゴリ", href: "/product-categories", icon: FolderTree, enabled: true },
+      { label: "諸経費カテゴリ", href: "/expense-categories", icon: Coins, enabled: true },
       {
         label: "Inquiry（営業先DB）",
         href: "/inquiries",
