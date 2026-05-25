@@ -385,6 +385,7 @@ model Client {
   // リレーション
   contacts ClientContact[]
   brands   Brand[]
+  buyers   Buyer[]
 
   @@unique([companyId, clientCode])
   @@index([companyId, status])
@@ -988,29 +989,35 @@ enum RoyaltyType {
 // バイヤー・納品先マスター
 // =====================================================
 
-/// バイヤー（小売・卸の会社）
+/// バイヤー（小売・卸の会社、または Client の事業部単位）
 model Buyer {
   id        String @id @default(uuid())
   companyId String @map("company_id")
 
-  // 関連クライアント（このバイヤーがクライアントの取引先）
-  clientId String? @map("client_id") // 関連クライアント
+  // 関連クライアント（このバイヤーがクライアントの取引先 / 事業部）
+  clientId String? @map("client_id")
 
   // 基本情報
   buyerCode   String  @map("buyer_code") @db.VarChar(50)
   buyerName   String  @map("buyer_name") @db.VarChar(255)
   buyerNameEn String? @map("buyer_name_en") @db.VarChar(255)
 
-  // 連絡先
-  address String? @db.Text
-  phone   String? @db.VarChar(50)
-  email   String? @db.VarChar(255)
+  // 連絡先（住所 5 分割、Client / AddressFields と揃える）
+  postalCode    String? @map("postal_code") @db.VarChar(20)
+  country       String  @default("JP") @db.VarChar(2)
+  prefecture    String? @db.VarChar(50)
+  city          String? @db.VarChar(100)
+  address       String? @db.Text
+  addressLine2  String? @map("address_line2") @db.VarChar(255)
+  contactPerson String? @map("contact_person") @db.VarChar(255)
+  phone         String? @db.VarChar(50)
+  email         String? @db.VarChar(255)
 
   // メモ
   notes String? @db.Text
 
   // ステータス
-  status String @default("ACTIVE") @db.VarChar(20)
+  status BuyerStatus @default(ACTIVE)
 
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
@@ -1018,11 +1025,18 @@ model Buyer {
   deletedAt DateTime? @map("deleted_at")
 
   // リレーション
+  client               Client?               @relation(fields: [clientId], references: [id])
   deliveryDestinations DeliveryDestination[]
 
   @@unique([companyId, buyerCode])
   @@index([companyId, clientId])
+  @@index([companyId, status])
   @@map("buyers")
+}
+
+enum BuyerStatus {
+  ACTIVE
+  ARCHIVED
 }
 
 /// 納品先（バイヤーの店舗・倉庫等）
