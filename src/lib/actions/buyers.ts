@@ -54,6 +54,31 @@ async function requireSession() {
 }
 
 // =============================================================================
+// 補助: フォームの Client セレクト用に ACTIVE な Client 候補を返す
+// =============================================================================
+export type ClientOption = {
+  id: string
+  clientCode: string
+  companyName: string
+}
+
+export async function listActiveClientsForBuyerSelect(): Promise<ClientOption[]> {
+  const sess = await requireSession()
+  if (!sess.ok) return []
+
+  const rows = await prisma.client.findMany({
+    where: {
+      companyId: sess.companyId,
+      deletedAt: null,
+      status: "ACTIVE",
+    },
+    select: { id: true, clientCode: true, companyName: true },
+    orderBy: [{ clientCode: "asc" }],
+  })
+  return rows
+}
+
+// =============================================================================
 // 1. 一覧取得（client を select 込みで返す）
 // =============================================================================
 export type ListBuyersParams = {
@@ -284,6 +309,9 @@ export async function createBuyer(
     })
 
     revalidatePath("/buyers")
+    if (created.clientId) {
+      revalidatePath(`/clients/${created.clientId}`)
+    }
     return { ok: true, data: { id: created.id } }
   } catch (e) {
     return {
@@ -398,6 +426,13 @@ export async function updateBuyer(
 
     revalidatePath("/buyers")
     revalidatePath(`/buyers/${id}`)
+    // 双方向リンク: 旧 clientId と新 clientId の両方を invalidate
+    if (existing.clientId) {
+      revalidatePath(`/clients/${existing.clientId}`)
+    }
+    if (updated.clientId && updated.clientId !== existing.clientId) {
+      revalidatePath(`/clients/${updated.clientId}`)
+    }
     return { ok: true, data: { id } }
   } catch (e) {
     return {
@@ -446,6 +481,9 @@ export async function archiveBuyer(
 
     revalidatePath("/buyers")
     revalidatePath(`/buyers/${id}`)
+    if (existing.clientId) {
+      revalidatePath(`/clients/${existing.clientId}`)
+    }
     return { ok: true, data: { id } }
   } catch (e) {
     return {
@@ -494,6 +532,9 @@ export async function restoreBuyer(
 
     revalidatePath("/buyers")
     revalidatePath(`/buyers/${id}`)
+    if (existing.clientId) {
+      revalidatePath(`/clients/${existing.clientId}`)
+    }
     return { ok: true, data: { id } }
   } catch (e) {
     return {
@@ -610,6 +651,9 @@ export async function deleteBuyerPermanently(
     })
 
     revalidatePath("/buyers")
+    if (existing.clientId) {
+      revalidatePath(`/clients/${existing.clientId}`)
+    }
     return { ok: true, data: { id } }
   } catch (e) {
     return {

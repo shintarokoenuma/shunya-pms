@@ -11,6 +11,7 @@ import {
   Package,
   Receipt,
   Settings,
+  ShoppingBag,
   ShoppingCart,
   Tag,
   Truck,
@@ -50,6 +51,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "仕入先", href: "/suppliers", icon: Truck, enabled: true },
       { label: "工場", href: "/factories", icon: Factory, enabled: true },
       { label: "外注先", href: "/contractors", icon: UserCog, enabled: true },
+      { label: "バイヤー", href: "/buyers", icon: ShoppingBag, enabled: true },
       { label: "商品カテゴリ", href: "/product-categories", icon: FolderTree, enabled: true },
       { label: "諸経費カテゴリ", href: "/expense-categories", icon: Coins, enabled: true },
       {
