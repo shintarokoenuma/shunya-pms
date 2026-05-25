@@ -205,3 +205,50 @@ Phase 1B 以降で実装予定:
 - 業界用語マスター（`industry_term`）の本格活用
   - 同義語マッピングを DB 化
   - 多言語翻訳の精度向上
+
+---
+
+## Buyer マスターの buyerCode 命名規則
+
+（2026-05-25 追記、Phase 1A-11 仕様確定議論より）
+
+Buyer は業務シナリオによって 2 種類の意味を持つため、buyerCode の付け方も使い分ける。
+
+### Case A：ブランド OEM の卸先として登録
+
+Buyer 自身の名前を使う：
+
+| Client | Buyer | buyerCode |
+|---|---|---|
+| MARKA | BEAMS | `BEAMS` |
+| MARKA | IF | `IF` |
+
+Client 紐付けを buyerCode に明示したい場合は `<Client略号>-<Buyer略号>` も可：
+
+| Client | Buyer | buyerCode |
+|---|---|---|
+| MARKA | BEAMS | `MARKA-BEAMS` |
+
+### Case B：直接 OEM の事業部単位として登録
+
+`<Client略号>-<事業部略号>` 形式：
+
+| Client | 事業部 | buyerCode |
+|---|---|---|
+| BEAMS | 国内事業部 | `BEAMS-DOM` |
+| BEAMS | インターナショナル事業部 | `BEAMS-INTL` |
+| BEAMS | PB 事業部 | `BEAMS-PB` |
+| United Arrows | 国内事業部 | `UA-DOM` |
+
+### 略号の付け方の目安
+
+- Client 略号：大文字英字 2-8 文字（`BEAMS`、`MARKA`、`UA` など）
+- 事業部略号（Case B）：以下の標準語を推奨
+  - `DOM`：国内事業部（Domestic）
+  - `INTL`：海外・インターナショナル事業部
+  - `PB`：プライベートブランド事業部
+  - `EC`：EC・オンライン事業部
+  - `WHO`：卸事業部
+  - 上記に当てはまらない場合は事業部名の英字略号（最大 8 文字）
+
+詳細な議論経緯は `docs/phase1a-11-spec-confirmation-2026-05-25.md` を参照。
