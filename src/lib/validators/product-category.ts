@@ -45,7 +45,7 @@ export const productCategoryInputSchema = z
     categoryCode: z
       .string()
       .min(1, "カテゴリコードは必須です")
-      .max(10, "10文字以内で入力してください")
+      .max(50, "50文字以内で入力してください")
       .regex(/^[A-Za-z0-9_-]+$/, "英数字・ハイフン・アンダースコアのみ使用できます"),
     categoryName: z
       .string()

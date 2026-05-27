@@ -231,6 +231,70 @@ export async function listParentCandidates(level: 2 | 3) {
 }
 
 // =============================================================================
+// 全 ACTIVE カテゴリを階層パンくず付きで返す（ModelCode 等の Select 用）
+// Phase 1A-14：ModelCode の Category Select を有効化するために追加
+// =============================================================================
+export type ProductCategoryOptionForSelect = {
+  id: string
+  categoryCode: string
+  categoryName: string
+  level: number
+  /** 階層パンくず（例: "レディース > トップス > Tシャツ"） */
+  breadcrumb: string
+}
+
+export async function listAllActiveProductCategoriesForSelect(): Promise<
+  ProductCategoryOptionForSelect[]
+> {
+  const session = await auth()
+  if (!session?.user) return []
+  const companyId = session.user.companyId
+  if (!companyId) return []
+
+  const rows = await prisma.productCategory.findMany({
+    where: {
+      companyId,
+      deletedAt: null,
+      status: ProductCategoryStatus.ACTIVE,
+    },
+    orderBy: [{ categoryCode: "asc" }],
+    select: {
+      id: true,
+      categoryCode: true,
+      categoryName: true,
+      level: true,
+      parentCategoryId: true,
+    },
+  })
+
+  // id -> row の Map を作って、各行について parent を辿りパンくず生成
+  const byId = new Map(rows.map((r) => [r.id, r]))
+
+  const buildBreadcrumb = (id: string): string => {
+    const names: string[] = []
+    let cursor: string | null = id
+    const visited = new Set<string>()
+    while (cursor !== null) {
+      if (visited.has(cursor)) break
+      visited.add(cursor)
+      const row = byId.get(cursor)
+      if (!row) break
+      names.unshift(row.categoryName)
+      cursor = row.parentCategoryId
+    }
+    return names.join(" > ")
+  }
+
+  return rows.map((r) => ({
+    id: r.id,
+    categoryCode: r.categoryCode,
+    categoryName: r.categoryName,
+    level: r.level,
+    breadcrumb: buildBreadcrumb(r.id),
+  }))
+}
+
+// =============================================================================
 // 詳細取得
 // =============================================================================
 export async function getProductCategory(id: string) {
