@@ -48,7 +48,7 @@ export const MATERIAL_STATUS_OPTIONS: {
 // 素材タイプ（15 値）
 // =============================================================================
 export const MATERIAL_TYPE_LABELS: Record<MaterialType, string> = {
-  FABRIC: "生地",
+  FABRIC: "表地",
   LINING: "裏地",
   INTERLINING: "芯地",
   ZIPPER: "ファスナー",
@@ -96,7 +96,7 @@ export const MATERIAL_TYPE_OPTIONS: {
   value: MaterialType
   label: string
 }[] = [
-  { value: "FABRIC", label: "生地" },
+  { value: "FABRIC", label: "表地" },
   { value: "LINING", label: "裏地" },
   { value: "INTERLINING", label: "芯地" },
   { value: "ZIPPER", label: "ファスナー" },
