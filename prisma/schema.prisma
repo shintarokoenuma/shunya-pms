@@ -1045,29 +1045,36 @@ model DeliveryDestination {
   companyId String @map("company_id")
   buyerId   String @map("buyer_id")
 
-  // 基本情報
+  // 識別
   destinationCode String @map("destination_code") @db.VarChar(50)
   destinationName String @map("destination_name") @db.VarChar(255) // 例：BEAMS渋谷店
 
-  // 住所
-  postalCode String? @map("postal_code") @db.VarChar(20)
-  country    String  @default("JP") @db.VarChar(2)
-  prefecture String? @db.VarChar(50)
-  city       String? @db.VarChar(100)
-  address    String? @db.Text
+  // 住所（A-3：5 分割 + addressLine2）
+  postalCode   String? @map("postal_code") @db.VarChar(20)
+  country      String  @default("JP") @db.VarChar(2)
+  prefecture   String? @db.VarChar(50)
+  city         String? @db.VarChar(100)
+  address      String? @db.Text
+  addressLine2 String? @map("address_line2") @db.VarChar(255) // 例：山田ビル 3F
 
-  // 連絡先
+  // 連絡先（A-2：単一連絡先）
   contactPerson String? @map("contact_person") @db.VarChar(255)
   phone         String? @db.VarChar(50)
   email         String? @db.VarChar(255)
 
-  // 配送指示
+  // 配送指示（C-3）
   deliveryNotes          String? @map("delivery_notes") @db.Text
   preferredDeliveryDays  String? @map("preferred_delivery_days") @db.VarChar(255) // 例：火・木
   preferredDeliveryHours String? @map("preferred_delivery_hours") @db.VarChar(255) // 例：10:00-15:00
 
-  // ステータス
-  status String @default("ACTIVE") @db.VarChar(20)
+  // 海外取引（A-4：timezone のみ）
+  timezone String? @db.VarChar(50)
+
+  // ステータス（A-1：Buyer に揃えて 2 値）
+  status DeliveryDestinationStatus @default(ACTIVE)
+
+  // メモ
+  notes String? @db.Text
 
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
@@ -1079,7 +1086,13 @@ model DeliveryDestination {
 
   @@unique([companyId, destinationCode])
   @@index([companyId, buyerId])
+  @@index([companyId, status])
   @@map("delivery_destinations")
+}
+
+enum DeliveryDestinationStatus {
+  ACTIVE
+  ARCHIVED
 }
 
 // =====================================================

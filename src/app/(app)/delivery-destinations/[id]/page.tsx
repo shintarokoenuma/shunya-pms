@@ -11,14 +11,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { getBuyer } from "@/lib/actions/buyers"
-import { listDeliveryDestinations } from "@/lib/actions/delivery-destinations"
-import { BuyerActions } from "../_components/buyer-delete-button"
-import { RelatedDestinationsSection } from "../_components/related-destinations-section"
+import { getDeliveryDestination } from "@/lib/actions/delivery-destinations"
+import { DeliveryDestinationActions } from "../_components/delivery-destination-delete-button"
 import {
-  BUYER_STATUS_LABELS,
-  BUYER_STATUS_BADGE_VARIANT,
+  DELIVERY_DESTINATION_STATUS_LABELS,
+  DELIVERY_DESTINATION_STATUS_BADGE_VARIANT,
   COUNTRY_OPTIONS,
+  TIMEZONE_OPTIONS,
 } from "../_components/labels"
 
 type Params = Promise<{ id: string }>
@@ -26,7 +25,12 @@ type Params = Promise<{ id: string }>
 const countryLabel = (v: string) =>
   COUNTRY_OPTIONS.find((o) => o.value === v)?.label ?? v
 
-export default async function BuyerDetailPage({
+const timezoneLabel = (v: string | null) => {
+  if (!v) return "—"
+  return TIMEZONE_OPTIONS.find((o) => o.value === v)?.label ?? v
+}
+
+export default async function DeliveryDestinationDetailPage({
   params,
 }: {
   params: Params
@@ -35,30 +39,12 @@ export default async function BuyerDetailPage({
   if (!session?.user) redirect("/login")
 
   const { id } = await params
-  const result = await getBuyer(id)
+  const result = await getDeliveryDestination(id)
   if (!result.ok) {
     notFound()
   }
   const item = result.data
 
-  // 関連納品先（B-1）：全件 + アーカイブも含めて取得（クライアント側でトグル）
-  const destinationsResult = await listDeliveryDestinations({
-    buyerId: id,
-    pageSize: 100,
-  })
-  const destinations = destinationsResult.ok
-    ? destinationsResult.data.items.map((d) => ({
-        id: d.id,
-        destinationCode: d.destinationCode,
-        destinationName: d.destinationName,
-        prefecture: d.prefecture,
-        city: null,
-        country: d.country,
-        status: d.status,
-      }))
-    : []
-
-  // MASTER_ADMIN 判定
   const company = await prisma.company.findUnique({
     where: { id: session.user.companyId },
     select: { tenantType: true },
@@ -70,7 +56,7 @@ export default async function BuyerDetailPage({
       {/* ヘッダー */}
       <div className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
-          <Link href="/buyers">
+          <Link href="/delivery-destinations">
             <ChevronLeft className="mr-1 h-4 w-4" />
             一覧に戻る
           </Link>
@@ -79,32 +65,28 @@ export default async function BuyerDetailPage({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold tracking-tight">
-                {item.buyerName}
+                {item.destinationName}
               </h1>
-              <Badge variant={BUYER_STATUS_BADGE_VARIANT[item.status]}>
-                {BUYER_STATUS_LABELS[item.status]}
+              <Badge
+                variant={DELIVERY_DESTINATION_STATUS_BADGE_VARIANT[item.status]}
+              >
+                {DELIVERY_DESTINATION_STATUS_LABELS[item.status]}
               </Badge>
             </div>
             <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-              <span className="font-mono">{item.buyerCode}</span>
-              {item.buyerNameEn && (
-                <>
-                  <span>·</span>
-                  <span>{item.buyerNameEn}</span>
-                </>
-              )}
+              <span className="font-mono">{item.destinationCode}</span>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href={`/buyers/${id}/edit`}>
+              <Link href={`/delivery-destinations/${id}/edit`}>
                 <Pencil className="mr-1 h-4 w-4" />
                 編集
               </Link>
             </Button>
-            <BuyerActions
+            <DeliveryDestinationActions
               id={item.id}
-              buyerName={item.buyerName}
+              destinationName={item.destinationName}
               status={item.status}
               isMasterAdmin={isMasterAdmin}
             />
@@ -112,25 +94,50 @@ export default async function BuyerDetailPage({
         </div>
       </div>
 
-      {/* 関連クライアント */}
+      {/* 関連バイヤー / クライアント */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">関連クライアント</CardTitle>
+          <CardTitle className="text-base">関連バイヤー</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Link
+            href={`/buyers/${item.buyer.id}`}
+            className="inline-flex items-center gap-2 hover:underline"
+          >
+            <span className="font-mono text-xs text-muted-foreground">
+              {item.buyer.buyerCode}
+            </span>
+            <span className="font-medium">{item.buyer.buyerName}</span>
+          </Link>
+          {item.buyer.client && (
+            <div className="text-sm text-muted-foreground">
+              クライアント:{" "}
+              <Link
+                href={`/clients/${item.buyer.client.id}`}
+                className="inline-flex items-center gap-1 hover:underline"
+              >
+                <span className="font-mono text-xs">
+                  {item.buyer.client.clientCode}
+                </span>
+                <span>{item.buyer.client.companyName}</span>
+              </Link>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 住所 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">住所</CardTitle>
         </CardHeader>
         <CardContent>
-          {item.client ? (
-            <Link
-              href={`/clients/${item.client.id}`}
-              className="inline-flex items-center gap-2 hover:underline"
-            >
-              <span className="font-mono text-xs text-muted-foreground">
-                {item.client.clientCode}
-              </span>
-              <span className="font-medium">{item.client.companyName}</span>
-            </Link>
-          ) : (
-            <span className="text-sm text-muted-foreground">指定なし</span>
-          )}
+          <DetailRow label="国" value={countryLabel(item.country)} />
+          <DetailRow label="郵便番号" value={item.postalCode ?? "—"} />
+          <DetailRow label="都道府県" value={item.prefecture ?? "—"} />
+          <DetailRow label="市区町村" value={item.city ?? "—"} />
+          <DetailRow label="住所" value={item.address ?? "—"} />
+          <DetailRow label="建物・部屋番号" value={item.addressLine2 ?? "—"} />
         </CardContent>
       </Card>
 
@@ -140,12 +147,6 @@ export default async function BuyerDetailPage({
           <CardTitle className="text-base">連絡先</CardTitle>
         </CardHeader>
         <CardContent>
-          <DetailRow label="国" value={countryLabel(item.country)} />
-          <DetailRow label="郵便番号" value={item.postalCode ?? "—"} />
-          <DetailRow label="都道府県" value={item.prefecture ?? "—"} />
-          <DetailRow label="市区町村" value={item.city ?? "—"} />
-          <DetailRow label="住所" value={item.address ?? "—"} />
-          <DetailRow label="建物・部屋番号" value={item.addressLine2 ?? "—"} />
           <DetailRow label="担当者名" value={item.contactPerson ?? "—"} />
           <DetailRow label="電話" value={item.phone ?? "—"} />
           <DetailRow
@@ -166,6 +167,34 @@ export default async function BuyerDetailPage({
         </CardContent>
       </Card>
 
+      {/* 配送指示 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">配送指示</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DetailRow
+            label="配送メモ"
+            value={
+              item.deliveryNotes ? (
+                <p className="whitespace-pre-wrap">{item.deliveryNotes}</p>
+              ) : (
+                "—"
+              )
+            }
+          />
+          <DetailRow
+            label="希望納品曜日"
+            value={item.preferredDeliveryDays ?? "—"}
+          />
+          <DetailRow
+            label="希望納品時間帯"
+            value={item.preferredDeliveryHours ?? "—"}
+          />
+          <DetailRow label="タイムゾーン" value={timezoneLabel(item.timezone)} />
+        </CardContent>
+      </Card>
+
       {/* メモ */}
       {item.notes && (
         <Card>
@@ -177,10 +206,6 @@ export default async function BuyerDetailPage({
           </CardContent>
         </Card>
       )}
-
-      {/* 関連納品先（Phase 1A-10 B-1） */}
-      <RelatedDestinationsSection buyerId={id} destinations={destinations} />
-
 
       {/* メタ情報 */}
       <Card>
