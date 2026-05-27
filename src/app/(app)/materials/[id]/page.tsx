@@ -142,9 +142,19 @@ export default async function MaterialDetailPage({
             <DetailRow
               label="素材カテゴリ"
               value={
-                <span className="text-muted-foreground">
-                  （素材カテゴリマスター未実装）
-                </span>
+                item.category ? (
+                  <Link
+                    href={`/material-categories/${item.category.id}`}
+                    className="inline-flex items-center gap-2 hover:underline"
+                  >
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {item.category.categoryCode}
+                    </span>
+                    <span>{item.category.categoryName}</span>
+                  </Link>
+                ) : (
+                  "—"
+                )
               }
             />
             <DetailRow

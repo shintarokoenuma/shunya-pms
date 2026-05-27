@@ -7,6 +7,7 @@ import {
   getMaterial,
   listActiveSuppliersForMaterialSelect,
 } from "@/lib/actions/materials"
+import { listAllActiveMaterialCategoriesForSelect } from "@/lib/actions/material-categories"
 import { MaterialForm } from "../../_components/material-form"
 import type { MaterialBaseInput } from "@/lib/validators/material"
 
@@ -35,9 +36,10 @@ export default async function EditMaterialPage({
   if (!session?.user) redirect("/login")
 
   const { id } = await params
-  const [result, suppliers] = await Promise.all([
+  const [result, suppliers, categories] = await Promise.all([
     getMaterial(id),
     listActiveSuppliersForMaterialSelect(),
+    listAllActiveMaterialCategoriesForSelect(),
   ])
   if (!result.ok) {
     notFound()
@@ -78,6 +80,7 @@ export default async function EditMaterialPage({
         mode="edit"
         id={id}
         suppliers={suppliers}
+        categories={categories}
         defaultValues={defaultValues}
       />
     </div>

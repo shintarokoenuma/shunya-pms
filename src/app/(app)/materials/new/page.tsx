@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { listActiveSuppliersForMaterialSelect } from "@/lib/actions/materials"
+import { listAllActiveMaterialCategoriesForSelect } from "@/lib/actions/material-categories"
 import { MaterialForm } from "../_components/material-form"
 
 type SearchParams = Promise<{ primarySupplierId?: string }>
@@ -17,7 +18,10 @@ export default async function NewMaterialPage({
   if (!session?.user) redirect("/login")
 
   const sp = await searchParams
-  const suppliers = await listActiveSuppliersForMaterialSelect()
+  const [suppliers, categories] = await Promise.all([
+    listActiveSuppliersForMaterialSelect(),
+    listAllActiveMaterialCategoriesForSelect(),
+  ])
 
   const initialSupplierId =
     sp.primarySupplierId && suppliers.some((s) => s.id === sp.primarySupplierId)
@@ -38,6 +42,7 @@ export default async function NewMaterialPage({
       <MaterialForm
         mode="create"
         suppliers={suppliers}
+        categories={categories}
         defaultValues={
           initialSupplierId
             ? { primarySupplierId: initialSupplierId }

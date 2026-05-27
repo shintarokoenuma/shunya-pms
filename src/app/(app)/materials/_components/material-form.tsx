@@ -55,16 +55,26 @@ export type SupplierSelectOption = {
   companyName: string
 }
 
+export type MaterialCategorySelectOption = {
+  id: string
+  categoryCode: string
+  categoryName: string
+  level: number
+  breadcrumb: string
+}
+
 type Props =
   | {
       mode: "create"
       suppliers: SupplierSelectOption[]
+      categories: MaterialCategorySelectOption[]
       defaultValues?: Partial<MaterialBaseInput>
     }
   | {
       mode: "edit"
       id: string
       suppliers: SupplierSelectOption[]
+      categories: MaterialCategorySelectOption[]
       defaultValues: MaterialBaseInput
     }
 
@@ -223,19 +233,28 @@ export function MaterialForm(props: Props) {
                     onValueChange={(v) =>
                       field.onChange(v === NO_CATEGORY ? null : v)
                     }
-                    disabled
                   >
                     <FormControl>
-                      <SelectTrigger className="md:w-[320px]">
+                      <SelectTrigger className="md:w-[480px]">
                         <SelectValue placeholder="（未選択）" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       <SelectItem value={NO_CATEGORY}>（未選択）</SelectItem>
+                      {props.categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span className="font-mono text-xs text-muted-foreground mr-2">
+                            {c.categoryCode}
+                          </span>
+                          {c.breadcrumb}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormDescription>
-                    素材カテゴリマスター実装後に選択可能になります
+                    {props.categories.length === 0
+                      ? "稼働中の素材カテゴリがありません。先に /material-categories から登録してください"
+                      : "Lv1（大分類）/ Lv2（中分類）/ Lv3（小分類）から自由に選択できます"}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
