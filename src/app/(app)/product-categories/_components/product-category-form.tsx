@@ -40,6 +40,7 @@ import {
   PRODUCT_CATEGORY_STATUS_OPTIONS,
   PRODUCT_CATEGORY_LEVEL_OPTIONS,
 } from "./labels"
+import { CategoryCodeSuggester } from "./category-code-suggester"
 
 type ParentCandidate = {
   id: string
@@ -139,22 +140,6 @@ export function ProductCategoryForm({ mode, initialId, initialValues }: Props) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="categoryCode">
-                カテゴリコード <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="categoryCode"
-                {...form.register("categoryCode")}
-                placeholder="TS / JK / PT"
-                maxLength={10}
-              />
-              {form.formState.errors.categoryCode && (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.categoryCode.message}
-                </p>
-              )}
-            </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="categoryName">
                 カテゴリ名 <span className="text-destructive">*</span>
@@ -162,7 +147,7 @@ export function ProductCategoryForm({ mode, initialId, initialValues }: Props) {
               <Input
                 id="categoryName"
                 {...form.register("categoryName")}
-                placeholder="Tシャツ"
+                placeholder="例：レディース / トップス / Tシャツ"
                 maxLength={100}
               />
               {form.formState.errors.categoryName && (
@@ -170,6 +155,37 @@ export function ProductCategoryForm({ mode, initialId, initialValues }: Props) {
                   {form.formState.errors.categoryName.message}
                 </p>
               )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="categoryCode">
+                カテゴリコード <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="categoryCode"
+                {...form.register("categoryCode")}
+                placeholder="例：LADIES-TOPS-TSHIRT"
+                maxLength={50}
+                className="font-mono"
+              />
+              {form.formState.errors.categoryCode && (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.categoryCode.message}
+                </p>
+              )}
+              <CategoryCodeSuggester
+                categoryName={form.watch("categoryName") ?? ""}
+                parentCategoryCode={
+                  parentCandidates.find(
+                    (p) => p.id === form.watch("parentCategoryId"),
+                  )?.categoryCode ?? null
+                }
+                onSelect={(code) =>
+                  form.setValue("categoryCode", code, {
+                    shouldDirty: true,
+                    shouldValidate: true,
+                  })
+                }
+              />
             </div>
           </div>
           <div className="space-y-1.5">

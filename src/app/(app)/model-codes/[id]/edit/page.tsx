@@ -7,6 +7,7 @@ import {
   getModelCode,
   listActiveBrandsForModelCodeSelect,
 } from "@/lib/actions/model-codes"
+import { listAllActiveProductCategoriesForSelect } from "@/lib/actions/product-categories"
 import { ModelCodeForm } from "../../_components/model-code-form"
 import type { ModelCodeBaseInput } from "@/lib/validators/model-code"
 
@@ -21,9 +22,10 @@ export default async function EditModelCodePage({
   if (!session?.user) redirect("/login")
 
   const { id } = await params
-  const [result, brands] = await Promise.all([
+  const [result, brands, categories] = await Promise.all([
     getModelCode(id),
     listActiveBrandsForModelCodeSelect(),
+    listAllActiveProductCategoriesForSelect(),
   ])
   if (!result.ok) {
     notFound()
@@ -60,6 +62,7 @@ export default async function EditModelCodePage({
         mode="edit"
         id={id}
         brands={brands}
+        categories={categories}
         defaultValues={defaultValues}
         currentModelCode={item.modelCode}
         aggregates={{
