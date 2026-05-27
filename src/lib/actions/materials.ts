@@ -299,21 +299,6 @@ export async function createMaterial(
     }
     const data = parsed.data
 
-    // materialCode 重複チェック
-    const dup = await prisma.material.findFirst({
-      where: {
-        companyId: sess.companyId,
-        materialCode: data.materialCode,
-        deletedAt: null,
-      },
-    })
-    if (dup) {
-      return {
-        ok: false,
-        error: `素材コード "${data.materialCode}" は既に使用されています`,
-      }
-    }
-
     // primarySupplierId 存在チェック
     const supplier = await prisma.supplier.findFirst({
       where: {
@@ -321,10 +306,28 @@ export async function createMaterial(
         companyId: sess.companyId,
         deletedAt: null,
       },
-      select: { id: true },
+      select: { id: true, companyName: true },
     })
     if (!supplier) {
       return { ok: false, error: "指定された仕入先が見つかりません" }
+    }
+
+    // (primarySupplierId, materialCode) の複合 unique で重複チェック
+    // Phase 1A-13a-fix：同じコードでも仕入先が違えば登録可能
+    const dup = await prisma.material.findFirst({
+      where: {
+        companyId: sess.companyId,
+        primarySupplierId: data.primarySupplierId,
+        materialCode: data.materialCode,
+        deletedAt: null,
+      },
+      select: { id: true },
+    })
+    if (dup) {
+      return {
+        ok: false,
+        error: `仕入先「${supplier.companyName}」には既に素材コード "${data.materialCode}" が登録されています`,
+      }
     }
 
     const created = await prisma.material.create({
@@ -399,24 +402,6 @@ export async function updateMaterial(
       return { ok: false, error: "素材が見つかりません" }
     }
 
-    // materialCode 変更時のみ重複チェック
-    if (existing.materialCode !== data.materialCode) {
-      const dup = await prisma.material.findFirst({
-        where: {
-          companyId: sess.companyId,
-          materialCode: data.materialCode,
-          deletedAt: null,
-          NOT: { id },
-        },
-      })
-      if (dup) {
-        return {
-          ok: false,
-          error: `素材コード "${data.materialCode}" は既に使用されています`,
-        }
-      }
-    }
-
     // primarySupplierId 変更時のみ存在チェック
     if (existing.primarySupplierId !== data.primarySupplierId) {
       const supplier = await prisma.supplier.findFirst({
@@ -425,9 +410,36 @@ export async function updateMaterial(
           companyId: sess.companyId,
           deletedAt: null,
         },
+        select: { id: true },
       })
       if (!supplier) {
         return { ok: false, error: "指定された仕入先が見つかりません" }
+      }
+    }
+
+    // (primarySupplierId, materialCode) の複合 unique 重複チェック
+    // どちらかが変わったときに検査
+    if (
+      existing.materialCode !== data.materialCode ||
+      existing.primarySupplierId !== data.primarySupplierId
+    ) {
+      const dup = await prisma.material.findFirst({
+        where: {
+          companyId: sess.companyId,
+          primarySupplierId: data.primarySupplierId,
+          materialCode: data.materialCode,
+          deletedAt: null,
+          NOT: { id },
+        },
+        include: {
+          primarySupplier: { select: { companyName: true } },
+        },
+      })
+      if (dup) {
+        return {
+          ok: false,
+          error: `仕入先「${dup.primarySupplier.companyName}」には既に素材コード "${data.materialCode}" が登録されています`,
+        }
       }
     }
 

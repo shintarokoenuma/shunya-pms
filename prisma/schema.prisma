@@ -612,7 +612,8 @@ model Supplier {
   deletedAt DateTime? @map("deleted_at")
 
   // リレーション
-  contacts SupplierContact[]
+  contacts  SupplierContact[]
+  materials Material[]
 
   @@unique([companyId, supplierCode])
   @@index([companyId, status])
@@ -1116,8 +1117,8 @@ model Material {
   categoryId   String?      @map("category_id")
   materialType MaterialType @map("material_type")
 
-  // 仕入先
-  primarySupplierId String? @map("primary_supplier_id")
+  // 仕入先（Phase 1A-13a-fix で必須化 + relation 追加）
+  primarySupplierId String @map("primary_supplier_id")
 
   // 仕様
   specification String? @db.Text
@@ -1163,9 +1164,11 @@ model Material {
   deletedAt DateTime? @map("deleted_at")
 
   // リレーション
-  category MaterialCategory? @relation(fields: [categoryId], references: [id])
+  category        MaterialCategory? @relation(fields: [categoryId], references: [id])
+  primarySupplier Supplier          @relation(fields: [primarySupplierId], references: [id], onDelete: Restrict)
 
-  @@unique([companyId, materialCode])
+  // Phase 1A-13a-fix：仕入先ごとに独立した materialCode 採番を許可する複合 unique
+  @@unique([companyId, primarySupplierId, materialCode])
   @@index([companyId, materialType])
   @@index([companyId, status])
   @@index([primarySupplierId])
