@@ -433,20 +433,24 @@ export default async function ClientDetailPage({
         </CardContent>
       </Card>
 
-      {/* 関連バイヤー（Phase 1A-11 追加） */}
-      {/*
-        Phase 1A-10（DeliveryDestination）完成時、
-        同じ箇所に「関連納品先」セクションも追加予定。
-      */}
+      {/* 関連バイヤー（Phase 1A-11 追加、1A-10 で納品先数バッジ追加） */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-3">
           <CardTitle className="text-base">関連バイヤー</CardTitle>
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/buyers/new?clientId=${id}`}>
-              <Plus className="mr-1 h-4 w-4" />
-              バイヤーを追加
+          <div className="flex items-center gap-3">
+            <Link
+              href={`/delivery-destinations?clientId=${id}`}
+              className="text-sm text-primary hover:underline whitespace-nowrap"
+            >
+              全納品先を一覧で見る →
             </Link>
-          </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/buyers/new?clientId=${id}`}>
+                <Plus className="mr-1 h-4 w-4" />
+                バイヤーを追加
+              </Link>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
           {buyers.length === 0 ? (
@@ -461,20 +465,25 @@ export default async function ClientDetailPage({
                   href={`/buyers/${b.id}`}
                   className="flex items-center justify-between gap-3 rounded-md border p-3 hover:bg-accent transition-colors"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-sm text-muted-foreground">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="font-mono text-sm text-muted-foreground shrink-0">
                       {b.buyerCode}
                     </span>
-                    <span className="font-medium">{b.buyerName}</span>
+                    <span className="font-medium truncate">{b.buyerName}</span>
                     {b.buyerNameEn && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground truncate">
                         ({b.buyerNameEn})
                       </span>
                     )}
                   </div>
-                  <Badge variant={BUYER_STATUS_BADGE_VARIANT[b.status]}>
-                    {BUYER_STATUS_LABELS[b.status]}
-                  </Badge>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="outline">
+                      納品先 {b._count.deliveryDestinations} 件
+                    </Badge>
+                    <Badge variant={BUYER_STATUS_BADGE_VARIANT[b.status]}>
+                      {BUYER_STATUS_LABELS[b.status]}
+                    </Badge>
+                  </div>
                 </Link>
               ))}
             </div>
