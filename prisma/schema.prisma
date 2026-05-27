@@ -1154,8 +1154,8 @@ model Material {
   // メモ
   notes String? @db.Text
 
-  // ステータス
-  status String @default("ACTIVE") @db.VarChar(20)
+  // ステータス（Phase 1A-13a で enum 化、ModelCode と同じ 4 値）
+  status MaterialStatus @default(ACTIVE)
 
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
@@ -1170,6 +1170,13 @@ model Material {
   @@index([companyId, status])
   @@index([primarySupplierId])
   @@map("materials")
+}
+
+enum MaterialStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+  ARCHIVED
 }
 
 enum MaterialType {
