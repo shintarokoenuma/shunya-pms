@@ -7,6 +7,7 @@ import {
   FolderTree,
   Hash,
   Layers,
+  Scissors,
   LayoutDashboard,
   MessageSquare,
   Package,
@@ -56,6 +57,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "バイヤー", href: "/buyers", icon: ShoppingBag, enabled: true },
       { label: "納品先", href: "/delivery-destinations", icon: MapPin, enabled: true },
       { label: "型番", href: "/model-codes", icon: Hash, enabled: true },
+      { label: "素材", href: "/materials", icon: Scissors, enabled: true },
       { label: "商品カテゴリ", href: "/product-categories", icon: FolderTree, enabled: true },
       { label: "諸経費カテゴリ", href: "/expense-categories", icon: Coins, enabled: true },
       {
