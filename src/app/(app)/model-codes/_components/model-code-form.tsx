@@ -59,6 +59,14 @@ export type BrandSelectOption = {
   clientName: string | null
 }
 
+export type CategorySelectOption = {
+  id: string
+  categoryCode: string
+  categoryName: string
+  level: number
+  breadcrumb: string
+}
+
 export type ReadOnlyAggregates = {
   totalRepetitions: number
   totalProductionQty: number
@@ -76,12 +84,14 @@ type Props =
   | {
       mode: "create"
       brands: BrandSelectOption[]
+      categories: CategorySelectOption[]
       defaultValues?: Partial<ModelCodeBaseInput>
     }
   | {
       mode: "edit"
       id: string
       brands: BrandSelectOption[]
+      categories: CategorySelectOption[]
       defaultValues: ModelCodeBaseInput
       currentModelCode: string
       aggregates: ReadOnlyAggregates
@@ -332,19 +342,28 @@ export function ModelCodeForm(props: Props) {
                     onValueChange={(v) =>
                       field.onChange(v === NO_CATEGORY ? null : v)
                     }
-                    disabled
                   >
                     <FormControl>
-                      <SelectTrigger className="md:w-[320px]">
+                      <SelectTrigger className="md:w-[480px]">
                         <SelectValue placeholder="（未選択）" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       <SelectItem value={NO_CATEGORY}>（未選択）</SelectItem>
+                      {props.categories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span className="font-mono text-xs text-muted-foreground mr-2">
+                            {c.categoryCode}
+                          </span>
+                          {c.breadcrumb}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                   <FormDescription>
-                    商品カテゴリマスター実装後に選択可能になります
+                    {props.categories.length === 0
+                      ? "稼働中の商品カテゴリがありません。先に /product-categories から登録してください"
+                      : "Lv1（大分類）/ Lv2（中分類）/ Lv3（小分類）から自由に選択できます"}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

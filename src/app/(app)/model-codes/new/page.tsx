@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { listActiveBrandsForModelCodeSelect } from "@/lib/actions/model-codes"
+import { listAllActiveProductCategoriesForSelect } from "@/lib/actions/product-categories"
 import { ModelCodeForm } from "../_components/model-code-form"
 
 type SearchParams = Promise<{ brandId?: string }>
@@ -17,7 +18,10 @@ export default async function NewModelCodePage({
   if (!session?.user) redirect("/login")
 
   const sp = await searchParams
-  const brands = await listActiveBrandsForModelCodeSelect()
+  const [brands, categories] = await Promise.all([
+    listActiveBrandsForModelCodeSelect(),
+    listAllActiveProductCategoriesForSelect(),
+  ])
 
   const initialBrandId =
     sp.brandId && brands.some((b) => b.id === sp.brandId)
@@ -38,6 +42,7 @@ export default async function NewModelCodePage({
       <ModelCodeForm
         mode="create"
         brands={brands}
+        categories={categories}
         defaultValues={initialBrandId ? { brandId: initialBrandId } : undefined}
       />
     </div>
