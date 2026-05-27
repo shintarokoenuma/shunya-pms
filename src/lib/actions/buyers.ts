@@ -1,7 +1,7 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { Prisma, BuyerStatus } from "@prisma/client"
+import { Prisma, BuyerStatus, DeliveryDestinationStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { runWithoutTenantContext } from "@/lib/tenant-context"
@@ -107,6 +107,11 @@ export type BuyerListItem = Prisma.BuyerGetPayload<{
         companyName: true
       }
     }
+    _count: {
+      select: {
+        deliveryDestinations: true
+      }
+    }
   }
 }>
 
@@ -162,6 +167,11 @@ export async function listBuyers(
               id: true,
               clientCode: true,
               companyName: true,
+            },
+          },
+          _count: {
+            select: {
+              deliveryDestinations: { where: { deletedAt: null } },
             },
           },
         },
@@ -443,14 +453,25 @@ export async function updateBuyer(
 }
 
 // =============================================================================
-// 5. アーカイブ
+// 5. アーカイブ（Phase 1A-10 で cascade オプション追加：パターン γ）
+//
+// 配下に ACTIVE な DeliveryDestination がある場合、UI でユーザーに
+// 同時アーカイブを選択させる（デフォルト ON）。
+// cascadeArchiveDestinations=true のとき、Buyer + 配下 DD を同一 tx で archive。
 // =============================================================================
+export type ArchiveBuyerOptions = {
+  cascadeArchiveDestinations?: boolean
+}
+
 export async function archiveBuyer(
   id: string,
-): Promise<ActionResult<{ id: string }>> {
+  options: ArchiveBuyerOptions = {},
+): Promise<ActionResult<{ id: string; cascadedCount: number }>> {
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+
+    const cascade = options.cascadeArchiveDestinations ?? true
 
     const existing = await prisma.buyer.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -462,10 +483,42 @@ export async function archiveBuyer(
       return { ok: false, error: "既にアーカイブ済みです" }
     }
 
-    await prisma.buyer.update({
-      where: { id },
-      data: { status: BuyerStatus.ARCHIVED },
-    })
+    const { cascadedCount, cascadedIds } = await prisma.$transaction(
+      async (tx) => {
+        await tx.buyer.update({
+          where: { id },
+          data: { status: BuyerStatus.ARCHIVED },
+        })
+
+        if (!cascade) {
+          return { cascadedCount: 0, cascadedIds: [] as string[] }
+        }
+
+        // 連鎖アーカイブ対象を id 込みで取得（個別の revalidatePath に使う）
+        const targets = await tx.deliveryDestination.findMany({
+          where: {
+            companyId: sess.companyId,
+            buyerId: id,
+            deletedAt: null,
+            status: DeliveryDestinationStatus.ACTIVE,
+          },
+          select: { id: true },
+        })
+        if (targets.length === 0) {
+          return { cascadedCount: 0, cascadedIds: [] as string[] }
+        }
+
+        await tx.deliveryDestination.updateMany({
+          where: { id: { in: targets.map((t) => t.id) } },
+          data: { status: DeliveryDestinationStatus.ARCHIVED },
+        })
+
+        return {
+          cascadedCount: targets.length,
+          cascadedIds: targets.map((t) => t.id),
+        }
+      },
+    )
 
     await prisma.auditLog.create({
       data: {
@@ -475,7 +528,11 @@ export async function archiveBuyer(
         entityType: "Buyer",
         entityId: id,
         beforeData: { status: existing.status },
-        afterData: { status: BuyerStatus.ARCHIVED },
+        afterData: {
+          status: BuyerStatus.ARCHIVED,
+          cascadeArchiveDestinations: cascade,
+          cascadedDestinationCount: cascadedCount,
+        },
       },
     })
 
@@ -484,7 +541,13 @@ export async function archiveBuyer(
     if (existing.clientId) {
       revalidatePath(`/clients/${existing.clientId}`)
     }
-    return { ok: true, data: { id } }
+    if (cascadedCount > 0) {
+      revalidatePath("/delivery-destinations")
+      for (const ddId of cascadedIds) {
+        revalidatePath(`/delivery-destinations/${ddId}`)
+      }
+    }
+    return { ok: true, data: { id, cascadedCount } }
   } catch (e) {
     return {
       ok: false,
