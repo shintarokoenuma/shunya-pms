@@ -1234,8 +1234,8 @@ model ProductCategory {
   id        String @id @default(uuid())
   companyId String @map("company_id")
 
-  // 基本情報
-  categoryCode   String  @map("category_code") @db.VarChar(10) // TS / JK / PT
+  // 基本情報（Phase 1A-14：階層コード `LADIES-TOPS-TSHIRT` 対応で 50 文字に拡張）
+  categoryCode   String  @map("category_code") @db.VarChar(50)
   categoryName   String  @map("category_name") @db.VarChar(100)
   categoryNameEn String? @map("category_name_en") @db.VarChar(100)
 
@@ -1266,8 +1266,9 @@ model ProductCategory {
   parent   ProductCategory?  @relation("ProductCategoryHierarchy", fields: [parentCategoryId], references: [id])
   children ProductCategory[] @relation("ProductCategoryHierarchy")
 
+  // Phase 1A-14：categoryName 単独 unique を廃止（同名「Tシャツ」を異なる親に持つため）
+  // categoryCode は会社内一意のまま
   @@unique([companyId, categoryCode])
-  @@unique([companyId, categoryName])
   @@index([companyId, parentCategoryId])
   @@index([companyId, status])
   @@index([companyId, level])
