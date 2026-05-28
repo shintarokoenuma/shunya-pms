@@ -224,19 +224,26 @@ export type MaterialCategoryOptionForSelect = {
   breadcrumb: string
 }
 
-export async function listAllActiveMaterialCategoriesForSelect(): Promise<
-  MaterialCategoryOptionForSelect[]
-> {
+export async function listAllActiveMaterialCategoriesForSelect(
+  options?: { includeIds?: string[] },
+): Promise<MaterialCategoryOptionForSelect[]> {
   const session = await auth()
   if (!session?.user) return []
   const companyId = session.user.companyId
   if (!companyId) return []
 
+  // 編集画面など「現在の categoryId が ARCHIVED でも選択肢に残したい」場合に
+  // includeIds を指定すると、ACTIVE と includeIds の OR で取得する。
+  const includeIds = options?.includeIds?.filter((v) => v.length > 0) ?? []
+
   const rows = await prisma.materialCategory.findMany({
     where: {
       companyId,
       deletedAt: null,
-      status: MaterialCategoryStatus.ACTIVE,
+      OR: [
+        { status: MaterialCategoryStatus.ACTIVE },
+        ...(includeIds.length > 0 ? [{ id: { in: includeIds } }] : []),
+      ],
     },
     orderBy: [{ categoryCode: "asc" }],
     select: {
@@ -561,6 +568,19 @@ export async function archiveMaterialCategory(
       }
     }
 
+    const activeMaterialCount = await prisma.material.count({
+      where: {
+        categoryId: id,
+        deletedAt: null,
+      },
+    })
+    if (activeMaterialCount > 0) {
+      return {
+        ok: false,
+        error: `このカテゴリを使用している素材が ${activeMaterialCount} 件存在するため、アーカイブできません。先に素材のカテゴリを変更してください`,
+      }
+    }
+
     const after = await prisma.materialCategory.update({
       where: { id },
       data: { status: MaterialCategoryStatus.ARCHIVED },
@@ -580,6 +600,7 @@ export async function archiveMaterialCategory(
 
     revalidatePath("/material-categories")
     revalidatePath(`/material-categories/${id}`)
+    revalidatePath("/materials")
     return { ok: true, data: { id } }
   } catch (e) {
     return {
@@ -651,6 +672,7 @@ export async function restoreMaterialCategory(
 
     revalidatePath("/material-categories")
     revalidatePath(`/material-categories/${id}`)
+    revalidatePath("/materials")
     return { ok: true, data: { id } }
   } catch (e) {
     return {

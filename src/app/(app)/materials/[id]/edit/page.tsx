@@ -36,15 +36,21 @@ export default async function EditMaterialPage({
   if (!session?.user) redirect("/login")
 
   const { id } = await params
-  const [result, suppliers, categories] = await Promise.all([
-    getMaterial(id),
-    listActiveSuppliersForMaterialSelect(),
-    listAllActiveMaterialCategoriesForSelect(),
-  ])
+
+  // ARCHIVED カテゴリを参照している Material も「現在値」を Select に残すため、
+  // getMaterial を先に解決してから includeIds 付きで categories を取得する。
+  const result = await getMaterial(id)
   if (!result.ok) {
     notFound()
   }
   const item = result.data
+
+  const [suppliers, categories] = await Promise.all([
+    listActiveSuppliersForMaterialSelect(),
+    listAllActiveMaterialCategoriesForSelect(
+      item.categoryId ? { includeIds: [item.categoryId] } : undefined,
+    ),
+  ])
 
   const defaultValues: MaterialBaseInput = {
     materialCode: item.materialCode,
