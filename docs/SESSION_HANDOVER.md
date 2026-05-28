@@ -21,7 +21,7 @@
 - Phase 1A-15 動作確認 6 項目: ✓ 完了(本セッション、本番環境)
 - 動作確認誤投入レコード 2 件の物理削除: ✓ 完了(Web UI 経由、Material 28000 / FABRIC-COTTON-OXFORD)
 - 過去試作データの整理: ✓ 完了(Material 1000 × 2、MaterialCategory COTTON Lv1)
-- 本セッションの docs PR: 〈マージ後に反映〉
+- 本セッションの docs PR: PR #36 (squash merge: 482bc50)
 
 ## ② 未マージ PR と動作確認状態
 
