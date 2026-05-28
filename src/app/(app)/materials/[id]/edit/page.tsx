@@ -7,6 +7,7 @@ import {
   getMaterial,
   listActiveSuppliersForMaterialSelect,
 } from "@/lib/actions/materials"
+import { listAllActiveMaterialCategoriesForSelect } from "@/lib/actions/material-categories"
 import { MaterialForm } from "../../_components/material-form"
 import type { MaterialBaseInput } from "@/lib/validators/material"
 
@@ -35,14 +36,21 @@ export default async function EditMaterialPage({
   if (!session?.user) redirect("/login")
 
   const { id } = await params
-  const [result, suppliers] = await Promise.all([
-    getMaterial(id),
-    listActiveSuppliersForMaterialSelect(),
-  ])
+
+  // ARCHIVED カテゴリを参照している Material も「現在値」を Select に残すため、
+  // getMaterial を先に解決してから includeIds 付きで categories を取得する。
+  const result = await getMaterial(id)
   if (!result.ok) {
     notFound()
   }
   const item = result.data
+
+  const [suppliers, categories] = await Promise.all([
+    listActiveSuppliersForMaterialSelect(),
+    listAllActiveMaterialCategoriesForSelect(
+      item.categoryId ? { includeIds: [item.categoryId] } : undefined,
+    ),
+  ])
 
   const defaultValues: MaterialBaseInput = {
     materialCode: item.materialCode,
@@ -78,6 +86,7 @@ export default async function EditMaterialPage({
         mode="edit"
         id={id}
         suppliers={suppliers}
+        categories={categories}
         defaultValues={defaultValues}
       />
     </div>

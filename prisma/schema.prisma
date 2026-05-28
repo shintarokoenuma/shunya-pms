@@ -1200,7 +1200,7 @@ enum MaterialType {
   OTHER
 }
 
-/// 素材カテゴリ
+/// 素材カテゴリ（Phase 1A-15 で階層・ステータス対応）
 model MaterialCategory {
   id        String @id @default(uuid())
   companyId String @map("company_id")
@@ -1209,7 +1209,12 @@ model MaterialCategory {
   categoryName   String  @map("category_name") @db.VarChar(255)
   categoryNameEn String? @map("category_name_en") @db.VarChar(255)
 
+  // 階層構造（Phase 1A-15：3 階層、ProductCategory と同パターン）
   parentCategoryId String? @map("parent_category_id")
+  level            Int     @default(1)
+
+  // ステータス
+  status MaterialCategoryStatus @default(ACTIVE)
 
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
@@ -1222,7 +1227,15 @@ model MaterialCategory {
   children  MaterialCategory[] @relation("CategoryHierarchy")
 
   @@unique([companyId, categoryCode])
+  @@index([companyId, parentCategoryId])
+  @@index([companyId, status])
+  @@index([companyId, level])
   @@map("material_categories")
+}
+
+enum MaterialCategoryStatus {
+  ACTIVE
+  ARCHIVED
 }
 
 // =====================================================

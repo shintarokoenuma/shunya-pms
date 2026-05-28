@@ -242,7 +242,16 @@ export async function listMaterials(
 // =============================================================================
 // 2. 詳細取得
 // =============================================================================
-export type MaterialDetail = Material & { supplier: SupplierSummary | null }
+export type MaterialCategorySummary = {
+  id: string
+  categoryCode: string
+  categoryName: string
+}
+
+export type MaterialDetail = Material & {
+  supplier: SupplierSummary | null
+  category: MaterialCategorySummary | null
+}
 
 export async function getMaterial(
   id: string,
@@ -256,6 +265,11 @@ export async function getMaterial(
 
     const row = await prisma.material.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
+      include: {
+        category: {
+          select: { id: true, categoryCode: true, categoryName: true },
+        },
+      },
     })
     if (!row) {
       return { ok: false, error: "素材が見つかりません" }
@@ -265,10 +279,14 @@ export async function getMaterial(
       ? await fetchSupplierSummariesByIds(sess.companyId, [row.primarySupplierId])
       : new Map<string, SupplierSummary>()
 
+    // include した category は prisma 側で含まれているのでそのまま使う
+    const { category, ...rest } = row
+
     return {
       ok: true,
       data: {
-        ...row,
+        ...rest,
+        category,
         supplier: row.primarySupplierId
           ? supplierMap.get(row.primarySupplierId) ?? null
           : null,
