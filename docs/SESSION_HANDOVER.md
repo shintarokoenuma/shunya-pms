@@ -86,7 +86,7 @@ dev DB: 存在しない(B-011 で構築議論予定)
 - PR #33: chore/seed-categories(`a1208bc`)
 - PR #34: B-009 バックログ追加(`d049f51`)
 - PR #35: docs/session-handover-2026-05-28(前セッション末、`90ffa58`)
-- 本セッション PR: docs/phase1a-15-prod-audit + B-010/B-011 + B-006 優先度更新 + SESSION_HANDOVER 訂正(〈マージ後に番号反映〉)
+- PR #36: docs/phase1a-15-prod-audit + B-010/B-011 + B-006 優先度更新 + SESSION_HANDOVER 訂正(squash merge: 482bc50)
 
 ## ⑧ 本セッションで判明した重要事実
 
