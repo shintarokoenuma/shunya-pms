@@ -133,6 +133,19 @@ export function BuyerForm(props: Props) {
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
+              name="buyerName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>バイヤー名 *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="例：BEAMS / BEAMS 国内事業部" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="buyerCode"
               render={({ field }) => (
                 <FormItem>
@@ -143,19 +156,6 @@ export function BuyerForm(props: Props) {
                   <FormDescription>
                     英数字・ハイフン・アンダースコア（最大 50 文字）
                   </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="buyerName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>バイヤー名 *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例：BEAMS / BEAMS 国内事業部" {...field} />
-                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

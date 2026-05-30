@@ -177,6 +177,19 @@ export function DeliveryDestinationForm(props: Props) {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
+                name="destinationName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>納品先名 *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="例：BEAMS渋谷店" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
                 name="destinationCode"
                 render={({ field }) => (
                   <FormItem>
@@ -187,19 +200,6 @@ export function DeliveryDestinationForm(props: Props) {
                     <FormDescription>
                       推奨形式：&lt;buyerCode&gt;-&lt;location&gt;
                     </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="destinationName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>納品先名 *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="例：BEAMS渋谷店" {...field} />
-                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

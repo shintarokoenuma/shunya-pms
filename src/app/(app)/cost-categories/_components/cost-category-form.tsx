@@ -47,6 +47,8 @@ import {
   CALCULATION_TYPE_DESCRIPTIONS,
   CURRENCY_OPTIONS,
 } from "./labels"
+import { CodeSuggester } from "@/components/code-suggester"
+import { COST_TERM_DICT } from "@/lib/constants/code-dicts/cost"
 
 type ParentCandidate = {
   id: string
@@ -159,6 +161,22 @@ export function CostCategoryForm({ mode, initialId, initialValues }: Props) {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label htmlFor="categoryName">
+                名称 <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="categoryName"
+                {...form.register("categoryName")}
+                placeholder="パターン代 / 検品費"
+                maxLength={100}
+              />
+              {form.formState.errors.categoryName && (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.categoryName.message}
+                </p>
+              )}
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="categoryCode">
                 コード <span className="text-destructive">*</span>
@@ -176,21 +194,22 @@ export function CostCategoryForm({ mode, initialId, initialValues }: Props) {
                   {form.formState.errors.categoryCode.message}
                 </p>
               )}
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="categoryName">
-                名称 <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="categoryName"
-                {...form.register("categoryName")}
-                placeholder="パターン代 / 検品費"
-                maxLength={100}
-              />
-              {form.formState.errors.categoryName && (
-                <p className="text-xs text-destructive">
-                  {form.formState.errors.categoryName.message}
-                </p>
+              {!isSystemReserved && (
+                <CodeSuggester
+                  name={form.watch("categoryName") ?? ""}
+                  parentCode={
+                    parentCandidates.find(
+                      (p) => p.id === form.watch("parentCategoryId"),
+                    )?.categoryCode ?? null
+                  }
+                  dict={COST_TERM_DICT}
+                  onSelect={(code) =>
+                    form.setValue("categoryCode", code, {
+                      shouldDirty: true,
+                      shouldValidate: true,
+                    })
+                  }
+                />
               )}
             </div>
           </div>

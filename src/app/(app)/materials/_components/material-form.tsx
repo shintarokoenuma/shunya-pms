@@ -142,24 +142,6 @@ export function MaterialForm(props: Props) {
             <CardTitle>基本情報</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <FormField
-              control={form.control}
-              name="materialCode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>素材コード *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例：FAB-COT-001" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    例: FAB-COT-001（生地）/ BTN-SQR-12mm（ボタン）/
-                    ZIP-METAL-15cm（ファスナー）など、自由に命名できます
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <FormField
                 control={form.control}
@@ -188,6 +170,24 @@ export function MaterialForm(props: Props) {
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="materialCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>素材コード *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="例：FAB-COT-001" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    例: FAB-COT-001（生地）/ BTN-SQR-12mm（ボタン）/
+                    ZIP-METAL-15cm（ファスナー）など、自由に命名できます
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </CardContent>
         </Card>
 

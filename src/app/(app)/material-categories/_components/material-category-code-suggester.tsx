@@ -1,11 +1,14 @@
 "use client"
 
-import { useMemo } from "react"
-import { Button } from "@/components/ui/button"
-import {
-  suggestMaterialCategoryCode,
-  type MaterialCategoryCodeSuggestion,
-} from "@/lib/utils/material-category-code-suggest"
+/**
+ * Phase 1A-15 で導入、Phase 1A-17 で共通 `<CodeSuggester>` の薄いラッパーに変更 (B-007 回収)。
+ *
+ * - ロジック・描画はすべて `src/components/code-suggester.tsx` に集約
+ * - ドメイン辞書として MATERIAL_TERM_DICT を固定で渡す
+ * - 既存呼び出し側 (material-category-form.tsx) の互換性のため props 名は維持
+ */
+import { CodeSuggester } from "@/components/code-suggester"
+import { MATERIAL_TERM_DICT } from "@/lib/constants/code-dicts/material"
 
 type Props = {
   categoryName: string
@@ -13,42 +16,17 @@ type Props = {
   onSelect: (code: string) => void
 }
 
-/**
- * Phase 1A-15: MaterialCategory フォーム用のコードサジェスター
- * ProductCategory の CategoryCodeSuggester と同じ構造、辞書のみ差し替え。
- */
 export function MaterialCategoryCodeSuggester({
   categoryName,
   parentCategoryCode,
   onSelect,
 }: Props) {
-  const suggestions: MaterialCategoryCodeSuggestion[] = useMemo(
-    () => suggestMaterialCategoryCode(categoryName, parentCategoryCode),
-    [categoryName, parentCategoryCode],
-  )
-
-  if (suggestions.length === 0) return null
-
   return (
-    <div className="flex flex-wrap items-center gap-1.5 pt-1">
-      <span className="text-xs text-muted-foreground">候補:</span>
-      {suggestions.map((s) => (
-        <Button
-          key={s.value}
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 px-2 font-mono text-xs"
-          onClick={() => onSelect(s.value)}
-          title={
-            s.source === "parent-dict"
-              ? "親カテゴリ + 素材辞書から生成"
-              : "素材辞書から生成"
-          }
-        >
-          {s.value}
-        </Button>
-      ))}
-    </div>
+    <CodeSuggester
+      name={categoryName}
+      parentCode={parentCategoryCode}
+      dict={MATERIAL_TERM_DICT}
+      onSelect={onSelect}
+    />
   )
 }
