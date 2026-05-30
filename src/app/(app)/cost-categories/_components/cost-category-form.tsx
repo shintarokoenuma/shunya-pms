@@ -197,11 +197,11 @@ export function CostCategoryForm({ mode, initialId, initialValues }: Props) {
               {!isSystemReserved && (
                 <CodeSuggester
                   name={form.watch("categoryName") ?? ""}
-                  parentCode={
-                    parentCandidates.find(
-                      (p) => p.id === form.watch("parentCategoryId"),
-                    )?.categoryCode ?? null
-                  }
+                  // CostCategory はフラット命名 (1A-16 シード済み Lv2 35 行が
+                  // MAIN_FABRIC / REGULAR_SEWING 等の親プレフィックス無し形式)。
+                  // 親コード MATERIAL を渡すと "MATERIAL-MAIN_FABRIC" のような
+                  // 不整合な候補がトップに出るため、null 固定で辞書値そのまま使う。
+                  parentCode={null}
                   dict={COST_TERM_DICT}
                   onSelect={(code) =>
                     form.setValue("categoryCode", code, {
