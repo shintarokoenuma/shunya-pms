@@ -13,19 +13,19 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
-  EXPENSE_CATEGORY_STATUS_OPTIONS,
-  EXPENSE_TYPE_OPTIONS,
+  COST_CATEGORY_STATUS_OPTIONS,
+  EXTERNAL_COST_CATEGORY_OPTIONS,
 } from "./labels"
 
-export function ExpenseCategoriesSearch() {
+export function CostCategoriesSearch() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
 
   const [q, setQ] = useState(searchParams.get("q") ?? "")
   const [status, setStatus] = useState(searchParams.get("status") ?? "all")
-  const [expenseType, setExpenseType] = useState(
-    searchParams.get("expenseType") ?? "all",
+  const [externalCategory, setExternalCategory] = useState(
+    searchParams.get("externalCategory") ?? "all",
   )
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -33,12 +33,13 @@ export function ExpenseCategoriesSearch() {
     const params = new URLSearchParams()
     if (q.trim()) params.set("q", q.trim())
     if (status !== "all") params.set("status", status)
-    if (expenseType !== "all") params.set("expenseType", expenseType)
+    if (externalCategory !== "all")
+      params.set("externalCategory", externalCategory)
     startTransition(() => {
       router.push(
         params.toString()
-          ? `/expense-categories?${params.toString()}`
-          : "/expense-categories",
+          ? `/cost-categories?${params.toString()}`
+          : "/cost-categories",
       )
     })
   }
@@ -46,14 +47,14 @@ export function ExpenseCategoriesSearch() {
   const handleClear = () => {
     setQ("")
     setStatus("all")
-    setExpenseType("all")
+    setExternalCategory("all")
     startTransition(() => {
-      router.push("/expense-categories")
+      router.push("/cost-categories")
     })
   }
 
   const hasFilter =
-    q.trim().length > 0 || status !== "all" || expenseType !== "all"
+    q.trim().length > 0 || status !== "all" || externalCategory !== "all"
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
@@ -67,13 +68,16 @@ export function ExpenseCategoriesSearch() {
             className="pl-9"
           />
         </div>
-        <Select value={expenseType} onValueChange={setExpenseType}>
+        <Select
+          value={externalCategory}
+          onValueChange={setExternalCategory}
+        >
           <SelectTrigger className="w-full sm:w-[200px]">
-            <SelectValue placeholder="費用種別" />
+            <SelectValue placeholder="大分類" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">費用種別（全て）</SelectItem>
-            {EXPENSE_TYPE_OPTIONS.map((opt) => (
+            <SelectItem value="all">大分類（全て）</SelectItem>
+            {EXTERNAL_COST_CATEGORY_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>
@@ -86,7 +90,7 @@ export function ExpenseCategoriesSearch() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">ステータス（全て）</SelectItem>
-            {EXPENSE_CATEGORY_STATUS_OPTIONS.map((opt) => (
+            {COST_CATEGORY_STATUS_OPTIONS.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>

@@ -11,12 +11,12 @@ type Props = {
   total: number
 }
 
-export function ExpenseCategoriesPagination({ page, totalPages, total }: Props) {
+export function CostCategoriesPagination({ page, totalPages, total }: Props) {
   const searchParams = useSearchParams()
   const buildUrl = (p: number) => {
     const params = new URLSearchParams(searchParams.toString())
     params.set("page", String(p))
-    return `/expense-categories?${params.toString()}`
+    return `/cost-categories?${params.toString()}`
   }
   if (totalPages <= 1) {
     return (

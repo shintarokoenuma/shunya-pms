@@ -1,26 +1,27 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
 import {
-  ExpenseCategoryStatus,
-  ExpenseType,
+  CostCategoryStatus,
   CalculationType,
   Currency,
+  type ExternalCostCategory,
 } from "@prisma/client"
 import {
-  expenseCategoryInputSchema,
-  type ExpenseCategoryFormValues,
-  type ExpenseCategoryInput,
-} from "@/lib/validators/expense-category"
+  costCategoryInputSchema,
+  type CostCategoryFormValues,
+  type CostCategoryInput,
+} from "@/lib/validators/cost-category"
 import {
-  createExpenseCategory,
-  updateExpenseCategory,
-} from "@/lib/actions/expense-categories"
+  createCostCategory,
+  updateCostCategory,
+  listCostCategoryParentCandidates,
+} from "@/lib/actions/cost-categories"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -35,94 +36,97 @@ import {
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
 import {
-  EXPENSE_CATEGORY_STATUS_OPTIONS,
-  EXPENSE_TYPE_LABELS,
+  COST_CATEGORY_STATUS_OPTIONS,
+  EXTERNAL_COST_CATEGORY_LABELS,
   CALCULATION_TYPE_OPTIONS,
   CALCULATION_TYPE_DESCRIPTIONS,
   CURRENCY_OPTIONS,
 } from "./labels"
 
+type ParentCandidate = {
+  id: string
+  categoryCode: string
+  categoryName: string
+  level: number
+  externalCategory: ExternalCostCategory
+}
+
 type Props = {
   mode: "create" | "edit"
   initialId?: string
-  initialValues?: Partial<ExpenseCategoryFormValues>
+  initialValues?: Partial<CostCategoryFormValues> & {
+    isSystemReserved?: boolean
+  }
 }
 
-/**
- * 業務的グルーピングごとの ExpenseType
- * SelectContent 内で SelectGroup として表示する
- */
-const EXPENSE_TYPE_GROUPS: {
-  label: string
-  values: ExpenseType[]
-}[] = [
-  {
-    label: "製造関連",
-    values: ["PATTERN_FEE", "GRADING_FEE", "SAMPLE_FEE", "INSPECTION_FEE"],
-  },
-  {
-    label: "加工関連",
-    values: [
-      "PROCESSING_FEE",
-      "PRINTING_FEE",
-      "EMBROIDERY_FEE",
-      "WASHING_FEE",
-    ],
-  },
-  {
-    label: "輸送・通関関連",
-    values: [
-      "TRANSPORT_FEE",
-      "CUSTOMS_FEE",
-      "TARIFF",
-      "IMPORT_TAX",
-      "STORAGE_FEE",
-    ],
-  },
-  {
-    label: "その他",
-    values: ["PHOTOGRAPHY_FEE", "RENTAL_FEE", "OTHER"],
-  },
-]
-
-export function ExpenseCategoryForm({ mode, initialId, initialValues }: Props) {
+export function CostCategoryForm({ mode, initialId, initialValues }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [parentCandidates, setParentCandidates] = useState<ParentCandidate[]>(
+    [],
+  )
 
-  const form = useForm<ExpenseCategoryFormValues>({
-    resolver: zodResolver(expenseCategoryInputSchema),
+  const isSystemReserved = initialValues?.isSystemReserved ?? false
+
+  const form = useForm<CostCategoryFormValues>({
+    resolver: zodResolver(costCategoryInputSchema),
     defaultValues: {
-      expenseCode: initialValues?.expenseCode ?? "",
-      expenseName: initialValues?.expenseName ?? "",
-      expenseNameEn: initialValues?.expenseNameEn ?? "",
-      expenseType: initialValues?.expenseType ?? ExpenseType.PATTERN_FEE,
+      categoryCode: initialValues?.categoryCode ?? "",
+      categoryName: initialValues?.categoryName ?? "",
+      categoryNameEn: initialValues?.categoryNameEn ?? "",
+      // 新規作成は Lv2 固定。編集は initialValues に従う
+      level: initialValues?.level ?? 2,
+      parentCategoryId: initialValues?.parentCategoryId ?? null,
+      externalCategory:
+        initialValues?.externalCategory ?? ("MATERIAL" as ExternalCostCategory),
       standardAmount: initialValues?.standardAmount ?? null,
       currency: initialValues?.currency ?? Currency.JPY,
       calculationType:
         initialValues?.calculationType ?? CalculationType.FIXED,
       notes: initialValues?.notes ?? "",
-      status: initialValues?.status ?? ExpenseCategoryStatus.ACTIVE,
+      status: initialValues?.status ?? CostCategoryStatus.ACTIVE,
     },
   })
 
-  // calculationType の変化を監視（UI 制御用）
+  // 親候補ロード (Lv2 のみ)
+  const currentLevel = Number(form.watch("level")) as 1 | 2
+  useEffect(() => {
+    if (currentLevel === 2) {
+      listCostCategoryParentCandidates().then((rows) =>
+        setParentCandidates(rows as ParentCandidate[]),
+      )
+    }
+  }, [currentLevel])
+
+  // 親選択時に externalCategory を継承
+  const watchedParentId = form.watch("parentCategoryId")
+  useEffect(() => {
+    if (currentLevel === 2 && watchedParentId) {
+      const p = parentCandidates.find((c) => c.id === watchedParentId)
+      if (p && p.externalCategory !== form.getValues("externalCategory")) {
+        form.setValue("externalCategory", p.externalCategory, {
+          shouldDirty: true,
+        })
+      }
+    }
+  }, [watchedParentId, parentCandidates, currentLevel, form])
+
   const watchCalcType = form.watch("calculationType") ?? CalculationType.FIXED
   const isPercentage = watchCalcType === CalculationType.PERCENTAGE
+  const watchedExternalCategory = form.watch("externalCategory")
 
-  const onSubmit = (values: ExpenseCategoryFormValues) => {
+  const onSubmit = (values: CostCategoryFormValues) => {
     startTransition(async () => {
-      const payload = values as ExpenseCategoryInput
+      const payload = values as CostCategoryInput
       const result =
         mode === "create"
-          ? await createExpenseCategory(payload)
-          : await updateExpenseCategory(initialId!, payload)
+          ? await createCostCategory(payload)
+          : await updateCostCategory(initialId!, payload)
 
       if (!result.ok) {
         toast.error(result.error)
@@ -130,10 +134,10 @@ export function ExpenseCategoryForm({ mode, initialId, initialValues }: Props) {
       }
       toast.success(
         mode === "create"
-          ? "諸経費カテゴリを作成しました"
-          : "諸経費カテゴリを更新しました",
+          ? "原価費目を作成しました"
+          : "原価費目を更新しました",
       )
-      router.push(`/expense-categories/${result.data.id}`)
+      router.push(`/cost-categories/${result.data.id}`)
       router.refresh()
     })
   }
@@ -145,103 +149,133 @@ export function ExpenseCategoryForm({ mode, initialId, initialValues }: Props) {
         <CardHeader>
           <CardTitle>基本情報</CardTitle>
           <CardDescription>
-            諸経費カテゴリの識別情報。コードは会社内で一意。
+            原価費目の識別情報。コードは会社内で一意。
+            {isSystemReserved && (
+              <span className="ml-1 text-destructive">
+                ※ システム予約行: 名称・英名のみ編集可
+              </span>
+            )}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="expenseCode">
+              <Label htmlFor="categoryCode">
                 コード <span className="text-destructive">*</span>
               </Label>
               <Input
-                id="expenseCode"
-                {...form.register("expenseCode")}
+                id="categoryCode"
+                {...form.register("categoryCode")}
                 placeholder="PATTERN_FEE / INSPECTION_FEE"
                 maxLength={50}
+                disabled={isSystemReserved}
+                className="font-mono"
               />
-              {form.formState.errors.expenseCode && (
+              {form.formState.errors.categoryCode && (
                 <p className="text-xs text-destructive">
-                  {form.formState.errors.expenseCode.message}
+                  {form.formState.errors.categoryCode.message}
                 </p>
               )}
             </div>
             <div className="space-y-1.5 sm:col-span-2">
-              <Label htmlFor="expenseName">
+              <Label htmlFor="categoryName">
                 名称 <span className="text-destructive">*</span>
               </Label>
               <Input
-                id="expenseName"
-                {...form.register("expenseName")}
+                id="categoryName"
+                {...form.register("categoryName")}
                 placeholder="パターン代 / 検品費"
                 maxLength={100}
               />
-              {form.formState.errors.expenseName && (
+              {form.formState.errors.categoryName && (
                 <p className="text-xs text-destructive">
-                  {form.formState.errors.expenseName.message}
+                  {form.formState.errors.categoryName.message}
                 </p>
               )}
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="expenseNameEn">英名（任意）</Label>
+            <Label htmlFor="categoryNameEn">英名（任意）</Label>
             <Input
-              id="expenseNameEn"
-              {...form.register("expenseNameEn")}
+              id="categoryNameEn"
+              {...form.register("categoryNameEn")}
               placeholder="Pattern Fee / Inspection Fee"
               maxLength={100}
             />
-            {form.formState.errors.expenseNameEn && (
+            {form.formState.errors.categoryNameEn && (
               <p className="text-xs text-destructive">
-                {form.formState.errors.expenseNameEn.message}
+                {form.formState.errors.categoryNameEn.message}
               </p>
             )}
           </div>
         </CardContent>
       </Card>
 
-      {/* ─────────────────── 分類 ─────────────────── */}
+      {/* ─────────────────── 階層・大分類 ─────────────────── */}
       <Card>
         <CardHeader>
-          <CardTitle>分類</CardTitle>
+          <CardTitle>階層・大分類</CardTitle>
           <CardDescription>
-            業務上の費用種別。見積もりエンジン側のカテゴリ分けに使用されます。
+            {currentLevel === 1
+              ? "Lv1 (大分類) は予約 4 行のみ。新規追加・大分類変更はできません。"
+              : "Lv2 (小分類) は親 (Lv1) を選んで作成。大分類は親から自動継承されます。"}
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          {currentLevel === 2 && !isSystemReserved && (
+            <div className="space-y-1.5">
+              <Label htmlFor="parentCategoryId">
+                親カテゴリ (Lv1){" "}
+                <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={form.watch("parentCategoryId") ?? ""}
+                onValueChange={(v) =>
+                  form.setValue("parentCategoryId", v || null, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
+                disabled={parentCandidates.length === 0}
+              >
+                <SelectTrigger id="parentCategoryId">
+                  <SelectValue
+                    placeholder={
+                      parentCandidates.length === 0
+                        ? "稼働中の Lv1 カテゴリがありません"
+                        : "親カテゴリを選択"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {parentCandidates.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      <span className="font-mono text-xs text-muted-foreground mr-2">
+                        {p.categoryCode}
+                      </span>
+                      {p.categoryName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {form.formState.errors.parentCategoryId && (
+                <p className="text-xs text-destructive">
+                  {form.formState.errors.parentCategoryId.message}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="space-y-1.5">
-            <Label htmlFor="expenseType">
-              費用種別 <span className="text-destructive">*</span>
-            </Label>
-            <Select
-              value={form.watch("expenseType")}
-              onValueChange={(v) =>
-                form.setValue("expenseType", v as ExpenseType, {
-                  shouldValidate: true,
-                })
-              }
-            >
-              <SelectTrigger id="expenseType">
-                <SelectValue placeholder="費用種別を選択" />
-              </SelectTrigger>
-              <SelectContent>
-                {EXPENSE_TYPE_GROUPS.map((group) => (
-                  <SelectGroup key={group.label}>
-                    <SelectLabel>{group.label}</SelectLabel>
-                    {group.values.map((v) => (
-                      <SelectItem key={v} value={v}>
-                        {EXPENSE_TYPE_LABELS[v]}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                ))}
-              </SelectContent>
-            </Select>
-            {form.formState.errors.expenseType && (
-              <p className="text-xs text-destructive">
-                {form.formState.errors.expenseType.message}
-              </p>
-            )}
+            <Label>大分類 (自動)</Label>
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              {EXTERNAL_COST_CATEGORY_LABELS[watchedExternalCategory] ?? "—"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {currentLevel === 1
+                ? "Lv1 では固定です。"
+                : "親 (Lv1) を選ぶと自動でセットされます。"}
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -251,7 +285,7 @@ export function ExpenseCategoryForm({ mode, initialId, initialValues }: Props) {
         <CardHeader>
           <CardTitle>標準金額・計算方法</CardTitle>
           <CardDescription>
-            見積もり作成時のデフォルト値。金額未設定の場合、案件ごとに手入力します。
+            見積もり作成時のデフォルト値。葉ノード (Lv2) で設定します。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -286,7 +320,7 @@ export function ExpenseCategoryForm({ mode, initialId, initialValues }: Props) {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="standardAmount">
-                標準金額{isPercentage ? "(%)" : "（任意）"}
+                標準金額{isPercentage ? " (%)" : "（任意）"}
               </Label>
               <Input
                 id="standardAmount"
@@ -347,16 +381,17 @@ export function ExpenseCategoryForm({ mode, initialId, initialValues }: Props) {
             <Select
               value={form.watch("status")}
               onValueChange={(v) =>
-                form.setValue("status", v as ExpenseCategoryStatus, {
+                form.setValue("status", v as CostCategoryStatus, {
                   shouldValidate: true,
                 })
               }
+              disabled={isSystemReserved}
             >
               <SelectTrigger id="status">
                 <SelectValue placeholder="ステータス" />
               </SelectTrigger>
               <SelectContent>
-                {EXPENSE_CATEGORY_STATUS_OPTIONS.map((opt) => (
+                {COST_CATEGORY_STATUS_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>

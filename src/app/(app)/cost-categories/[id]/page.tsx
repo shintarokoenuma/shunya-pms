@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ChevronLeft, Pencil } from "lucide-react"
+import { ChevronLeft, Lock, Pencil } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Badge } from "@/components/ui/badge"
@@ -11,21 +11,18 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-import { getExpenseCategory } from "@/lib/actions/expense-categories"
-import { ExpenseCategoryDeleteButton } from "../_components/expense-category-delete-button"
+import { getCostCategory } from "@/lib/actions/cost-categories"
+import { CostCategoryDeleteButton } from "../_components/cost-category-delete-button"
 import {
-  EXPENSE_CATEGORY_STATUS_LABELS,
-  EXPENSE_CATEGORY_STATUS_BADGE_VARIANT,
-  EXPENSE_TYPE_LABELS,
+  COST_CATEGORY_STATUS_LABELS,
+  COST_CATEGORY_STATUS_BADGE_VARIANT,
+  EXTERNAL_COST_CATEGORY_LABELS,
   CALCULATION_TYPE_LABELS,
   CALCULATION_TYPE_DESCRIPTIONS,
 } from "../_components/labels"
 
 type Params = Promise<{ id: string }>
 
-/**
- * Decimal | null を「¥30,000」のような表示に整形
- */
 function formatAmount(
   amount: { toNumber?: () => number } | number | null,
   currency: string,
@@ -45,7 +42,7 @@ function formatAmount(
   })}`
 }
 
-export default async function ExpenseCategoryDetailPage({
+export default async function CostCategoryDetailPage({
   params,
 }: {
   params: Params
@@ -54,13 +51,12 @@ export default async function ExpenseCategoryDetailPage({
   if (!session?.user) redirect("/login")
 
   const { id } = await params
-  const result = await getExpenseCategory(id)
+  const result = await getCostCategory(id)
   if (!result.ok) {
     notFound()
   }
   const item = result.data
 
-  // MASTER_ADMIN 判定（tenantType で判定）
   const company = await prisma.company.findUnique({
     where: { id: session.user.companyId },
     select: { tenantType: true },
@@ -72,7 +68,7 @@ export default async function ExpenseCategoryDetailPage({
       {/* ヘッダー */}
       <div className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
-          <Link href="/expense-categories">
+          <Link href="/cost-categories">
             <ChevronLeft className="mr-1 h-4 w-4" />
             一覧に戻る
           </Link>
@@ -81,50 +77,97 @@ export default async function ExpenseCategoryDetailPage({
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-semibold tracking-tight">
-                {item.expenseName}
+                {item.categoryName}
               </h1>
-              <Badge
-                variant={
-                  EXPENSE_CATEGORY_STATUS_BADGE_VARIANT[item.status]
-                }
-              >
-                {EXPENSE_CATEGORY_STATUS_LABELS[item.status]}
+              <Badge variant={COST_CATEGORY_STATUS_BADGE_VARIANT[item.status]}>
+                {COST_CATEGORY_STATUS_LABELS[item.status]}
               </Badge>
+              {item.isSystemReserved && (
+                <Badge variant="outline" className="gap-1">
+                  <Lock className="h-3 w-3" />
+                  予約
+                </Badge>
+              )}
             </div>
             <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-              <span className="font-mono">{item.expenseCode}</span>
-              {item.expenseNameEn && (
+              <span className="font-mono">{item.categoryCode}</span>
+              <span>·</span>
+              <span>Lv{item.level}</span>
+              {item.categoryNameEn && (
                 <>
                   <span>·</span>
-                  <span>{item.expenseNameEn}</span>
+                  <span>{item.categoryNameEn}</span>
                 </>
               )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
-              <Link href={`/expense-categories/${id}/edit`}>
+              <Link href={`/cost-categories/${id}/edit`}>
                 <Pencil className="mr-1 h-4 w-4" />
                 編集
               </Link>
             </Button>
-            <ExpenseCategoryDeleteButton
+            <CostCategoryDeleteButton
               id={item.id}
-              expenseName={item.expenseName}
+              categoryName={item.categoryName}
               status={item.status}
+              isSystemReserved={item.isSystemReserved}
               isMasterAdmin={isMasterAdmin}
             />
           </div>
         </div>
       </div>
 
-      {/* 分類 */}
+      {/* 階層・大分類 */}
       <Card>
         <CardHeader>
-          <CardTitle>分類</CardTitle>
+          <CardTitle>階層・大分類</CardTitle>
         </CardHeader>
-        <CardContent>
-          <DetailRow label="費用種別" value={EXPENSE_TYPE_LABELS[item.expenseType]} />
+        <CardContent className="space-y-3">
+          <DetailRow label="階層レベル" value={`Lv${item.level}`} />
+          <DetailRow
+            label="大分類"
+            value={EXTERNAL_COST_CATEGORY_LABELS[item.externalCategory]}
+          />
+          {item.parent && (
+            <DetailRow
+              label="親カテゴリ"
+              value={
+                <Link
+                  href={`/cost-categories/${item.parent.id}`}
+                  className="text-primary hover:underline"
+                >
+                  <span className="font-mono text-xs text-muted-foreground mr-2">
+                    {item.parent.categoryCode}
+                  </span>
+                  {item.parent.categoryName}
+                </Link>
+              }
+            />
+          )}
+          {item.children.length > 0 && (
+            <DetailRow
+              label="子カテゴリ"
+              value={
+                <ul className="space-y-1">
+                  {item.children.map((c) => (
+                    <li key={c.id}>
+                      <Link
+                        href={`/cost-categories/${c.id}`}
+                        className="text-primary hover:underline"
+                      >
+                        <span className="font-mono text-xs text-muted-foreground mr-2">
+                          {c.categoryCode}
+                        </span>
+                        {c.categoryName}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              }
+            />
+          )}
         </CardContent>
       </Card>
 

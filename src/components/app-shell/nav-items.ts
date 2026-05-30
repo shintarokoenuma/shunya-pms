@@ -60,7 +60,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "素材", href: "/materials", icon: Scissors, enabled: true },
       { label: "素材カテゴリ", href: "/material-categories", icon: FolderTree, enabled: true },
       { label: "商品カテゴリ", href: "/product-categories", icon: FolderTree, enabled: true },
-      { label: "諸経費カテゴリ", href: "/expense-categories", icon: Coins, enabled: true },
+      { label: "原価費目", href: "/cost-categories", icon: Coins, enabled: true },
       {
         label: "Inquiry（営業先DB）",
         href: "/inquiries",

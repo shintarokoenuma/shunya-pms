@@ -16,7 +16,7 @@ import {
  * 設計方針:
  * - shunya-master-patterns v1.2 §5 の 8 関数構成（list / get / create / update /
  *   archive / restore / checkUsage / deletePermanently）
- * - 認証は auth() + 共通ヘルパー requireSession()（ExpenseCategory / Contractor と同パターン）
+ * - 認証は auth() + 共通ヘルパー requireSession()（CostCategory / Contractor と同パターン）
  * - 物理削除は 4 重ガード（MASTER_ADMIN + ARCHIVED + 名前一致 + 参照ゼロ）
  * - 全 mutation で auditLog 自動記録
  *

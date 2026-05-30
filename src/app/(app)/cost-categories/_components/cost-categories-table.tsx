@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, Lock } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -9,34 +9,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { ExpenseCategoryListItem } from "@/lib/actions/expense-categories"
+import type { CostCategoryListItem } from "@/lib/actions/cost-categories"
 import {
-  EXPENSE_CATEGORY_STATUS_LABELS,
-  EXPENSE_CATEGORY_STATUS_BADGE_VARIANT,
-  EXPENSE_TYPE_LABELS,
+  COST_CATEGORY_STATUS_LABELS,
+  COST_CATEGORY_STATUS_BADGE_VARIANT,
+  EXTERNAL_COST_CATEGORY_LABELS,
   CALCULATION_TYPE_LABELS,
 } from "./labels"
 
 type Props = {
-  items: ExpenseCategoryListItem[]
+  items: CostCategoryListItem[]
 }
 
-/**
- * Decimal | null を「¥30,000」「USD 50」のような表示に整形
- * standardAmount が null のときは「—」
- */
 function formatAmount(
-  amount: ExpenseCategoryListItem["standardAmount"],
-  currency: ExpenseCategoryListItem["currency"],
+  amount: CostCategoryListItem["standardAmount"],
+  currency: CostCategoryListItem["currency"],
 ): string {
   if (amount === null || amount === undefined) return "—"
-  // Prisma.Decimal は toNumber() を持つ
   const n =
     typeof amount === "object" && "toNumber" in amount
       ? amount.toNumber()
       : Number(amount)
   if (!Number.isFinite(n)) return "—"
-
   if (currency === "JPY") {
     return `¥${n.toLocaleString("ja-JP")}`
   }
@@ -46,11 +40,11 @@ function formatAmount(
   })}`
 }
 
-export function ExpenseCategoriesTable({ items }: Props) {
+export function CostCategoriesTable({ items }: Props) {
   if (items.length === 0) {
     return (
       <div className="rounded-md border border-dashed py-12 text-center text-sm text-muted-foreground">
-        諸経費カテゴリがありません
+        原価費目がありません
       </div>
     )
   }
@@ -60,9 +54,10 @@ export function ExpenseCategoriesTable({ items }: Props) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[140px]">コード</TableHead>
+            <TableHead className="w-[60px]">階層</TableHead>
+            <TableHead className="w-[160px]">コード</TableHead>
             <TableHead>名称</TableHead>
-            <TableHead className="w-[160px]">費用種別</TableHead>
+            <TableHead className="w-[120px]">大分類</TableHead>
             <TableHead className="w-[140px]">計算方法</TableHead>
             <TableHead className="w-[140px] text-right">標準金額</TableHead>
             <TableHead className="w-[100px]">ステータス</TableHead>
@@ -72,19 +67,32 @@ export function ExpenseCategoriesTable({ items }: Props) {
         <TableBody>
           {items.map((item) => (
             <TableRow key={item.id}>
+              <TableCell className="text-xs text-muted-foreground">
+                Lv{item.level}
+              </TableCell>
               <TableCell className="font-mono text-sm">
-                {item.expenseCode}
+                <div className="flex items-center gap-1.5">
+                  {item.isSystemReserved && (
+                    <Lock className="h-3 w-3 text-muted-foreground" />
+                  )}
+                  {item.categoryCode}
+                </div>
               </TableCell>
               <TableCell>
-                <div className="font-medium">{item.expenseName}</div>
-                {item.expenseNameEn && (
+                <div className="font-medium">{item.categoryName}</div>
+                {item.parent && (
                   <div className="text-xs text-muted-foreground">
-                    {item.expenseNameEn}
+                    親: {item.parent.categoryName}
+                  </div>
+                )}
+                {item.categoryNameEn && !item.parent && (
+                  <div className="text-xs text-muted-foreground">
+                    {item.categoryNameEn}
                   </div>
                 )}
               </TableCell>
               <TableCell className="text-sm">
-                {EXPENSE_TYPE_LABELS[item.expenseType]}
+                {EXTERNAL_COST_CATEGORY_LABELS[item.externalCategory]}
               </TableCell>
               <TableCell className="text-sm">
                 {CALCULATION_TYPE_LABELS[item.calculationType]}
@@ -94,16 +102,14 @@ export function ExpenseCategoriesTable({ items }: Props) {
               </TableCell>
               <TableCell>
                 <Badge
-                  variant={
-                    EXPENSE_CATEGORY_STATUS_BADGE_VARIANT[item.status]
-                  }
+                  variant={COST_CATEGORY_STATUS_BADGE_VARIANT[item.status]}
                 >
-                  {EXPENSE_CATEGORY_STATUS_LABELS[item.status]}
+                  {COST_CATEGORY_STATUS_LABELS[item.status]}
                 </Badge>
               </TableCell>
               <TableCell>
                 <Link
-                  href={`/expense-categories/${item.id}`}
+                  href={`/cost-categories/${item.id}`}
                   className="inline-flex items-center text-sm text-primary hover:underline"
                 >
                   詳細

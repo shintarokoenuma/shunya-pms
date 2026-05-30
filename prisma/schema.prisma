@@ -1294,19 +1294,27 @@ enum ProductCategoryStatus {
 }
 
 // =====================================================
-// 諸経費マスター
+// 原価費目マスター（Phase 1A-16）
 // =====================================================
 
-/// 諸経費マスター（パターン代、検品費等）
-model ExpenseCategory {
+/// 原価費目マスター（階層 2 段。Lv1 は ExternalCostCategory に対応する予約 4 行）
+model CostCategory {
   id        String @id @default(uuid())
   companyId String @map("company_id")
 
-  expenseCode   String  @map("expense_code") @db.VarChar(50)
-  expenseName   String  @map("expense_name") @db.VarChar(100)
-  expenseNameEn String? @map("expense_name_en") @db.VarChar(100)
+  categoryCode   String  @map("category_code") @db.VarChar(50)
+  categoryName   String  @map("category_name") @db.VarChar(100)
+  categoryNameEn String? @map("category_name_en") @db.VarChar(100)
 
-  expenseType ExpenseType @map("expense_type")
+  // 階層構造（Phase 1A-16：2 階層）
+  parentCategoryId String? @map("parent_category_id")
+  level            Int     @default(1)
+
+  // 大分類（社外公開用、Lv1 は固定、Lv2 は親から継承）
+  externalCategory ExternalCostCategory @map("external_category")
+
+  // システム予約行（Lv1 4 行）= archive / 物理削除 / categoryCode 変更不可
+  isSystemReserved Boolean @default(false) @map("is_system_reserved")
 
   // 標準金額
   standardAmount Decimal? @map("standard_amount") @db.Decimal(15, 2)
@@ -1319,36 +1327,22 @@ model ExpenseCategory {
   notes String? @db.Text
 
   // ステータス
-  status ExpenseCategoryStatus @default(ACTIVE)
+  status CostCategoryStatus @default(ACTIVE)
 
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  @@unique([companyId, expenseCode])
-  @@index([companyId, status])
-  @@index([companyId, expenseType])
-  @@map("expense_categories")
-}
+  // リレーション（自己参照階層）
+  parent   CostCategory?  @relation("CostCategoryHierarchy", fields: [parentCategoryId], references: [id])
+  children CostCategory[] @relation("CostCategoryHierarchy")
 
-enum ExpenseType {
-  PATTERN_FEE // パターン代
-  GRADING_FEE // グレーディング代
-  SAMPLE_FEE // サンプル代
-  INSPECTION_FEE // 検品費
-  TRANSPORT_FEE // 輸送費
-  CUSTOMS_FEE // 通関費
-  TARIFF // 関税
-  IMPORT_TAX // 輸入消費税
-  STORAGE_FEE // 倉庫保管費
-  PROCESSING_FEE // 加工費（特殊）
-  PRINTING_FEE // プリント費
-  EMBROIDERY_FEE // 刺繍費
-  WASHING_FEE // 洗い費
-  PHOTOGRAPHY_FEE // 撮影費
-  RENTAL_FEE // レンタル費
-  OTHER
+  @@unique([companyId, categoryCode])
+  @@index([companyId, status])
+  @@index([companyId, parentCategoryId])
+  @@index([companyId, externalCategory])
+  @@map("cost_categories")
 }
 
 enum CalculationType {
@@ -1357,7 +1351,7 @@ enum CalculationType {
   PERCENTAGE // 売上の％
 }
 
-enum ExpenseCategoryStatus {
+enum CostCategoryStatus {
   ACTIVE
   ARCHIVED
 }
