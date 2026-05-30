@@ -54,8 +54,8 @@ export function ContractorsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[100px]">コード</TableHead>
             <TableHead>外注先名</TableHead>
+            <TableHead className="w-[100px]">コード</TableHead>
             <TableHead className="w-[90px]">区分</TableHead>
             <TableHead>専門分野</TableHead>
             <TableHead className="w-[140px]">契約形態</TableHead>
@@ -67,7 +67,6 @@ export function ContractorsTable({
         <TableBody>
           {items.map((c) => (
             <TableRow key={c.id}>
-              <TableCell className="font-mono">{c.contractorCode}</TableCell>
               <TableCell>
                 <Link
                   href={`/contractors/${c.id}`}
@@ -81,6 +80,7 @@ export function ContractorsTable({
                   </div>
                 )}
               </TableCell>
+              <TableCell className="font-mono">{c.contractorCode}</TableCell>
               <TableCell>
                 <Badge variant="secondary" className="text-xs">
                   {c.isIndividual ? "個人" : "法人"}

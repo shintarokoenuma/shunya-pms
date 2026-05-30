@@ -33,8 +33,8 @@ export function DeliveryDestinationsTable({ items }: Props) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[180px]">コード</TableHead>
             <TableHead>納品先名</TableHead>
+            <TableHead className="w-[180px]">コード</TableHead>
             <TableHead className="w-[200px]">クライアント</TableHead>
             <TableHead className="w-[180px]">バイヤー</TableHead>
             <TableHead className="w-[120px]">所在地</TableHead>
@@ -45,11 +45,11 @@ export function DeliveryDestinationsTable({ items }: Props) {
         <TableBody>
           {items.map((item) => (
             <TableRow key={item.id}>
-              <TableCell className="font-mono text-sm">
-                {item.destinationCode}
-              </TableCell>
               <TableCell>
                 <div className="font-medium">{item.destinationName}</div>
+              </TableCell>
+              <TableCell className="font-mono text-sm">
+                {item.destinationCode}
               </TableCell>
               <TableCell className="text-sm">
                 {item.buyer.client ? (

@@ -52,8 +52,8 @@ export function MaterialsTable({ items }: Props) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[160px]">コード</TableHead>
             <TableHead>素材名</TableHead>
+            <TableHead className="w-[160px]">コード</TableHead>
             <TableHead className="w-[110px]">タイプ</TableHead>
             <TableHead className="w-[200px]">仕入先</TableHead>
             <TableHead className="w-[180px]">単価</TableHead>
@@ -64,9 +64,6 @@ export function MaterialsTable({ items }: Props) {
         <TableBody>
           {items.map((item) => (
             <TableRow key={item.id}>
-              <TableCell className="font-mono text-sm">
-                {item.materialCode}
-              </TableCell>
               <TableCell>
                 <div className="font-medium">{item.materialName}</div>
                 {item.materialNameEn && (
@@ -74,6 +71,9 @@ export function MaterialsTable({ items }: Props) {
                     {item.materialNameEn}
                   </div>
                 )}
+              </TableCell>
+              <TableCell className="font-mono text-sm">
+                {item.materialCode}
               </TableCell>
               <TableCell>
                 <Badge variant={MATERIAL_TYPE_BADGE_VARIANT[item.materialType]}>
