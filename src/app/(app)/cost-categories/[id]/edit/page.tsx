@@ -3,12 +3,12 @@ import { notFound, redirect } from "next/navigation"
 import { ChevronLeft } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
-import { getExpenseCategory } from "@/lib/actions/expense-categories"
-import { ExpenseCategoryForm } from "../../_components/expense-category-form"
+import { getCostCategory } from "@/lib/actions/cost-categories"
+import { CostCategoryForm } from "../../_components/cost-category-form"
 
 type Params = Promise<{ id: string }>
 
-export default async function EditExpenseCategoryPage({
+export default async function EditCostCategoryPage({
   params,
 }: {
   params: Params
@@ -17,17 +17,17 @@ export default async function EditExpenseCategoryPage({
   if (!session?.user) redirect("/login")
 
   const { id } = await params
-  const result = await getExpenseCategory(id)
+  const result = await getCostCategory(id)
   if (!result.ok) {
     notFound()
   }
   const item = result.data
 
-  // Decimal | null を number | null に変換（form 側の expected 型）
   const standardAmount =
     item.standardAmount === null
       ? null
-      : typeof item.standardAmount === "object" && "toNumber" in item.standardAmount
+      : typeof item.standardAmount === "object" &&
+          "toNumber" in item.standardAmount
         ? item.standardAmount.toNumber()
         : Number(item.standardAmount)
 
@@ -35,31 +35,32 @@ export default async function EditExpenseCategoryPage({
     <div className="space-y-6 p-6">
       <div className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
-          <Link href={`/expense-categories/${id}`}>
+          <Link href={`/cost-categories/${id}`}>
             <ChevronLeft className="mr-1 h-4 w-4" />
             詳細に戻る
           </Link>
         </Button>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          諸経費カテゴリ 編集
-        </h1>
+        <h1 className="text-2xl font-semibold tracking-tight">原価費目 編集</h1>
         <p className="text-sm text-muted-foreground">
-          {item.expenseName}（{item.expenseCode}）
+          {item.categoryName}（{item.categoryCode}） / Lv{item.level}
         </p>
       </div>
-      <ExpenseCategoryForm
+      <CostCategoryForm
         mode="edit"
         initialId={id}
         initialValues={{
-          expenseCode: item.expenseCode,
-          expenseName: item.expenseName,
-          expenseNameEn: item.expenseNameEn ?? "",
-          expenseType: item.expenseType,
+          categoryCode: item.categoryCode,
+          categoryName: item.categoryName,
+          categoryNameEn: item.categoryNameEn ?? "",
+          parentCategoryId: item.parentCategoryId,
+          level: item.level as 1 | 2,
+          externalCategory: item.externalCategory,
           standardAmount,
           currency: item.currency,
           calculationType: item.calculationType,
           notes: item.notes ?? "",
           status: item.status,
+          isSystemReserved: item.isSystemReserved,
         }}
       />
     </div>

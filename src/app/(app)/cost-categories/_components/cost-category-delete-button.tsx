@@ -22,39 +22,49 @@ import {
   AlertTitle,
 } from "@/components/ui/alert"
 import {
-  checkExpenseCategoryUsage,
-  deleteExpenseCategoryPermanently,
-  archiveExpenseCategory,
-  restoreExpenseCategory,
-  type ExpenseCategoryUsage,
-} from "@/lib/actions/expense-categories"
-import type { ExpenseCategoryStatus } from "@prisma/client"
+  checkCostCategoryUsage,
+  deleteCostCategoryPermanently,
+  archiveCostCategory,
+  restoreCostCategory,
+  type CostCategoryUsage,
+} from "@/lib/actions/cost-categories"
+import type { CostCategoryStatus } from "@prisma/client"
 
 type Props = {
   id: string
-  expenseName: string
-  status: ExpenseCategoryStatus
+  categoryName: string
+  status: CostCategoryStatus
+  isSystemReserved: boolean
   isMasterAdmin: boolean
 }
 
 /**
- * 諸経費カテゴリの archive / restore / 物理削除を集約したボタン群。
+ * 原価費目の archive / restore / 物理削除を集約したボタン群。
  * - 通常権限: アーカイブ / 復元のみ
  * - MASTER_ADMIN: 物理削除（4 重ガード）も表示
+ * - isSystemReserved=true の行は archive / 物理削除いずれも表示しない
  */
-export function ExpenseCategoryDeleteButton({
+export function CostCategoryDeleteButton({
   id,
-  expenseName,
+  categoryName,
   status,
+  isSystemReserved,
   isMasterAdmin,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  // アーカイブ
+  if (isSystemReserved) {
+    return (
+      <div className="text-xs text-muted-foreground">
+        システム予約行（操作不可）
+      </div>
+    )
+  }
+
   const handleArchive = () => {
     startTransition(async () => {
-      const result = await archiveExpenseCategory(id)
+      const result = await archiveCostCategory(id)
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -64,10 +74,9 @@ export function ExpenseCategoryDeleteButton({
     })
   }
 
-  // 復元
   const handleRestore = () => {
     startTransition(async () => {
-      const result = await restoreExpenseCategory(id)
+      const result = await restoreCostCategory(id)
       if (!result.ok) {
         toast.error(result.error)
         return
@@ -106,7 +115,7 @@ export function ExpenseCategoryDeleteButton({
             復元
           </Button>
           {isMasterAdmin && (
-            <PermanentDeleteDialog id={id} expenseName={expenseName} />
+            <PermanentDeleteDialog id={id} categoryName={categoryName} />
           )}
         </>
       )}
@@ -115,24 +124,23 @@ export function ExpenseCategoryDeleteButton({
 }
 
 // =============================================================================
-// 物理削除ダイアログ（MASTER_ADMIN 専用）
+// 物理削除ダイアログ (MASTER_ADMIN 専用)
 // =============================================================================
 function PermanentDeleteDialog({
   id,
-  expenseName,
+  categoryName,
 }: {
   id: string
-  expenseName: string
+  categoryName: string
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
-  const [usage, setUsage] = useState<ExpenseCategoryUsage | null>(null)
+  const [usage, setUsage] = useState<CostCategoryUsage | null>(null)
   const [usageLoading, setUsageLoading] = useState(false)
   const [usageError, setUsageError] = useState<string | null>(null)
   const [confirmName, setConfirmName] = useState("")
 
-  // ダイアログを開いたら参照件数を取得
   const handleOpenChange = (next: boolean) => {
     setOpen(next)
     if (next) {
@@ -140,7 +148,7 @@ function PermanentDeleteDialog({
       setUsageError(null)
       setUsage(null)
       setUsageLoading(true)
-      checkExpenseCategoryUsage(id)
+      checkCostCategoryUsage(id)
         .then((result) => {
           if (result.ok) {
             setUsage(result.data)
@@ -154,14 +162,14 @@ function PermanentDeleteDialog({
 
   const handleDelete = () => {
     startTransition(async () => {
-      const result = await deleteExpenseCategoryPermanently(id, confirmName)
+      const result = await deleteCostCategoryPermanently(id, confirmName)
       if (!result.ok) {
         toast.error(result.error)
         return
       }
       toast.success("物理削除しました")
       setOpen(false)
-      router.push("/expense-categories")
+      router.push("/cost-categories")
       router.refresh()
     })
   }
@@ -169,7 +177,7 @@ function PermanentDeleteDialog({
   const canDelete =
     usage !== null &&
     usage.totalRefs === 0 &&
-    confirmName.trim() === expenseName
+    confirmName.trim() === categoryName
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -183,7 +191,7 @@ function PermanentDeleteDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-destructive" />
-            諸経費カテゴリを物理削除
+            原価費目を物理削除
           </DialogTitle>
           <DialogDescription>
             この操作は元に戻せません。データが完全に削除されます。
@@ -191,13 +199,11 @@ function PermanentDeleteDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* 対象 */}
           <div className="rounded-md border bg-muted/40 p-3 text-sm">
             <div className="text-xs text-muted-foreground">削除対象</div>
-            <div className="font-medium">{expenseName}</div>
+            <div className="font-medium">{categoryName}</div>
           </div>
 
-          {/* 参照件数 */}
           {usageLoading && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -214,8 +220,8 @@ function PermanentDeleteDialog({
             <Alert variant="destructive">
               <AlertTitle>削除できません</AlertTitle>
               <AlertDescription>
-                見積もり原価明細から {usage.quotationCostBreakdownCount}{" "}
-                件参照されています。
+                子カテゴリ {usage.childrenCount} 件 / 見積もり原価明細{" "}
+                {usage.quotationCostBreakdownCount} 件 から参照されています。
               </AlertDescription>
             </Alert>
           )}
@@ -228,7 +234,6 @@ function PermanentDeleteDialog({
             </Alert>
           )}
 
-          {/* 確認入力 */}
           <div className="space-y-1.5">
             <Label htmlFor="confirmName">
               確認のためカテゴリ名を入力してください
@@ -237,7 +242,7 @@ function PermanentDeleteDialog({
               id="confirmName"
               value={confirmName}
               onChange={(e) => setConfirmName(e.target.value)}
-              placeholder={expenseName}
+              placeholder={categoryName}
               disabled={isPending || usage === null || usage.totalRefs > 0}
             />
           </div>
