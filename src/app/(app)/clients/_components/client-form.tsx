@@ -198,6 +198,19 @@ export function ClientForm(props: Props) {
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
+              name="companyName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>会社名 *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="株式会社マルカ" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="clientCode"
               render={({ field }) => (
                 <FormItem>
@@ -206,19 +219,6 @@ export function ClientForm(props: Props) {
                     <Input placeholder="MARKA" {...field} />
                   </FormControl>
                   <FormDescription>英数字・ハイフン・アンダースコア</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="companyName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>会社名 *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="株式会社マルカ" {...field} />
-                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

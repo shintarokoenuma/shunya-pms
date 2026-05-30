@@ -47,8 +47,8 @@ export function FactoriesTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[100px]">コード</TableHead>
             <TableHead>工場名</TableHead>
+            <TableHead className="w-[100px]">コード</TableHead>
             <TableHead>工場タイプ</TableHead>
             <TableHead className="w-[80px]">国</TableHead>
             <TableHead className="w-[100px]">ステータス</TableHead>
@@ -58,7 +58,6 @@ export function FactoriesTable({
         <TableBody>
           {items.map((f) => (
             <TableRow key={f.id}>
-              <TableCell className="font-mono">{f.factoryCode}</TableCell>
               <TableCell>
                 <Link
                   href={`/factories/${f.id}`}
@@ -72,6 +71,7 @@ export function FactoriesTable({
                   </div>
                 )}
               </TableCell>
+              <TableCell className="font-mono">{f.factoryCode}</TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-1">
                   {f.factoryTypes.length > 0 ? (

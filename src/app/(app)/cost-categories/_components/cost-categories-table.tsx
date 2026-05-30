@@ -55,8 +55,8 @@ export function CostCategoriesTable({ items }: Props) {
         <TableHeader>
           <TableRow>
             <TableHead className="w-[60px]">階層</TableHead>
-            <TableHead className="w-[160px]">コード</TableHead>
             <TableHead>名称</TableHead>
+            <TableHead className="w-[160px]">コード</TableHead>
             <TableHead className="w-[120px]">大分類</TableHead>
             <TableHead className="w-[140px]">計算方法</TableHead>
             <TableHead className="w-[140px] text-right">標準金額</TableHead>
@@ -70,14 +70,6 @@ export function CostCategoriesTable({ items }: Props) {
               <TableCell className="text-xs text-muted-foreground">
                 Lv{item.level}
               </TableCell>
-              <TableCell className="font-mono text-sm">
-                <div className="flex items-center gap-1.5">
-                  {item.isSystemReserved && (
-                    <Lock className="h-3 w-3 text-muted-foreground" />
-                  )}
-                  {item.categoryCode}
-                </div>
-              </TableCell>
               <TableCell>
                 <div className="font-medium">{item.categoryName}</div>
                 {item.parent && (
@@ -90,6 +82,14 @@ export function CostCategoriesTable({ items }: Props) {
                     {item.categoryNameEn}
                   </div>
                 )}
+              </TableCell>
+              <TableCell className="font-mono text-sm">
+                <div className="flex items-center gap-1.5">
+                  {item.isSystemReserved && (
+                    <Lock className="h-3 w-3 text-muted-foreground" />
+                  )}
+                  {item.categoryCode}
+                </div>
               </TableCell>
               <TableCell className="text-sm">
                 {EXTERNAL_COST_CATEGORY_LABELS[item.externalCategory]}

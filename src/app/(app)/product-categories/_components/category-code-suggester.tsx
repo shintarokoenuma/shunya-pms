@@ -1,61 +1,35 @@
 "use client"
 
-import { useMemo } from "react"
-import { Button } from "@/components/ui/button"
-import {
-  suggestCategoryCode,
-  type CategoryCodeSuggestion,
-} from "@/lib/utils/category-code-suggest"
+/**
+ * Phase 1A-14 で導入、Phase 1A-17 で共通 `<CodeSuggester>` の薄いラッパーに変更 (B-007 回収)。
+ *
+ * - ロジック・描画はすべて `src/components/code-suggester.tsx` に集約
+ * - ドメイン辞書として APPAREL_TERM_DICT を固定で渡す
+ * - 既存呼び出し側 (product-category-form.tsx) の互換性のため props 名は維持
+ */
+import { CodeSuggester } from "@/components/code-suggester"
+import { APPAREL_TERM_DICT } from "@/lib/constants/code-dicts/apparel"
 
 type Props = {
-  /** 入力中のカテゴリ名（日本語） */
+  /** 入力中のカテゴリ名 (日本語) */
   categoryName: string
-  /** 選択中の親カテゴリの categoryCode（未選択時は null） */
+  /** 選択中の親カテゴリの categoryCode (未選択時は null) */
   parentCategoryCode: string | null
   /** 候補チップをクリックしたときに呼ばれる */
   onSelect: (code: string) => void
 }
 
-/**
- * Phase 1A-14: ProductCategory フォーム用のコードサジェスター
- *
- * 入力された categoryName と選択中の parentCategoryCode から候補を計算し、
- * クリック可能なチップとして表示。候補がない場合は何も表示しない。
- *
- * 配置: categoryCode 入力欄の直下
- */
 export function CategoryCodeSuggester({
   categoryName,
   parentCategoryCode,
   onSelect,
 }: Props) {
-  const suggestions: CategoryCodeSuggestion[] = useMemo(
-    () => suggestCategoryCode(categoryName, parentCategoryCode),
-    [categoryName, parentCategoryCode],
-  )
-
-  if (suggestions.length === 0) return null
-
   return (
-    <div className="flex flex-wrap items-center gap-1.5 pt-1">
-      <span className="text-xs text-muted-foreground">候補:</span>
-      {suggestions.map((s) => (
-        <Button
-          key={s.value}
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 px-2 font-mono text-xs"
-          onClick={() => onSelect(s.value)}
-          title={
-            s.source === "parent-dict"
-              ? "親カテゴリ + 辞書から生成"
-              : "辞書から生成"
-          }
-        >
-          {s.value}
-        </Button>
-      ))}
-    </div>
+    <CodeSuggester
+      name={categoryName}
+      parentCode={parentCategoryCode}
+      dict={APPAREL_TERM_DICT}
+      onSelect={onSelect}
+    />
   )
 }

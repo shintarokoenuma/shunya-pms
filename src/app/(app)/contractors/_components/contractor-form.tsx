@@ -226,6 +226,37 @@ export function ContractorForm(props: Props) {
             <CardTitle>基本情報</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="contractorName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>外注先名 *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="例: 山田パターン工房 / 株式会社サンプル" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    個人事業主の場合は屋号または氏名、法人の場合は会社名
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="contractorNameEn"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>外注先名(英語)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Sample Pattern Co., Ltd." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -268,37 +299,6 @@ export function ContractorForm(props: Props) {
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="contractorName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>外注先名 *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例: 山田パターン工房 / 株式会社サンプル" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    個人事業主の場合は屋号または氏名、法人の場合は会社名
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="contractorNameEn"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>外注先名(英語)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Sample Pattern Co., Ltd." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

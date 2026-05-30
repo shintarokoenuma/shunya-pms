@@ -149,6 +149,19 @@ export function BrandForm(props: Props) {
             />
             <FormField
               control={form.control}
+              name="brandName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>ブランド名 *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="MARKA" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
               name="brandCode"
               render={({ field }) => (
                 <FormItem>
@@ -164,19 +177,6 @@ export function BrandForm(props: Props) {
                   <FormDescription>
                     2~5文字の英大文字。品番略号として使われます（例: MK-26SS-TS-001）
                   </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="brandName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>ブランド名 *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="MARKA" {...field} />
-                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

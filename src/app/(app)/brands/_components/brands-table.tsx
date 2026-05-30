@@ -46,8 +46,8 @@ export function BrandsTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[80px]">コード</TableHead>
             <TableHead>ブランド名</TableHead>
+            <TableHead className="w-[80px]">コード</TableHead>
             <TableHead>クライアント</TableHead>
             <TableHead className="w-[100px]">ステータス</TableHead>
             <TableHead className="w-[120px] text-right">操作</TableHead>
@@ -56,7 +56,6 @@ export function BrandsTable({
         <TableBody>
           {items.map((b) => (
             <TableRow key={b.id}>
-              <TableCell className="font-mono">{b.brandCode}</TableCell>
               <TableCell>
                 <Link
                   href={`/brands/${b.id}`}
@@ -68,6 +67,7 @@ export function BrandsTable({
                   <div className="text-xs text-muted-foreground">{b.brandNameEn}</div>
                 )}
               </TableCell>
+              <TableCell className="font-mono">{b.brandCode}</TableCell>
               <TableCell>
                 <Link
                   href={`/clients/${b.client.id}`}

@@ -52,8 +52,8 @@ export function ProductCategoriesTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[100px]">コード</TableHead>
             <TableHead>カテゴリ名</TableHead>
+            <TableHead className="w-[100px]">コード</TableHead>
             <TableHead className="w-[100px]">階層</TableHead>
             <TableHead>親カテゴリ</TableHead>
             <TableHead className="w-[100px]">ステータス</TableHead>
@@ -68,7 +68,6 @@ export function ProductCategoriesTable({
                 : `レベル ${c.level}`
             return (
               <TableRow key={c.id}>
-                <TableCell className="font-mono">{c.categoryCode}</TableCell>
                 <TableCell>
                   <Link
                     href={`/product-categories/${c.id}`}
@@ -82,6 +81,7 @@ export function ProductCategoriesTable({
                     </div>
                   )}
                 </TableCell>
+                <TableCell className="font-mono">{c.categoryCode}</TableCell>
                 <TableCell>
                   <Badge variant="outline" className="text-xs">
                     {levelLabel}

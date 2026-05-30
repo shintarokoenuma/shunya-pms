@@ -33,8 +33,8 @@ export function BuyersTable({ items }: Props) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[140px]">コード</TableHead>
             <TableHead>バイヤー名</TableHead>
+            <TableHead className="w-[140px]">コード</TableHead>
             <TableHead className="w-[220px]">関連クライアント</TableHead>
             <TableHead className="w-[80px]">国</TableHead>
             <TableHead className="w-[100px]">ステータス</TableHead>
@@ -44,9 +44,6 @@ export function BuyersTable({ items }: Props) {
         <TableBody>
           {items.map((item) => (
             <TableRow key={item.id}>
-              <TableCell className="font-mono text-sm">
-                {item.buyerCode}
-              </TableCell>
               <TableCell>
                 <div className="font-medium">{item.buyerName}</div>
                 {item.buyerNameEn && (
@@ -54,6 +51,9 @@ export function BuyersTable({ items }: Props) {
                     {item.buyerNameEn}
                   </div>
                 )}
+              </TableCell>
+              <TableCell className="font-mono text-sm">
+                {item.buyerCode}
               </TableCell>
               <TableCell className="text-sm">
                 {item.client ? (

@@ -33,8 +33,8 @@ export function ModelCodesTable({ items }: Props) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[180px]">モデルコード</TableHead>
             <TableHead>モデル名</TableHead>
+            <TableHead className="w-[180px]">モデルコード</TableHead>
             <TableHead className="w-[180px]">ブランド</TableHead>
             <TableHead className="w-[200px]">クライアント</TableHead>
             <TableHead className="w-[100px]">リピート</TableHead>
@@ -45,9 +45,6 @@ export function ModelCodesTable({ items }: Props) {
         <TableBody>
           {items.map((item) => (
             <TableRow key={item.id}>
-              <TableCell className="font-mono text-sm">
-                {item.modelCode}
-              </TableCell>
               <TableCell>
                 <div className="font-medium">{item.modelName}</div>
                 {item.modelNameEn && (
@@ -55,6 +52,9 @@ export function ModelCodesTable({ items }: Props) {
                     {item.modelNameEn}
                   </div>
                 )}
+              </TableCell>
+              <TableCell className="font-mono text-sm">
+                {item.modelCode}
               </TableCell>
               <TableCell className="text-sm">
                 {item.brand ? (

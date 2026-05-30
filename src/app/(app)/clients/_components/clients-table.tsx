@@ -39,8 +39,8 @@ export function ClientsTable({ items, isMasterAdmin }: Props) {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>コード</TableHead>
             <TableHead>会社名</TableHead>
+            <TableHead>コード</TableHead>
             <TableHead>業態</TableHead>
             <TableHead>国</TableHead>
             <TableHead>ステータス</TableHead>
@@ -50,20 +50,20 @@ export function ClientsTable({ items, isMasterAdmin }: Props) {
         <TableBody>
           {items.map((c) => (
             <TableRow key={c.id}>
-              <TableCell className="font-mono text-xs">
-                <Link
-                  href={`/clients/${c.id}`}
-                  className="hover:underline"
-                >
-                  {c.clientCode}
-                </Link>
-              </TableCell>
               <TableCell className="font-medium">
                 <Link
                   href={`/clients/${c.id}`}
                   className="hover:underline"
                 >
                   {c.companyName}
+                </Link>
+              </TableCell>
+              <TableCell className="font-mono text-xs">
+                <Link
+                  href={`/clients/${c.id}`}
+                  className="hover:underline"
+                >
+                  {c.clientCode}
                 </Link>
               </TableCell>
               <TableCell className="text-sm">

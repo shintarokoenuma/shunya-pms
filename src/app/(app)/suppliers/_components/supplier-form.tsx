@@ -175,6 +175,34 @@ export function SupplierForm(props: Props) {
             <CardTitle>基本情報</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            <FormField
+              control={form.control}
+              name="companyName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>会社名 *</FormLabel>
+                  <FormControl>
+                    <Input placeholder="例: 株式会社サンプル生地" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="companyNameEn"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>会社名(英語)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Sample Fabric Co., Ltd." {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <div className="grid gap-4 md:grid-cols-2">
               <FormField
                 control={form.control}
@@ -217,34 +245,6 @@ export function SupplierForm(props: Props) {
                 )}
               />
             </div>
-
-            <FormField
-              control={form.control}
-              name="companyName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>会社名 *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例: 株式会社サンプル生地" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="companyNameEn"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>会社名(英語)</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Sample Fabric Co., Ltd." {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

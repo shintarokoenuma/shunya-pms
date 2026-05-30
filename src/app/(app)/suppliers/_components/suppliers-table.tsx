@@ -48,8 +48,8 @@ export function SuppliersTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="w-[100px]">コード</TableHead>
             <TableHead>会社名</TableHead>
+            <TableHead className="w-[100px]">コード</TableHead>
             <TableHead>取扱品目</TableHead>
             <TableHead className="w-[80px]">国</TableHead>
             <TableHead className="w-[100px]">ステータス</TableHead>
@@ -59,7 +59,6 @@ export function SuppliersTable({
         <TableBody>
           {items.map((s) => (
             <TableRow key={s.id}>
-              <TableCell className="font-mono">{s.supplierCode}</TableCell>
               <TableCell>
                 <Link
                   href={`/suppliers/${s.id}`}
@@ -73,6 +72,7 @@ export function SuppliersTable({
                   </div>
                 )}
               </TableCell>
+              <TableCell className="font-mono">{s.supplierCode}</TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-1">
                   {s.supplierType.length > 0 ? (
