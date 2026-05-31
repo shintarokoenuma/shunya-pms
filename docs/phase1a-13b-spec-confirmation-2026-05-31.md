@@ -51,8 +51,8 @@
 
 ## 4. 実装手順（patterns §12 準拠・Phase 2/3 のみ）
 
-1. 論理層: `src/lib/validators/material.ts` に8フィールド追加 → tsc clean → **論理層コミット**
-2. UI 層: `material-form.tsx`（3カード追加・imageUrl 追加・プレースホルダ撤去）/ 詳細ページ → tsc clean → **UI コミット**
+1. 論理層: `src/lib/validators/material.ts` に9フィールド追加（§3 B-1〜B-6 + C-1〜C-3）→ tsc clean → **論理層コミット**
+2. UI 層: `material-form.tsx`（3カード追加・imageUrl 追加・プレースホルダ撤去）/ `actions/materials.ts`（create/update 受け渡し）/ 詳細ページ / 編集ページ → tsc clean → **UI コミット**
 3. PR: push → PR → マージ（**migration 非含・本番 DB 非接触**）→ デプロイ確認 → dev で動作確認7項目
 
 ---
@@ -71,3 +71,4 @@
 |---|---|---|
 | 2026-05-31 | v0.1 | 初版ドラフト・要確認3点 |
 | 2026-05-31 | v1.0 | Q1=出し分けなし / Q2=URL入力 / Q3=JSON Phase2 を確定。実装着手可 |
+| 2026-05-31 | v1.1 | §4 「8フィールド」→「9フィールド」訂正 (§3 表の機械的集計 = B-1〜B-6 + C-1〜C-3 = 9) |
