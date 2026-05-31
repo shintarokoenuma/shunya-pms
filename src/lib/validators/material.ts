@@ -2,11 +2,15 @@ import { z } from "zod"
 import { Currency, MaterialStatus, MaterialType } from "@prisma/client"
 
 /**
- * Phase 1A-13a: 素材（Material）バリデータ
+ * Phase 1A-13a + 1A-13b: 素材（Material）バリデータ
  *
- * 設計方針（spec 2026-05-27）:
- * - 段階的実装。Phase 1A-13a は約 13 個の基本コアフィールドのみ扱う
- *   生地特有 / 規格 / 貿易 / 画像 / 色展開 / 多言語（Zh/Vi）は Phase 1A-13b/13c で追加
+ * 設計方針（spec 2026-05-27 / 1A-13b spec 2026-05-31 v1.0）:
+ * - 1A-13a: 基本コアフィールド (materialCode/Name/Type/primarySupplierId/unit/単価/status 等)
+ * - 1A-13b: 生地仕様 (fabricWeight / fabricWidth / composition / swatchImageUrl) +
+ *           規格・標準 (standardUsage / standardLossRate) +
+ *           貿易 (hsCode / originCountry) +
+ *           画像 (imageUrl) を追加
+ * - JSON 列 (compositionData / availableColors) は Phase 2 送り
  * - materialCode は手動入力（自動採番なし）。多様なフォーマットを許容するため
  *   英数字 + ハイフン + アンダースコア + スラッシュ + ピリオドを許可
  * - 必須: materialCode / materialName / materialType / primarySupplierId / unit
@@ -43,6 +47,59 @@ const optionalPositiveDecimal = z
   .refine((v) => v === null || v >= 0, "0以上の数値で入力してください")
   .nullable()
 
+/**
+ * 任意の 0 より大きい Decimal（fabricWeight / fabricWidth / standardUsage 用）
+ * 空文字・null・undefined は null として扱う
+ * `.default(null)` でフォーム入力欄が無くても null として通る (任意項目)
+ */
+const optionalStrictlyPositiveDecimal = z
+  .union([z.string(), z.number(), z.null()])
+  .transform((v) => {
+    if (v === "" || v === null || v === undefined) return null
+    const n = typeof v === "number" ? v : Number(v)
+    return Number.isFinite(n) ? n : null
+  })
+  .refine((v) => v === null || v > 0, "0より大きい数値で入力してください")
+  .nullable()
+  .default(null)
+
+/**
+ * 任意のパーセント Decimal（standardLossRate 用、0 〜 100）
+ * 空文字・null・undefined は null として扱う
+ */
+const optionalPercentDecimal = z
+  .union([z.string(), z.number(), z.null()])
+  .transform((v) => {
+    if (v === "" || v === null || v === undefined) return null
+    const n = typeof v === "number" ? v : Number(v)
+    return Number.isFinite(n) ? n : null
+  })
+  .refine(
+    (v) => v === null || (v >= 0 && v <= 100),
+    "0以上 100以下の数値で入力してください",
+  )
+  .nullable()
+  .default(null)
+
+/**
+ * 任意の http(s) URL（imageUrl / swatchImageUrl 用）
+ * 空文字・null・undefined は null として扱う
+ * 形式は http:// または https:// で始まることのみチェック（厳密な URL parser は使わない）
+ */
+const optionalHttpUrl = z
+  .union([z.string(), z.null()])
+  .transform((v) => {
+    if (v === null || v === undefined) return null
+    const trimmed = v.trim()
+    return trimmed === "" ? null : trimmed
+  })
+  .refine(
+    (v) => v === null || /^https?:\/\/.+/.test(v),
+    "http:// または https:// で始まる URL を入力してください",
+  )
+  .nullable()
+  .default(null)
+
 // =============================================================================
 // 素材本体スキーマ（Phase 1A-13a：基本コアのみ）
 // =============================================================================
@@ -76,6 +133,23 @@ export const materialBaseSchema = z.object({
   currency: z.nativeEnum(Currency).default(Currency.JPY),
   unit: requiredString(20, "単位"),
   minimumOrderQty: optionalPositiveDecimal,
+
+  // 生地仕様（Phase 1A-13b）
+  fabricWeight: optionalStrictlyPositiveDecimal, // g/m²
+  fabricWidth: optionalStrictlyPositiveDecimal, // cm
+  composition: optionalString(1000), // 自由記述 (例: Cotton 100%)
+  swatchImageUrl: optionalHttpUrl, // 生地見本画像 URL
+
+  // 規格・標準（Phase 1A-13b）
+  standardUsage: optionalStrictlyPositiveDecimal, // m/枚
+  standardLossRate: optionalPercentDecimal, // 0 〜 100 %
+
+  // 貿易（Phase 1A-13b）
+  hsCode: optionalString(20), // 形式チェックは緩め (上限のみ)
+  originCountry: optionalString(2), // ISO 3166-1 alpha-2 (UI Select で制約)
+
+  // 画像（Phase 1A-13b、UI では基本情報カード末尾に配置）
+  imageUrl: optionalHttpUrl,
 
   // メモ
   specification: optionalString(10000),
