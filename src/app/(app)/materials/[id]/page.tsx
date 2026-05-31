@@ -20,6 +20,11 @@ import {
   MATERIAL_TYPE_LABELS,
   MATERIAL_TYPE_BADGE_VARIANT,
 } from "../_components/labels"
+import { COUNTRY_OPTIONS } from "@/lib/constants/countries"
+
+const COUNTRY_LABEL_BY_VALUE: Record<string, string> = Object.fromEntries(
+  COUNTRY_OPTIONS.map((c) => [c.value, c.label]),
+)
 
 type Params = Promise<{ id: string }>
 
@@ -127,6 +132,23 @@ export default async function MaterialDetailPage({
               label="素材名（英語）"
               value={item.materialNameEn ?? "—"}
             />
+            <DetailRow
+              label="代表画像"
+              value={
+                item.imageUrl ? (
+                  <a
+                    href={item.imageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline break-all"
+                  >
+                    {item.imageUrl}
+                  </a>
+                ) : (
+                  "—"
+                )
+              }
+            />
           </CardContent>
         </Card>
 
@@ -221,23 +243,129 @@ export default async function MaterialDetailPage({
         </Card>
       )}
 
-      {/* Phase 1A-13b / 13c で追加されるセクション */}
+      {/* Phase 1A-13b 生地仕様 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">生地仕様</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DetailRow
+            label="目付"
+            value={
+              item.fabricWeight !== null
+                ? `${formatDecimal(item.fabricWeight)} g/m²`
+                : "—"
+            }
+          />
+          <DetailRow
+            label="生地巾"
+            value={
+              item.fabricWidth !== null
+                ? `${formatDecimal(item.fabricWidth)} cm`
+                : "—"
+            }
+          />
+          <DetailRow
+            label="組成"
+            value={
+              item.composition ? (
+                <span className="whitespace-pre-wrap">{item.composition}</span>
+              ) : (
+                "—"
+              )
+            }
+          />
+          <DetailRow
+            label="生地見本"
+            value={
+              item.swatchImageUrl ? (
+                <a
+                  href={item.swatchImageUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline break-all"
+                >
+                  {item.swatchImageUrl}
+                </a>
+              ) : (
+                "—"
+              )
+            }
+          />
+        </CardContent>
+      </Card>
+
+      {/* Phase 1A-13b 規格・標準 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">規格・標準</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DetailRow
+            label="標準用尺"
+            value={
+              item.standardUsage !== null
+                ? `${formatDecimal(item.standardUsage)} m/枚`
+                : "—"
+            }
+          />
+          <DetailRow
+            label="標準ロス率"
+            value={
+              item.standardLossRate !== null
+                ? `${formatDecimal(item.standardLossRate)} %`
+                : "—"
+            }
+          />
+        </CardContent>
+      </Card>
+
+      {/* Phase 1A-13b 貿易 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">貿易</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DetailRow
+            label="HS コード"
+            value={
+              item.hsCode ? (
+                <span className="font-mono">{item.hsCode}</span>
+              ) : (
+                "—"
+              )
+            }
+          />
+          <DetailRow
+            label="原産国"
+            value={
+              item.originCountry ? (
+                <span>
+                  <span className="font-mono text-xs text-muted-foreground mr-2">
+                    {item.originCountry}
+                  </span>
+                  {COUNTRY_LABEL_BY_VALUE[item.originCountry] ?? ""}
+                </span>
+              ) : (
+                "—"
+              )
+            }
+          />
+        </CardContent>
+      </Card>
+
+      {/* Phase 1A-13c で追加されるセクション */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">後続フェーズで追加予定</CardTitle>
           <CardDescription>
-            このセクションは Phase 1A-13b / 13c で順次拡張されます。
+            次フェーズ（1A-13c）で追加される予定の項目。
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-2 text-sm text-muted-foreground">
-          <p>
-            ・ 生地特有データ（fabricWeight / fabricWidth / composition）→
-            Phase 1A-13b
-          </p>
-          <p>・ 規格（standardUsage / standardLossRate）→ Phase 1A-13b</p>
-          <p>・ 貿易データ（hsCode / originCountry）→ Phase 1A-13b</p>
-          <p>・ 画像 / 色展開 / 参考サイト → Phase 1A-13c</p>
+          <p>・ 色展開（availableColors）→ Phase 1A-13c</p>
           <p>・ 多言語（materialNameZh / materialNameVi）→ Phase 1A-13c</p>
+          <p>・ 構造化組成（compositionData）→ Phase 2</p>
         </CardContent>
       </Card>
 

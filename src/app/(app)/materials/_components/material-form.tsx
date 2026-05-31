@@ -48,6 +48,11 @@ import {
   MATERIAL_TYPE_OPTIONS,
   CURRENCY_OPTIONS,
 } from "./labels"
+import { COUNTRY_OPTIONS } from "@/lib/constants/countries"
+
+const NO_ORIGIN_COUNTRY = "__none__"
+// 原産国は schema が VarChar(2) なので "OTHER" (4 文字) は使えない
+const ORIGIN_COUNTRY_OPTIONS = COUNTRY_OPTIONS.filter((c) => c.value !== "OTHER")
 
 export type SupplierSelectOption = {
   id: string
@@ -91,6 +96,16 @@ const CREATE_DEFAULTS: MaterialBaseInput = {
   currency: Currency.JPY,
   unit: "",
   minimumOrderQty: null,
+  // Phase 1A-13b: 生地仕様 / 規格・標準 / 貿易 / 画像
+  fabricWeight: null,
+  fabricWidth: null,
+  composition: "",
+  swatchImageUrl: null,
+  standardUsage: null,
+  standardLossRate: null,
+  hsCode: "",
+  originCountry: "",
+  imageUrl: null,
   specification: "",
   notes: "",
   status: MaterialStatus.ACTIVE,
@@ -183,6 +198,34 @@ export function MaterialForm(props: Props) {
                   <FormDescription>
                     例: FAB-COT-001（生地）/ BTN-SQR-12mm（ボタン）/
                     ZIP-METAL-15cm（ファスナー）など、自由に命名できます
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="imageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>代表画像 URL</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="url"
+                      placeholder="https://example.com/material.jpg"
+                      value={field.value ?? ""}
+                      onChange={(e) =>
+                        field.onChange(
+                          e.target.value === "" ? null : e.target.value,
+                        )
+                      }
+                      onBlur={field.onBlur}
+                      name={field.name}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    http:// または https:// で始まる URL（任意）
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -294,7 +337,194 @@ export function MaterialForm(props: Props) {
           </CardContent>
         </Card>
 
-        {/* ───────────────────── カード 3: 単価 ───────────────────── */}
+        {/* ───────────────────── カード 3: 生地仕様（Phase 1A-13b） ───────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle>生地仕様</CardTitle>
+            <CardDescription>
+              生地特有データ。任意項目（素材タイプによらず常時表示）
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="fabricWeight"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>目付（g/m²）</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="例：220"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === "" ? null : e.target.value,
+                          )
+                        }
+                        onBlur={field.onBlur}
+                        name={field.name}
+                      />
+                    </FormControl>
+                    <FormDescription>0 より大きい数値</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="fabricWidth"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>生地巾（cm）</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="例：148"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === "" ? null : e.target.value,
+                          )
+                        }
+                        onBlur={field.onBlur}
+                        name={field.name}
+                      />
+                    </FormControl>
+                    <FormDescription>0 より大きい数値</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <FormField
+              control={form.control}
+              name="composition"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>組成</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      placeholder="例：Cotton 100% / Polyester 65%, Cotton 35%"
+                      rows={2}
+                      maxLength={1000}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    繊維別構成比などを自由記述（Phase 2 で構造化マスターに移行予定）
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="swatchImageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>生地見本 URL</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="url"
+                      placeholder="https://example.com/swatch.jpg"
+                      value={field.value ?? ""}
+                      onChange={(e) =>
+                        field.onChange(
+                          e.target.value === "" ? null : e.target.value,
+                        )
+                      }
+                      onBlur={field.onBlur}
+                      name={field.name}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    http:// または https:// で始まる URL（任意）
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
+        {/* ───────────────────── カード 4: 規格・標準（Phase 1A-13b） ───────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle>規格・標準</CardTitle>
+            <CardDescription>
+              見積計算で使う標準値。任意項目
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="standardUsage"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>標準用尺（m/枚）</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.0001"
+                        min="0"
+                        placeholder="例：1.8"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === "" ? null : e.target.value,
+                          )
+                        }
+                        onBlur={field.onBlur}
+                        name={field.name}
+                      />
+                    </FormControl>
+                    <FormDescription>0 より大きい数値</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="standardLossRate"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>標準ロス率（%）</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        max="100"
+                        placeholder="例：5.0"
+                        value={field.value ?? ""}
+                        onChange={(e) =>
+                          field.onChange(
+                            e.target.value === "" ? null : e.target.value,
+                          )
+                        }
+                        onBlur={field.onBlur}
+                        name={field.name}
+                      />
+                    </FormControl>
+                    <FormDescription>0 〜 100 の範囲</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ───────────────────── カード 5: 単価 ───────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle>単価</CardTitle>
@@ -396,7 +626,83 @@ export function MaterialForm(props: Props) {
           </CardContent>
         </Card>
 
-        {/* ───────────────────── カード 4: メモ・ステータス ───────────────────── */}
+        {/* ───────────────────── カード 6: 貿易（Phase 1A-13b） ───────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle>貿易</CardTitle>
+            <CardDescription>
+              輸入時の通関で使用。任意項目
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="hsCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>HS コード</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="例：5208.21"
+                        maxLength={20}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormDescription>
+                      関税分類コード（任意・形式は緩い）
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="originCountry"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>原産国</FormLabel>
+                    <Select
+                      value={
+                        field.value && field.value !== ""
+                          ? field.value
+                          : NO_ORIGIN_COUNTRY
+                      }
+                      onValueChange={(v) =>
+                        field.onChange(v === NO_ORIGIN_COUNTRY ? "" : v)
+                      }
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="（未選択）" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NO_ORIGIN_COUNTRY}>
+                          （未選択）
+                        </SelectItem>
+                        {ORIGIN_COUNTRY_OPTIONS.map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            <span className="font-mono text-xs text-muted-foreground mr-2">
+                              {o.value}
+                            </span>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormDescription>
+                      ISO 3166-1 alpha-2（任意）
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ───────────────────── カード 7: メモ・ステータス ───────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle>メモ・ステータス</CardTitle>
@@ -468,14 +774,13 @@ export function MaterialForm(props: Props) {
           </CardContent>
         </Card>
 
-        {/* Phase 1A-13b / 13c プレビュー（保存後に詳細画面で見える内容を予告） */}
+        {/* Phase 1A-13c プレビュー（色展開 / 多言語は次フェーズ） */}
         {props.mode === "create" && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">後続フェーズで追加予定</CardTitle>
               <CardDescription>
-                生地特有データ（fabricWeight / composition 等）は Phase 1A-13b、
-                画像 / 色展開 / 参考サイトは Phase 1A-13c で UI が追加されます
+                色展開 / 多言語（materialNameZh / materialNameVi）は Phase 1A-13c で UI が追加されます
               </CardDescription>
             </CardHeader>
           </Card>

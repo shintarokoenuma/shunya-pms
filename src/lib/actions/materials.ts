@@ -17,12 +17,13 @@ import {
 } from "@/lib/validators/material"
 
 /**
- * Phase 1A-13a: 素材（Material）Server Actions
+ * Phase 1A-13a + 1A-13b: 素材（Material）Server Actions
  *
- * 設計方針（spec 2026-05-27）:
+ * 設計方針（spec 2026-05-27 / 1A-13b spec 2026-05-31 v1.0）:
  * - shunya-master-patterns v1.2 §5 標準の 8 関数構成
- * - 段階的実装：基本コアフィールドのみ。生地特有 / 規格 / 貿易 / 画像 / 色展開 /
- *   多言語（Zh/Vi）は Phase 1A-13b/13c で追加
+ * - 1A-13a: 基本コアフィールド
+ * - 1A-13b: 生地仕様 / 規格・標準 / 貿易 / 画像を create / update に追加
+ * - 色展開 / 多言語（Zh/Vi）は Phase 1A-13c で追加
  * - materialCode は手動入力（自動採番なし）
  *
  * Prisma スキーマ事情：
@@ -361,6 +362,16 @@ export async function createMaterial(
         currency: data.currency,
         unit: data.unit,
         minimumOrderQty: data.minimumOrderQty,
+        // Phase 1A-13b: 生地仕様 / 規格・標準 / 貿易 / 画像
+        fabricWeight: data.fabricWeight,
+        fabricWidth: data.fabricWidth,
+        composition: data.composition || null,
+        swatchImageUrl: data.swatchImageUrl,
+        standardUsage: data.standardUsage,
+        standardLossRate: data.standardLossRate,
+        hsCode: data.hsCode || null,
+        originCountry: data.originCountry || null,
+        imageUrl: data.imageUrl,
         specification: data.specification || null,
         notes: data.notes || null,
         status: data.status,
@@ -474,6 +485,16 @@ export async function updateMaterial(
         currency: data.currency,
         unit: data.unit,
         minimumOrderQty: data.minimumOrderQty,
+        // Phase 1A-13b: 生地仕様 / 規格・標準 / 貿易 / 画像
+        fabricWeight: data.fabricWeight,
+        fabricWidth: data.fabricWidth,
+        composition: data.composition || null,
+        swatchImageUrl: data.swatchImageUrl,
+        standardUsage: data.standardUsage,
+        standardLossRate: data.standardLossRate,
+        hsCode: data.hsCode || null,
+        originCountry: data.originCountry || null,
+        imageUrl: data.imageUrl,
         specification: data.specification || null,
         notes: data.notes || null,
         status: data.status,
