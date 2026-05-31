@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start",
+    "start": "prisma migrate deploy && next start",
     "lint": "eslint"
   },
   "dependencies": {
@@ -21,6 +21,7 @@
     "next-auth": "^5.0.0-beta.31",
     "next-themes": "^0.4.6",
     "papaparse": "^5.5.3",
+    "prisma": "^6.19.3",
     "radix-ui": "^1.4.3",
     "react": "19.2.4",
     "react-dom": "19.2.4",
@@ -41,7 +42,6 @@
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
-    "prisma": "^6.19.3",
     "tailwindcss": "^4",
     "tsx": "^4.22.0",
     "typescript": "^5"
