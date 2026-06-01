@@ -21,8 +21,10 @@ type ColorRow = {
   hex: string
 }
 
-// ─────────────────────────────────────────────────── 初期 50 色 (奇数 01〜99)
+// ─────────────────────────────────────────────────── 初期 51 色 (00 + 奇数 01〜99)
+// "00" = カラー未定 (マルチ/プリント/総柄など単色指定なし)。cmyk/hex は空文字。
 export const COLORS: readonly ColorRow[] = [
+  { colorNumber: "00", colorName: "カラー未定",     cmyk: "",             hex: "" },
   { colorNumber: "01", colorName: "晒し",           cmyk: "0.0.0.4",      hex: "#F4F4F2" },
   { colorNumber: "03", colorName: "オフホワイト",   cmyk: "0.2.6.5",      hex: "#E8E6DF" },
   { colorNumber: "05", colorName: "ライトグレー",   cmyk: "0.0.2.18",     hex: "#D2D2CE" },
