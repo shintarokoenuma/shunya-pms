@@ -1357,6 +1357,37 @@ enum CostCategoryStatus {
 }
 
 // =====================================================
+// 色マスター（Phase 1A-13c）
+// =====================================================
+
+/// 自社カラーマスター（社内の色共通言語。番手 2 桁体系：十の位=色相グループ、一の位=トーン段階）
+model Color {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+
+  colorNumber String @map("color_number") @db.VarChar(2) // "51" 偶数はイレギュラー予約
+  colorName   String @map("color_name") @db.VarChar(100) // 業界呼称（サックス、ネイビー…）
+
+  hueGroup Int @map("hue_group") // 十の位 0-9（色相系統）
+  toneStep Int @map("tone_step") // 一の位（1/3/5/7/9 基本、偶数は追加枠）
+
+  cmyk String @db.VarChar(20) // "100.85.0.40"（基準値）
+  hex  String @db.VarChar(7) //  "#001799"（算出値・表示用）
+
+  impression String? @db.VarChar(100) // 印象キーワード（任意）
+  sortOrder  Int     @map("sort_order") // 表示順（colorNumber 昇順）
+
+  status    String    @default("ACTIVE") @db.VarChar(20)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@unique([companyId, colorNumber])
+  @@index([companyId, hueGroup])
+  @@map("colors")
+}
+
+// =====================================================
 // 為替レート履歴
 // =====================================================
 
