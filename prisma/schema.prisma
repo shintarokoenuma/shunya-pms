@@ -1388,6 +1388,30 @@ model Color {
 }
 
 // =====================================================
+// 柄種別マスター（Phase 1A-13d）
+// =====================================================
+
+/// 自社柄種別マスター（柄の分類共通言語。種別分類のみで、個別柄インスタンスは持たない）
+model TextilePatternType {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+
+  typeCode    String  @map("type_code") @db.VarChar(10) // "SOLID" / "BD" / "ST" ...
+  typeName    String  @map("type_name") @db.VarChar(100) // "無地" / "ボーダー" ...
+  description String? @db.Text
+
+  sortOrder Int @map("sort_order")
+
+  status    String    @default("ACTIVE") @db.VarChar(20)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@unique([companyId, typeCode])
+  @@map("textile_pattern_types")
+}
+
+// =====================================================
 // 為替レート履歴
 // =====================================================
 
