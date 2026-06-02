@@ -208,6 +208,7 @@ type TxClient = Prisma.TransactionClient
 async function seedCategoryTarget(
   tx: TxClient,
   companyId: string,
+  seedUserId: string,
   target: Target,
   rows: CategoryRow[],
   dryRun: boolean,
@@ -266,6 +267,24 @@ async function seedCategoryTarget(
           status: row.status,
         },
         select: { id: true, categoryCode: true },
+      })
+      await tx.auditLog.create({
+        data: {
+          companyId,
+          userId: seedUserId,
+          action: "CREATE",
+          entityType: label,
+          entityId: created.id,
+          afterData: {
+            categoryCode: row.categoryCode,
+            categoryName: row.categoryName,
+            categoryNameEn: row.categoryNameEn || null,
+            parentCategoryCode: null,
+            level: 1,
+            status: row.status,
+            seedScript: "scripts/seed-categories.ts",
+          },
+        },
       })
       codeToId.set(row.categoryCode, created.id)
       stats.created += 1
@@ -341,6 +360,24 @@ async function seedCategoryTarget(
         },
         select: { id: true, categoryCode: true },
       })
+      await tx.auditLog.create({
+        data: {
+          companyId,
+          userId: seedUserId,
+          action: "CREATE",
+          entityType: label,
+          entityId: created.id,
+          afterData: {
+            categoryCode: row.categoryCode,
+            categoryName: row.categoryName,
+            categoryNameEn: row.categoryNameEn || null,
+            parentCategoryCode: row.parentCategoryCode || null,
+            level: 2,
+            status: row.status,
+            seedScript: "scripts/seed-categories.ts",
+          },
+        },
+      })
       codeToId.set(row.categoryCode, created.id)
       stats.created += 1
       console.log(
@@ -368,6 +405,7 @@ async function seedCategoryTarget(
 async function runOneTarget(
   prisma: PrismaClient,
   companyId: string,
+  seedUserId: string,
   target: Target,
   opts: Options,
 ): Promise<SeedStats> {
@@ -387,7 +425,14 @@ async function runOneTarget(
   if (opts.dryRun) {
     try {
       await prisma.$transaction(async (tx) => {
-        stats = await seedCategoryTarget(tx, companyId, target, rows, true)
+        stats = await seedCategoryTarget(
+          tx,
+          companyId,
+          seedUserId,
+          target,
+          rows,
+          true,
+        )
         throw new DryRunRollback()
       }, txOptions)
     } catch (e) {
@@ -395,7 +440,14 @@ async function runOneTarget(
     }
   } else {
     await prisma.$transaction(async (tx) => {
-      stats = await seedCategoryTarget(tx, companyId, target, rows, false)
+      stats = await seedCategoryTarget(
+        tx,
+        companyId,
+        seedUserId,
+        target,
+        rows,
+        false,
+      )
     }, txOptions)
   }
 
@@ -422,11 +474,33 @@ async function main(): Promise<void> {
       `${c("cyan", "[seed-categories]")} テナント: ${tenant.companyName} (companyId=${tenant.companyId})`,
     )
 
+    // AuditLog の userId 用にテナント内の最古ユーザーを解決
+    // (準拠形: colors-core / cost-categories-core / textile-pattern-types-core と同じ取り方)
+    const seedUser = await prisma.user.findFirst({
+      where: { companyId: tenant.companyId, deletedAt: null },
+      select: { id: true, email: true },
+      orderBy: { createdAt: "asc" },
+    })
+    if (!seedUser) {
+      throw new Error(
+        `テナント ${tenant.companyName} 内にユーザーが見つかりません (AuditLog 用 userId 解決失敗)`,
+      )
+    }
+    console.log(
+      `${c("cyan", "[seed-categories]")} AuditLog userId: ${seedUser.id} (${seedUser.email})`,
+    )
+
     const totals: SeedStats = { created: 0, skipped: 0, errors: 0 }
     const targets: Target[] =
       opts.target === "all" ? ["product", "material"] : [opts.target]
     for (const t of targets) {
-      const s = await runOneTarget(prisma, tenant.companyId, t, opts)
+      const s = await runOneTarget(
+        prisma,
+        tenant.companyId,
+        seedUser.id,
+        t,
+        opts,
+      )
       totals.created += s.created
       totals.skipped += s.skipped
       totals.errors += s.errors
