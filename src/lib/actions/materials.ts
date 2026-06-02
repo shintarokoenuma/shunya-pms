@@ -501,6 +501,74 @@ export async function updateMaterial(
       },
     })
 
+    // B-015: Material 業務スカラを全件 snapshot に載せる。
+    // システム項目 (id/companyId/createdAt/updatedAt/deletedAt) のみ除外し、
+    // satisfies Record<MaterialAuditField, unknown> で網羅をコンパイル時に強制する。
+    // schema にスカラを足すと MaterialScalarFieldEnum に自動で増えるため、
+    // Exclude しない限りこの型に組み込まれ、未追加でビルド失敗 = B-006 再発防止の保険。
+    type MaterialAuditField = Exclude<
+      keyof typeof Prisma.MaterialScalarFieldEnum,
+      "id" | "companyId" | "createdAt" | "updatedAt" | "deletedAt"
+    >
+
+    const beforeData = {
+      materialCode: existing.materialCode,
+      materialName: existing.materialName,
+      materialNameEn: existing.materialNameEn,
+      materialNameZh: existing.materialNameZh,
+      materialNameVi: existing.materialNameVi,
+      categoryId: existing.categoryId,
+      materialType: existing.materialType,
+      primarySupplierId: existing.primarySupplierId,
+      specification: existing.specification,
+      fabricWeight: existing.fabricWeight,
+      fabricWidth: existing.fabricWidth,
+      composition: existing.composition,
+      compositionData: existing.compositionData,
+      standardUsage: existing.standardUsage,
+      standardLossRate: existing.standardLossRate,
+      unitPrice: existing.unitPrice,
+      currency: existing.currency,
+      unit: existing.unit,
+      minimumOrderQty: existing.minimumOrderQty,
+      hsCode: existing.hsCode,
+      originCountry: existing.originCountry,
+      availableColors: existing.availableColors,
+      imageUrl: existing.imageUrl,
+      swatchImageUrl: existing.swatchImageUrl,
+      notes: existing.notes,
+      status: existing.status,
+    } satisfies Record<MaterialAuditField, unknown>
+
+    const afterData = {
+      materialCode: updated.materialCode,
+      materialName: updated.materialName,
+      materialNameEn: updated.materialNameEn,
+      materialNameZh: updated.materialNameZh,
+      materialNameVi: updated.materialNameVi,
+      categoryId: updated.categoryId,
+      materialType: updated.materialType,
+      primarySupplierId: updated.primarySupplierId,
+      specification: updated.specification,
+      fabricWeight: updated.fabricWeight,
+      fabricWidth: updated.fabricWidth,
+      composition: updated.composition,
+      compositionData: updated.compositionData,
+      standardUsage: updated.standardUsage,
+      standardLossRate: updated.standardLossRate,
+      unitPrice: updated.unitPrice,
+      currency: updated.currency,
+      unit: updated.unit,
+      minimumOrderQty: updated.minimumOrderQty,
+      hsCode: updated.hsCode,
+      originCountry: updated.originCountry,
+      availableColors: updated.availableColors,
+      imageUrl: updated.imageUrl,
+      swatchImageUrl: updated.swatchImageUrl,
+      notes: updated.notes,
+      status: updated.status,
+    } satisfies Record<MaterialAuditField, unknown>
+
     await prisma.auditLog.create({
       data: {
         companyId: sess.companyId,
@@ -508,22 +576,8 @@ export async function updateMaterial(
         action: "UPDATE",
         entityType: "Material",
         entityId: id,
-        beforeData: {
-          materialCode: existing.materialCode,
-          materialName: existing.materialName,
-          materialType: existing.materialType,
-          categoryId: existing.categoryId,
-          primarySupplierId: existing.primarySupplierId,
-          status: existing.status,
-        },
-        afterData: {
-          materialCode: updated.materialCode,
-          materialName: updated.materialName,
-          materialType: updated.materialType,
-          categoryId: updated.categoryId,
-          primarySupplierId: updated.primarySupplierId,
-          status: updated.status,
-        },
+        beforeData,
+        afterData,
       },
     })
 
