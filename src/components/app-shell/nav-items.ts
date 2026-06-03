@@ -76,7 +76,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "案件",
     items: [
-      { label: "品番カルテ", href: "/products", icon: Package, enabled: false },
+      { label: "品番カルテ", href: "/products", icon: Package, enabled: true },
       { label: "SKU", href: "/skus", icon: Layers, enabled: false },
     ],
   },

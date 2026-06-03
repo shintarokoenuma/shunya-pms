@@ -1,7 +1,8 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { Plus } from "lucide-react"
+import { Info, Plus } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 import { Button } from "@/components/ui/button"
 import {
   listModelCodes,
@@ -27,11 +28,13 @@ export default async function ModelCodesPage({
 }) {
   const session = await auth()
   if (!session?.user) redirect("/login")
+  const companyId = session.user.companyId
+  if (!companyId) redirect("/login")
 
   const sp = await searchParams
   const page = sp.page ? Number(sp.page) : 1
 
-  const [result, brands] = await Promise.all([
+  const [result, brands, company] = await Promise.all([
     listModelCodes({
       q: sp.q,
       status: sp.status as ModelCodeStatus | undefined,
@@ -41,7 +44,12 @@ export default async function ModelCodesPage({
       pageSize: 20,
     }),
     listActiveBrandsForModelCodeSelect(),
+    prisma.company.findUnique({
+      where: { id: companyId },
+      select: { tenantType: true },
+    }),
   ])
+  const isMasterAdmin = company?.tenantType === "MASTER_ADMIN"
 
   if (!result.ok) {
     return (
@@ -63,12 +71,30 @@ export default async function ModelCodesPage({
             -{`{連番}`}）。
           </p>
         </div>
-        <Button asChild>
-          <Link href="/model-codes/new">
-            <Plus className="mr-1 h-4 w-4" />
-            新規作成
-          </Link>
-        </Button>
+        {/* S-1: 一般導線の「新規作成」は非表示。MASTER_ADMIN のみ移行期の保険として残す */}
+        {isMasterAdmin && (
+          <Button asChild variant="outline">
+            <Link href="/model-codes/new">
+              <Plus className="mr-1 h-4 w-4" />
+              新規作成（管理者）
+            </Link>
+          </Button>
+        )}
+      </div>
+
+      {/* S-1: ModelCode は今後 Product 作成（モードB）から発番される運用への移行案内 */}
+      <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-200">
+        <div className="flex items-start gap-2">
+          <Info className="h-4 w-4 mt-0.5 flex-shrink-0" />
+          <div>
+            モデルコードは、品番カルテ（
+            <Link href="/products/new" className="underline font-medium">
+              /products/new
+            </Link>
+            ）の「新規モデルコードを発番する」モードから自動採番されます。
+            通常の運用では本ページからの手動発番は不要です。
+          </div>
+        </div>
       </div>
 
       <ModelCodesSearch brands={brands} />
