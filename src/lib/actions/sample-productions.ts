@@ -436,7 +436,10 @@ export async function createSampleProduction(
               parentSampleId: data.parentSampleId,
               title: data.title || null,
               description: data.description || null,
-              sampleQuantity: data.sampleQuantity,
+              // 空欄（null）のときは列の @default(1) に委ねるため省略する（列は NOT NULL）
+              ...(data.sampleQuantity !== null
+                ? { sampleQuantity: data.sampleQuantity }
+                : {}),
               plannedStartDate: startDate,
               plannedCompletionDate: completionDate,
               assignedToUserId: data.assignedToUserId,
@@ -535,7 +538,10 @@ export async function updateSampleProduction(
         // productId / parentSampleId / sampleNumber / sampleRound / roundOrder / status は immutable
         title: data.title || null,
         description: data.description || null,
-        sampleQuantity: data.sampleQuantity,
+        // 空欄（null）のときは現状維持（誤って 1 に戻さない）。値が来たときのみ更新。
+        ...(data.sampleQuantity !== null
+          ? { sampleQuantity: data.sampleQuantity }
+          : {}),
         plannedStartDate: startDate,
         plannedCompletionDate: completionDate,
         assignedToUserId: data.assignedToUserId,

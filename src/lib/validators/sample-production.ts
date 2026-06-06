@@ -33,17 +33,23 @@ const optionalDateString = z
   .transform((v) => (v === "" || v === null ? null : v))
 
 /**
- * 製作数（1以上の整数・既定1）。
- * フォームの number 入力は文字列で来るため union で受けて number 化する。
+ * 製作数（任意・空可）。サンプル時点では枚数未定のことがあるため空欄を許す。
+ * - 空文字 "" / null / undefined → null（既定 1 はここでは入れず actions/DB の @default に委ねる）
+ * - 値が入っている場合のみ「1以上の整数」を検証
+ * 型は number | null。
  */
 const sampleQuantityField = z
-  .union([z.string(), z.number()])
-  .transform((v) => (typeof v === "number" ? v : Number(v)))
+  .union([z.string(), z.number(), z.null()])
+  .transform((v) => {
+    if (v === null || v === "" || v === undefined) return null
+    return typeof v === "number" ? v : Number(v)
+  })
   .refine(
-    (v) => Number.isInteger(v) && v >= 1,
-    "製作数は1以上の整数で入力してください",
+    (v) => v === null || (Number.isInteger(v) && v >= 1),
+    "製作数は1以上の整数で入力してください（未定なら空欄可）",
   )
-  .default(1)
+  .nullable()
+  .default(null)
 
 // =============================================================================
 // 採番フォーマット（参照用）

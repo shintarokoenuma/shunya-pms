@@ -28,6 +28,7 @@ import {
 import {
   Form,
   FormControl,
+  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -81,7 +82,7 @@ export function SampleProductionForm(props: Props) {
           parentSampleId: props.parentSampleId ?? null,
           title: "",
           description: "",
-          sampleQuantity: 1,
+          sampleQuantity: null,
           plannedStartDate: "",
           plannedCompletionDate: "",
           assignedToUserId: null,
@@ -240,11 +241,12 @@ export function SampleProductionForm(props: Props) {
               name="sampleQuantity"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>製作数 *</FormLabel>
+                  <FormLabel>製作数（任意・未定なら空欄可）</FormLabel>
                   <FormControl>
                     <Input
                       type="number"
                       min={1}
+                      placeholder="未定なら空欄"
                       className="md:w-[160px]"
                       value={
                         field.value === null || field.value === undefined
@@ -257,6 +259,9 @@ export function SampleProductionForm(props: Props) {
                       ref={field.ref}
                     />
                   </FormControl>
+                  <FormDescription>
+                    サンプル時点で未定の場合は空欄のままで構いません。後から変更できます。
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
