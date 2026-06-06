@@ -5,24 +5,24 @@ import { auth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { listActiveBrandsForModelCodeSelect } from "@/lib/actions/model-codes"
 import { listAllActiveProductCategoriesForSelect } from "@/lib/actions/product-categories"
-import { ModelCodeForm } from "../_components/model-code-form"
+import { listAssignableUsers } from "@/lib/actions/clients"
+import { ProductForm } from "../_components/product-form"
 
 type SearchParams = Promise<{ brandId?: string }>
 
-export default async function NewModelCodePage({
+export default async function NewProductPage({
   searchParams,
 }: {
   searchParams: SearchParams
 }) {
   const session = await auth()
   if (!session?.user) redirect("/login")
-  // S-1（1A-12 撤去）: 型番の手動採番は裏方化。直URL到達は MASTER_ADMIN のみ許可（可逆）。
-  if (session.user.tenantType !== "MASTER_ADMIN") redirect("/products")
 
   const sp = await searchParams
-  const [brands, categories] = await Promise.all([
+  const [brands, categories, users] = await Promise.all([
     listActiveBrandsForModelCodeSelect(),
     listAllActiveProductCategoriesForSelect(),
+    listAssignableUsers(),
   ])
 
   const initialBrandId =
@@ -34,17 +34,20 @@ export default async function NewModelCodePage({
     <div className="space-y-6 p-6">
       <div className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
-          <Link href="/model-codes">
+          <Link href="/products">
             <ChevronLeft className="mr-1 h-4 w-4" />
             一覧に戻る
           </Link>
         </Button>
-        <h1 className="text-2xl font-semibold tracking-tight">型番 新規作成</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">
+          品番カルテ 新規作成
+        </h1>
       </div>
-      <ModelCodeForm
+      <ProductForm
         mode="create"
         brands={brands}
         categories={categories}
+        users={users}
         defaultValues={initialBrandId ? { brandId: initialBrandId } : undefined}
       />
     </div>

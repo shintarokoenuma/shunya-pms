@@ -5,7 +5,6 @@ import {
   Prisma,
   ProductStatus,
   ModelCodeStatus,
-  BrandStatus,
   type Product,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"

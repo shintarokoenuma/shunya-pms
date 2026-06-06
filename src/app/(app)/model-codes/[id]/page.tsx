@@ -41,6 +41,8 @@ export default async function ModelCodeDetailPage({
 }) {
   const session = await auth()
   if (!session?.user) redirect("/login")
+  // S-1（1A-12 撤去）: 型番は裏方化。MASTER_ADMIN 限定で温存（可逆）。
+  if (session.user.tenantType !== "MASTER_ADMIN") redirect("/products")
 
   const { id } = await params
   const result = await getModelCode(id)

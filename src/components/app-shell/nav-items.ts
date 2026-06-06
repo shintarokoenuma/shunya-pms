@@ -30,6 +30,12 @@ export type NavItem = {
   icon?: LucideIcon
   /** false の場合グレーアウト（後続フェーズで有効化） */
   enabled: boolean
+  /**
+   * true の場合、前面ナビから完全に下げる（描画しない）。
+   * enabled=false（グレーアウト表示）との違いに注意。S-1 の 1A-12 撤去で
+   * 型番（ModelCode）を裏方化するために導入。元に戻すには hidden を外すだけ（可逆）。
+   */
+  hidden?: boolean
 }
 
 export type NavSection = {
@@ -58,7 +64,10 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "外注先", href: "/contractors", icon: UserCog, enabled: true },
       { label: "バイヤー", href: "/buyers", icon: ShoppingBag, enabled: true },
       { label: "納品先", href: "/delivery-destinations", icon: MapPin, enabled: true },
-      { label: "型番", href: "/model-codes", icon: Hash, enabled: true },
+      // S-1（1A-12 撤去）: 型番は Product 作成時に裏側で自動発番する方式へ移行。
+      // 手動採番の前面導線は下げる。ページ/アクションは温存し MASTER_ADMIN のみ直URLで到達可。
+      // 完全削除は本番安定後に B 枠で別タスク。hidden を外せば元に戻る（可逆）。
+      { label: "型番", href: "/model-codes", icon: Hash, enabled: true, hidden: true },
       { label: "素材", href: "/materials", icon: Scissors, enabled: true },
       { label: "素材カテゴリ", href: "/material-categories", icon: FolderTree, enabled: true },
       { label: "カラー", href: "/colors", icon: Palette, enabled: true },
@@ -76,7 +85,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     label: "案件",
     items: [
-      { label: "品番カルテ", href: "/products", icon: Package, enabled: false },
+      { label: "品番カルテ", href: "/products", icon: Package, enabled: true },
       { label: "SKU", href: "/skus", icon: Layers, enabled: false },
     ],
   },
