@@ -159,7 +159,14 @@ function productCodePrefix(
   season: string,
   categoryCode: string,
 ): string {
-  return `${brandCode.toUpperCase()}-${season}-${categoryCode.toUpperCase()}-`
+  // season も brandCode / categoryCode と同様に大文字化して採番する
+  // （26ss と 26SS の表記ゆれが検索・突合の事故になるのを防ぐ）。
+  return `${brandCode.toUpperCase()}-${season.toUpperCase()}-${categoryCode.toUpperCase()}-`
+}
+
+/** 社内品番・season カラムの正規化（大文字化）に使う */
+function normalizeSeason(season: string): string {
+  return season.toUpperCase()
 }
 
 async function computeNextProductCode(
@@ -481,9 +488,11 @@ export async function createProduct(
       return { ok: false, error: "指定された商品カテゴリが見つかりません" }
     }
 
+    // productCode と Product.season の表記を揃えるため、season を大文字に正規化して使う。
+    const season = normalizeSeason(data.season)
     const codePrefix = productCodePrefix(
       brand.brandCode,
-      data.season,
+      season,
       category.categoryCode,
     )
     const deliveryDate = data.desiredDeliveryDate
@@ -533,7 +542,7 @@ export async function createProduct(
               productNameEn: data.productNameEn || null,
               description: data.description || null,
               silhouette: data.silhouette || null,
-              season: data.season,
+              season,
               year: data.year,
               expectedQuantity: data.expectedQuantity,
               desiredDeliveryDate: deliveryDate,
@@ -597,7 +606,7 @@ export async function createProduct(
           clientId: brand.clientId,
           categoryId: data.categoryId,
           productName: data.productName,
-          season: data.season,
+          season,
           year: data.year,
           status: data.status,
         },
@@ -688,7 +697,9 @@ export async function updateProduct(
           productNameEn: data.productNameEn || null,
           description: data.description || null,
           silhouette: data.silhouette || null,
-          season: data.season,
+          // productCode は immutable だが、season カラムの表記ゆれを残さないよう
+          // 更新時も大文字に正規化して保存する（UI 側の大文字強制は B-026）。
+          season: normalizeSeason(data.season),
           year: data.year,
           expectedQuantity: data.expectedQuantity,
           desiredDeliveryDate: deliveryDate,
