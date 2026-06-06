@@ -311,8 +311,10 @@ export async function getSampleProduction(
     const sess = await requireSession()
     if (!sess.ok) return sess
 
+    // archive 済み（deletedAt セット）も詳細表示・復元できるよう deletedAt では絞らない。
+    // 親子系譜は active（deletedAt: null）のみを辿る。
     const row = await prisma.sampleProduction.findFirst({
-      where: { id, companyId: sess.companyId, deletedAt: null },
+      where: { id, companyId: sess.companyId },
     })
     if (!row) {
       return { ok: false, error: "サンプル製作セットが見つかりません" }

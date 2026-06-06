@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ChevronLeft, Pencil } from "lucide-react"
+import { ChevronLeft, Pencil, Plus } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,8 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { getProduct } from "@/lib/actions/products"
+import { listSampleProductions } from "@/lib/actions/sample-productions"
+import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
 import {
   primaryProductCode,
   secondaryProductCode,
@@ -43,6 +45,13 @@ export default async function ProductDetailPage({
   const primary = primaryProductCode(item)
   const secondary = secondaryProductCode(item)
   const clientPrimary = isClientCodePrimary(item)
+
+  // S-2: この品番カルテ配下のサンプル製作セット
+  const samplesResult = await listSampleProductions({
+    productId: id,
+    pageSize: 50,
+  })
+  const samples = samplesResult.ok ? samplesResult.data.items : []
 
   return (
     <div className="space-y-6 p-6">
@@ -266,6 +275,24 @@ export default async function ProductDetailPage({
               ))}
             </ul>
           )}
+        </CardContent>
+      </Card>
+
+      {/* サンプル製作セット（S-2） */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">サンプル製作セット</CardTitle>
+            <Button asChild size="sm">
+              <Link href={`/samples/new?productId=${item.id}`}>
+                <Plus className="mr-1 h-4 w-4" />
+                サンプル作成
+              </Link>
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <SampleProductionsTable items={samples} showProduct={false} />
         </CardContent>
       </Card>
 

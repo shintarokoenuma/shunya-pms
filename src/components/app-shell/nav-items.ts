@@ -10,6 +10,7 @@ import {
   Palette,
   Scissors,
   Shapes,
+  Shirt,
   LayoutDashboard,
   MessageSquare,
   Package,
@@ -86,6 +87,7 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "案件",
     items: [
       { label: "品番カルテ", href: "/products", icon: Package, enabled: true },
+      { label: "サンプル製作", href: "/samples", icon: Shirt, enabled: true },
       { label: "SKU", href: "/skus", icon: Layers, enabled: false },
     ],
   },
