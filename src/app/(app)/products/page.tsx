@@ -4,44 +4,45 @@ import { Plus } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import {
-  listModelCodes,
-  listActiveBrandsForModelCodeSelect,
-} from "@/lib/actions/model-codes"
-import { ModelCodesSearch } from "./_components/model-codes-search"
-import { ModelCodesTable } from "./_components/model-codes-table"
-import { ModelCodesPagination } from "./_components/model-codes-pagination"
-import type { ModelCodeStatus } from "@prisma/client"
+  listProducts,
+  type ListProductsParams,
+} from "@/lib/actions/products"
+import { listActiveBrandsForModelCodeSelect } from "@/lib/actions/model-codes"
+import { ProductsSearch } from "./_components/products-search"
+import { ProductsTable } from "./_components/products-table"
+import { ProductsPagination } from "./_components/products-pagination"
+import type { ProductStatus } from "@prisma/client"
 
 type SearchParams = Promise<{
   q?: string
   status?: string
   brandId?: string
-  categoryId?: string
+  season?: string
   page?: string
 }>
 
-export default async function ModelCodesPage({
+export default async function ProductsPage({
   searchParams,
 }: {
   searchParams: SearchParams
 }) {
   const session = await auth()
   if (!session?.user) redirect("/login")
-  // S-1（1A-12 撤去）: 型番一覧は前面ナビから下げ、MASTER_ADMIN 限定で温存（可逆）。
-  if (session.user.tenantType !== "MASTER_ADMIN") redirect("/products")
 
   const sp = await searchParams
   const page = sp.page ? Number(sp.page) : 1
 
+  const params: ListProductsParams = {
+    q: sp.q,
+    status: sp.status as ProductStatus | undefined,
+    brandId: sp.brandId,
+    season: sp.season,
+    page,
+    pageSize: 20,
+  }
+
   const [result, brands] = await Promise.all([
-    listModelCodes({
-      q: sp.q,
-      status: sp.status as ModelCodeStatus | undefined,
-      brandId: sp.brandId,
-      categoryId: sp.categoryId,
-      page,
-      pageSize: 20,
-    }),
+    listProducts(params),
     listActiveBrandsForModelCodeSelect(),
   ])
 
@@ -59,23 +60,23 @@ export default async function ModelCodesPage({
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">型番</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">品番カルテ</h1>
           <p className="text-sm text-muted-foreground">
-            商品の「型」を表す不変 ID。Brand 配下で自動採番（M-{`{ブランド略号}`}
-            -{`{連番}`}）。
+            案件の背骨となる品番（Product）。社内品番は ブランド × シーズン ×
+            カテゴリ で自動採番されます。
           </p>
         </div>
         <Button asChild>
-          <Link href="/model-codes/new">
+          <Link href="/products/new">
             <Plus className="mr-1 h-4 w-4" />
             新規作成
           </Link>
         </Button>
       </div>
 
-      <ModelCodesSearch brands={brands} />
-      <ModelCodesTable items={items} />
-      <ModelCodesPagination
+      <ProductsSearch brands={brands} />
+      <ProductsTable items={items} />
+      <ProductsPagination
         page={currentPage}
         totalPages={totalPages}
         total={total}
