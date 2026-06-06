@@ -1,68 +1,56 @@
-# 引き継ぎメモ (2026-06-02 セッション末 / B-006・B-010横展開 完了 + マスター完了確認 + 品質表示統合方針決定)
+# 引き継ぎメモ (2026-06-06 セッション / 仕様議事録v1.0確定・currency-prices棚上げ → 次はS-1実装指示書)
 
-## ① 進行中フェーズと完了状態
+## ⓪ 最重要・プロジェクト棲み分けルール（毎回必須）
+- shunya-pms（リポジトリ shintarokoenuma/shunya-pms・ローカル ~/shunya-production-system・本番 shunya-pms-web-production.up.railway.app）と saagara-v2（別リポジトリ・本番 saagara-v2-production.up.railway.app）は完全に別物。
+- 過去に VS Code の Claude Code 別ウィンドウで両者を混同して作業した経緯あり（最悪 saagara 本番に shunya 変更が乗る事故リスク）。
+- 対策：(1) Claude Code 向け実装指示書には毎回冒頭に【対象プロジェクト】ヘッダ（リポジトリ/ローカルパス/本番URL/saagaraとは別物の注記）を固定で入れる。(2) 指示書を貼る前に VS Code のそのウィンドウが ~/shunya-production-system を開いているか目視確認する。
 
-- **B-006（Material UPDATE auditLog が categoryId を記録しない・high）: ✓ 完了**（PR #55 / c8d5c2a）。原因＝手書きホワイトリスト漏れ。before/after に categoryId を1行ずつ追加。dev で a/b/c 検証完了（after_category が実UUID・誤検知なしを確認）。
-- **B-010 横展開（seed の AuditLog 棚卸し）: ✓ 完了**（PR #56 / d28d938）。NG は seed-categories.ts 1件のみ。Lv1/Lv2 の create 直後に tx.auditLog.create を同一tx内追加。dev で冪等性確認（実行前後で件数不変）。
-- **引き継ぎメモ更新（SESSION_HANDOVER.md）**: 本セッションで複数回更新。docs単独のため main 直 push 運用。
-- **★マスターフェーズは事実上完了を確認**: 棚卸しの結果、メインマスター14個（クライアント/ブランド/仕入先/工場/外注先/バイヤー/納品先/型番/素材/素材カテゴリ/商品カテゴリ/原価費目/カラー/柄種別）すべて schema+actions+validator+UI+nav 完備。未着手は ExchangeRate（意図的にPhase 1B直前へリスケ済）・Inquiry（CRM寄り・nav enabled:false）・参照データ系3つ（HsCode/FtaRule/BusinessTermsGlossary、B-017前提）のみ。→ 必須マスターの残りは無い。
+## ① 本セッションで確定したこと（仕様議事録 v1.0）
+- 「品番カルテ × サンプル製作 × 進行チェックリスト」仕様議事録を v1.0 確定。§9 の6論点をすべて確定。
+- 保存先：docs/specs/product-sample-spec-confirmation-v1_0-2026-06-06.md（main にコミット済み e0a3130）。これが唯一の正。
+- 6論点の確定要点：
+  1. タスク項目＝サンプル8タスク（仕様確定/パターン/生地/付属/縫製/加工/検品/先方提出評価）。生地と付属は分離。加工はプルダウン方式（ProcessingType 軽量マスター・選んだ分だけ生成）。品質表示の独立タスクは廃止（表示内容→#1仕様確定に内包・下げ札資材→#4付属に吸収）。量産は＋グレーディング＋納品。
+  2. データ構造＝案C-1（タスク行モデル ProgressTask・新規）。自動生成は定型全生成＋加工は選択分のみ。
+  3. Product 採番＝MK-26SS-TS-001。品番体系を重要確定：社内品番(productCode)が案件の背骨／先方品番(clientProductCode)は別フィールド／表示で前面を切替(clientProductCode||productCode)／品名だけで動かず必ず案件化を強制（下書き状態は持たない）。categoryId は採番に必須なので Zod で必須化（schema は optional 据え置き・migration なし）。
+  4. SampleProduction＝SP-2026-0042。parentSampleId で系譜。status は初期手動遷移。
+  5. 発注連携＝サンプル起点に絞る。WO=作業/PO=現物の区別。初期費用費目（版・型・パターン・刺繍パンチ・グレーディング）。「個別売り立て/製品単価インクルード」の2区分フィールド。版類は PO・現物資産として扱い受け皿（現物資産フラグ・保管期限）のみ作る → 本格在庫管理は B-023。資材は品番単位でまとめ発送。
+  6. 段階順序＝S-1 → S-2 → S-3a(ProcessingType マスター) → S-3(進行チェックリスト) → S-4(発注連携)。チェックリストを発注連携より先。
 
-## ② PR と状態（すべてマージ済み）
+## ② 新規バックログ（本セッションで起票）
+- B-023：版類（型・版・パターン・刺繍パンチ）の在庫管理・再利用判定。保管期限つき・再利用できる現物資産として生地/付属（消費型）と別カテゴリで持つ。最初の山では PO 側に受け皿のみ。優先度中。
+- B-024：自社ブランドの生地・付属・織りネーム在庫。OEM=消費型／自社ブランド=在庫型の区別を在庫設計の最初の前提に組み込む申し送り。最初の山ではスコープ外。
 
-- PR #55（c8d5c2a）: B-006 updateMaterial AuditLog に categoryId 追加。
-- PR #56（d28d938）: B-010 横展開 seed-categories.ts に AuditLog(CREATE) 追加。
-- ローカルは main・クリーン。
+## ③ リポジトリ状態の重要発見と対応（currency-prices 棚上げ）
+- feat/currency-prices-incoterms ブランチに、記憶の曖昧な未コミット作業を発見（2026-06-03 夕方作成）。内容＝enum Incoterms 追加＋ProductPrice モデル新規（通貨別 上代/卸/原価）。Product 本体への列追加はなし（リレーション prices のみ）。
+- 調査結果：コミット0・stash0 で全部未コミット（消すと戻らない）。dev DB(hopper:12921)には migration 20260603092457 適用済み・product_prices テーブル生成済みだが 0行（backfill未実行）。本番(shuttle:16099)は無風。
+- 対応：消さず A案（保全コミット＋棚上げ）を採用。保全コミット 8f821f5（feat/currency-prices-incoterms 上・未 push・ローカルのみ）。
+- 正式採用は「別途 PR 化 → dev dry-run backfill 確認 → マージ」の手順。良いタイミングで進める（次の山候補）。
+- S-1 への影響：なし。S-1 は Product 本体 schema 無変更見込みのまま進められる（差分確認済み）。dev DB に product_prices/Incoterms が残るが S-1 は触らないので無害。
 
-## ③ dev DB の状態
+## ④ S-1 着手前の確認事項（次セッション冒頭で確定）
+- (1) categoryId 必須化（議事録で確定済み・Zod で必須化、schema は optional 据え置き）→ 指示書に反映でOK。
+- (2) 1A-12 手動採番UI（model-codes/new）の撤去方式：「導線非表示＋ファイルは MASTER_ADMIN ガードで温存（完全削除は後日）」の可逆方式で進めてよいか。← 次セッション冒頭でこの1点を確定すれば S-1 指示書を出せる。
 
-- 接続先 dev（.env=hopper:12921、railway run=postgres-7492.internal）。本番操作は本セッション一切なし。
-- Railway構成の唯一の正：本番=ab6d/shuttle:16099、dev=7492/hopper:12921。
+## ⑤ 次セッションで最初にやること（優先順）
+1. 上記 ④(2) の 1A-12 撤去方式を確定。
+2. main を最新化（git checkout main && git pull origin main / 最新は e0a3130）。
+3. main から S-1 用の新ブランチを切る（名称案 feature/s-1-product-crud-v2。既存 feature/s-1-product-crud〔6/3作成〕は古い別物なので衝突回避で新名）。
+4. S-1（Product 基本CRUD）の Claude Code 向け実装指示書を作成（採番・status・ProductStatusHistory記録・ModelCode連携〔既存選択＋新規発番〕・clientProductCode常設・品番表示主従ヘルパー・categoryId必須・1A-12導線撤去）。schema 無変更見込みなので dev で動作確認・本番 smoke test。
 
-## ④ 次セッションで最初にやるべきこと（優先順）
+## ⑥ 注意点・残課題
+- main に v1.0 が2ファイル並存：古い docs/product-sample-spec-confirmation-v1_0-2026-06-03.md（202行・別物）と 正の docs/specs/...v1_0-2026-06-06.md。06-06版が唯一の正。古い 06-03 版（と s-1-product-crud-implementation-brief-2026-06-03.md）は「superseded」注記を付けて残すか削除するか未決＝次セッションで整理（優先度中）。
+- reflog に古いブランチ feature/s-1-product-crud(6/3 16:51) あり。前回 (B) で「古い別物」とした S-1 作業跡の可能性。S-1 着手時に棚卸し。
+- 業務トランザクションは schema 変更（migration）を伴う段階（S-3a 以降）あり。dev 検証 → 本番は別途明示指示＋ host 照合（本番=ab6d/shuttle:16099, dev=7492/hopper:12921）＋三重ガードを全面適用。
+- Git運用：docs単独=main直push可 / コード含む=PR必須（shunya-git-workflow）。
 
-- **マスターは完了とみなす。** 次はシナリオA の次段＝業務トランザクション（品番カルテ/SKU/見積もり/発注/受注、nav で enabled:false の群）への入り口設計。マスター量産と違い業務ロジック・状態遷移・金額計算が絡むため、まず仕様確認（Part2 ID体系/Part3 機能要件/見積エンジン/在庫移動平均/請求FTA 等）から入る。
-- 着手前に「どの業務トランザクションを最初の山にするか」を決める（品番カルテ起点が自然と思われるが要相談）。
-- 軽微な実害修正を先に潰したい場合は B-015（価格系含む監査残漏れ）も候補。
+## ⑦ 本日マージ/コミットされたもの
+- e0a3130（main・push済）：仕様議事録 v1.0 を docs/specs/ に追加。
+- 8f821f5（feat/currency-prices-incoterms・未push・ローカル保全のみ）：currency-prices-incoterms の保全棚上げコミット。
 
-## ⑤ 注意点・残課題
-
-- PR #56 の afterData に seedScript キーを追加。準拠形が同キーを持つか未確認（実害なし・B-015/B-017 の監査整理時にまとめて確認）。
-- Git運用ルールをスキル化済み（shunya-git-workflow）: docs単独は main直push可、コードを1行でも含めば必ずPR。
-- quality-label-app は本アプリ自体が未完成（後述B-020）。統合前にまず単体の動作確認が必要。
-- quality-label-app の共有パスワード（admin/admin123）は変更推奨。
-
-## ⑥ 新規バックログ（番号は仮・正式採番は慎太郎さん）
-
-- **B-015**: Material UPDATE 監査スナップショット残漏れ補完（categoryId 以外に12〜13フィールド欠落。特に unitPrice/currency/unit は価格変更履歴として優先度高め）。検討：欠落スカラ列挙追加 vs ホワイトリスト方式の全マスター横断見直し。
-- **B-016**: 色指示の体系・番号・色名フィールド（PANTONE/DIC 等）を手入力で持てるよう Color マスター拡張。色データ全ライブラリは自前保持しない（ライセンスリスク・実益薄）。番号は識別子文字列なので問題なし。schema 変更を伴う可能性・別PR・要仕様確認。
-- **B-017**: prisma/seed.ts 参照データ系（HsCode/FtaRule/BusinessTermsGlossary）の監査ログ方針検討。upsert 冪等性との整合含む。ブートストラップ seed（Company/User自身）は対象外。
-- **B-018**: 品番に紐づく出荷・貸出伝票の発行ページ（先上げサンプル出荷・スワッチ出荷・貸出）。ブランド単位対応も可。タスク管理（出荷・貸出の業務トランザクション）に内包。論点：返却管理の要否・伝票単位（品番/SKU/生地スワッチ）・在庫引当の要否・既存 DeliveryNote 系との様式/採番共通化。
-- **B-019**: CSV インポート/エクスポート機能（旧 Phase 1A-14）。マスター移行用は後回し（マスターは都度フォーム登録で足りる）。本命は受注取り込み・発注など業務トランザクション側のCSV。実働確認後、Phase 2以降に業務に即して設計。
-- **B-020（★本セッションで方針決定）**: 品質表示メーカー（quality-label-app）の shunya-pms 統合。
-  - **統合方針＝①完全統合で確定**（移植して quality-label-app は廃止、データを shunya に一本化）。②API連携/③iframe は不採用。
-  - 実体: Railway稼働中の独立アプリ（Express+素のHTML/JS+Postgres、wholesome-unity プロジェクト内、GitHub shintarokoenuma/quality-label-app、引き継ぎ書2026-05-09あり）。
-  - shunya に新規で必要なマスター: JIS絵表示（48種・SVG）/ 繊維名（27種・家庭用品品質表示法 別表第二）/ 付記用語（13件）。印刷メーカーは Supplier/Factory への統合可否を検討。
-  - 移植コア機能: 縫製仕様書AI読取（Claude Vision）/ 数量マトリックス（カラー×サイズ）/ 3種PDF（品質表示・下げ札・アテンション）/ 発注書PDF / Resend メール送信。React+Prisma へ書き直し、PDF生成方式は要選定（Puppeteer継続 or 別ライブラリ）。
-  - 連携の核: 品番カルテ（Product）・SKU・BOM（組成/HSコード/用尺）・発注（PO）。先方品番が下げ札・品質表示・納品書に載る。
-  - 共有リソース整理: R2 prefix（saagara-images を3アプリ共有）、Resend ドメイン（info@shunya.cc 共有）。
-  - 着手前提: Phase 1A完了後、かつ品番カルテ・SKU・BOM・発注が動いてから。今は移植着手しない。統合前に quality-label-app 単体の動作確認（メール送信・各マスターCRUD・直近push反映状態の切り分け）を済ませる。
-
-## ⑦ 本日マージされた PR 一覧
-
-- PR #55（c8d5c2a）: B-006 updateMaterial AuditLog に categoryId 追加
-- PR #56（d28d938）: B-010 横展開 seed-categories.ts に AuditLog(CREATE) 追加
-- （docs）SESSION_HANDOVER.md 更新 fb6408a（main直push）
-
-## ⑧ 本日のその他の成果
-
-- Git運用ルールを新規スキル shunya-git-workflow として作成・登録（docs単独=直push可 / コード含む=PR必須）。
-- マスターフェーズ完了の確認（棚卸し実施）。
-- 品質表示メーカー統合の方針を①完全統合に決定。
+## ⑧ 既存バックログ（継続・未着手）
+- B-016 Color マスター拡張（PANTONE/DIC）/ B-017 参照データ系の監査方針 / B-018 出荷・貸出伝票ページ / B-019 CSVインポート / B-020 quality-label-app 統合（①完全統合・品質表示タスクと連携）/ B-021 全マスター監査スナップショット網羅強制 / B-022 外部パートナー開放（進行チェックに受け皿を先に仕込む方針は v1.0 §7 に反映済）。
 
 ## ⑨ 次セッション冒頭の手順
-
-- このメモを貼り付け → 状態復元
-- git checkout main && git pull origin main で最新確認（#55・#56 反映済み）
-- dev作業時は grep -E '^DATABASE_URL' .env | sed -E 's|.*@([^/]+)/.*|HOST=\1|' で dev（hopper:12921）確認
-- 本番操作時は §③ で host照合・safety-check 全面適用
-- Git操作は shunya-git-workflow スキルに従う（docs単独=直push可 / コード含む=PR必須）
+1. このメモを貼り付け → 状態復元。
+2. 議事録は main の docs/specs/product-sample-spec-confirmation-v1_0-2026-06-06.md が正（プロジェクトナレッジにも 06-06 版あり）。
+3. ④(2) を確定 → main 最新化 → S-1 新ブランチ → S-1 実装指示書づくり。
