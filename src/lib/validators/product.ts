@@ -56,6 +56,19 @@ const optionalDateString = z
   .default(null)
   .transform((v) => (v === "" || v === null ? null : v))
 
+/**
+ * 必須の年度（2000〜2100 の整数）。
+ * フォームの number 入力は文字列で来るため union で受けて number 化する
+ * （z.coerce.number() は input 型が unknown になり RHF と相性が悪いので使わない）。
+ */
+const requiredYear = z
+  .union([z.string(), z.number()])
+  .transform((v) => (typeof v === "number" ? v : Number(v)))
+  .refine(
+    (v) => Number.isInteger(v) && v >= 2000 && v <= 2100,
+    "年度は2000〜2100の整数で入力してください",
+  )
+
 // =============================================================================
 // 採番フォーマット（参照用、validator では使わない）
 // =============================================================================
@@ -82,11 +95,7 @@ export const productBaseSchema = z.object({
 
   // シーズン・年度
   season: requiredString(20, "シーズン"),
-  year: z.coerce
-    .number()
-    .int("年度は整数で入力してください")
-    .min(2000, "2000以上で入力してください")
-    .max(2100, "2100以下で入力してください"),
+  year: requiredYear,
 
   // 数量・納期（任意）
   expectedQuantity: optionalNonNegativeInt,
