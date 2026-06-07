@@ -11,6 +11,7 @@ export const PROGRESS_TASK_TYPE_LABELS: Record<ProgressTaskType, string> = {
   PATTERN: "パターン作成",
   FABRIC: "生地手配",
   TRIM: "付属手配",
+  BODY: "ボディ仕入",
   SEWING: "縫製依頼",
   PROCESSING: "加工",
   INSPECTION: "検品",
