@@ -47,3 +47,4 @@ prisma/*.bak
 
 # Prisma backups
 prisma/*.bak
+.env.prod.local
