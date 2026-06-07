@@ -10,6 +10,7 @@ import {
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { runWithoutTenantContext } from "@/lib/tenant-context"
+import { buildSampleTaskRows } from "@/lib/progress-task-template"
 import {
   sampleProductionBaseSchema,
   changeSampleStatusSchema,
@@ -426,7 +427,7 @@ export async function createSampleProduction(
             sess.companyId,
             prefix,
           )
-          return tx.sampleProduction.create({
+          const sp = await tx.sampleProduction.create({
             data: {
               companyId: sess.companyId,
               productId,
@@ -449,6 +450,11 @@ export async function createSampleProduction(
             },
             select: { id: true, sampleNumber: true },
           })
+          // S-3（A-2）: ラウンド作成と同一 tx で SAMPLE 定型8種を生成（不可分・途中失敗は両ロールバック）
+          await tx.progressTask.createMany({
+            data: buildSampleTaskRows(sess.companyId, productId, sp.id),
+          })
+          return sp
         })
         break
       } catch (e) {

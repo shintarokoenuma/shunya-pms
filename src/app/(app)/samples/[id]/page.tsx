@@ -11,10 +11,15 @@ import {
   CardTitle,
 } from "@/components/ui/card"
 import { getSampleProduction } from "@/lib/actions/sample-productions"
+import {
+  listTasks,
+  listActiveProcessingTypesForSelect,
+} from "@/lib/actions/progress-tasks"
 import { primaryProductCode } from "@/lib/utils/product-code"
 import { SampleProductionActions } from "../_components/sample-production-delete-button"
 import { SampleStatusControl } from "../_components/sample-status-control"
 import { SampleGenealogy } from "../_components/sample-genealogy"
+import { ProgressChecklist } from "../_components/progress-checklist"
 import {
   SAMPLE_STATUS_LABELS,
   SAMPLE_STATUS_BADGE_VARIANT,
@@ -40,6 +45,13 @@ export default async function SampleProductionDetailPage({
   const item = result.data
   const isMasterAdmin = session.user.tenantType === "MASTER_ADMIN"
   const isArchived = !!item.deletedAt
+
+  // S-3: 進行チェックリスト
+  const [tasksResult, processingOptions] = await Promise.all([
+    listTasks({ sampleProductionId: item.id }),
+    listActiveProcessingTypesForSelect(),
+  ])
+  const tasks = tasksResult.ok ? tasksResult.data.items : []
 
   return (
     <div className="space-y-6 p-6">
@@ -192,6 +204,20 @@ export default async function SampleProductionDetailPage({
             parent={item.parent}
             childNodes={item.children}
             canCreateRevision={!isArchived}
+          />
+        </CardContent>
+      </Card>
+
+      {/* 進行チェックリスト（S-3） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">進行チェックリスト</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProgressChecklist
+            sampleProductionId={item.id}
+            tasks={tasks}
+            processingOptions={processingOptions}
           />
         </CardContent>
       </Card>
