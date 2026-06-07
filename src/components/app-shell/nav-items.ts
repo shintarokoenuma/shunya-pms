@@ -11,6 +11,7 @@ import {
   Scissors,
   Shapes,
   Shirt,
+  Sparkles,
   LayoutDashboard,
   MessageSquare,
   Package,
@@ -74,6 +75,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "カラー", href: "/colors", icon: Palette, enabled: true },
       { label: "柄種別", href: "/textile-pattern-types", icon: Shapes, enabled: true },
       { label: "商品カテゴリ", href: "/product-categories", icon: FolderTree, enabled: true },
+      { label: "加工種別", href: "/processing-types", icon: Sparkles, enabled: true },
       { label: "原価費目", href: "/cost-categories", icon: Coins, enabled: true },
       {
         label: "Inquiry（営業先DB）",

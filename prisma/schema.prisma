@@ -1294,6 +1294,46 @@ enum ProductCategoryStatus {
 }
 
 // =====================================================
+// 加工種別マスター（S-3a）
+// =====================================================
+
+/// 加工種別マスター（洗い・プリント・刺繍・染め 等）
+/// ※ AI処理種別 enum AiProcessingType とは無関係。加工（PROCESSING）工程の種別を管理する軽量マスター。
+/// 後続 ProgressTask(taskType=PROCESSING) が processingTypeId で参照する。
+model ProcessingType {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+
+  // 識別
+  code String @map("code") @db.VarChar(50) // 自動採番 PRC-001 形式（companyId 単位の連番）
+  name String @map("name") @db.VarChar(255) // 表示名（例：洗い）
+
+  // 任意項目
+  nameEn      String? @map("name_en") @db.VarChar(255) // 英語名（例：Washing）
+  description String? @db.Text // 補足
+
+  // 並び順
+  sortOrder Int @default(0) @map("sort_order")
+
+  // ステータス（DD/Buyer に揃えて 2 値）
+  status ProcessingTypeStatus @default(ACTIVE)
+
+  // タイムスタンプ
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@unique([companyId, code])
+  @@index([companyId, status])
+  @@map("processing_types")
+}
+
+enum ProcessingTypeStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+// =====================================================
 // 原価費目マスター（Phase 1A-16）
 // =====================================================
 
