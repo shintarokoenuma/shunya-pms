@@ -1334,6 +1334,102 @@ enum ProcessingTypeStatus {
 }
 
 // =====================================================
+// 進行チェックリスト（ProgressTask・S-3）
+// =====================================================
+
+/// 進行チェックリスト（タスク行モデル・案C-1）
+/// SampleProduction（ラウンド）単位で SAMPLE phase 定型行を自動生成する（A-2）。
+/// PROCESSING 行は processingTypeId を握り、チェックリスト画面から都度追加する（B-2）。
+/// linked系FK（WO/PO）は持たない。伝票連携は S-4 で伝票側に progressTaskId? を足す方針。
+model ProgressTask {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+
+  // 紐付け
+  productId          String  @map("product_id") // 必須（背骨）
+  sampleProductionId String? @map("sample_production_id") // A-2 では実質必須。schema 上は受け皿として optional
+
+  // 種別・状態
+  taskType     ProgressTaskType         @map("task_type")
+  phase        ProgressTaskPhase        @default(SAMPLE)
+  status       ProgressTaskStatus       @default(NOT_STARTED)
+  evidenceMode ProgressTaskEvidenceMode @default(MANUAL) @map("evidence_mode") // S-3 は MANUAL 固定
+
+  // 加工種別参照（taskType=PROCESSING のときのみ・S-3a マスター参照）
+  processingTypeId String? @map("processing_type_id")
+
+  // 入荷フラグ（FABRIC / TRIM の「発注済み ≠ 入荷済み」を別状態で持つ）
+  isReceived Boolean? @map("is_received")
+
+  // 外部開放の受け皿（B-022。S-3 は入力者=社内のみ）
+  assigneeType      ProgressTaskAssigneeType? @map("assignee_type")
+  assigneeId        String?                   @map("assignee_id")
+  checkedByUserId   String?                   @map("checked_by_user_id")
+  checkedByExternal String?                   @map("checked_by_external")
+  checkedAt         DateTime?                 @map("checked_at")
+
+  // メモ・並び順
+  notes     String? @db.Text
+  sortOrder Int     @default(0) @map("sort_order")
+
+  // soft delete
+  deletedAt DateTime? @map("deleted_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId, productId])
+  @@index([companyId, sampleProductionId])
+  @@index([companyId, taskType])
+  @@index([companyId, status])
+  @@index([processingTypeId])
+  @@map("progress_tasks")
+}
+
+enum ProgressTaskType {
+  // --- SAMPLE phase（SP作成時に PROCESSING 以外の8種を自動生成）---
+  QUOTE // 見積もり
+  SPEC_LOCK // デザイン・仕様確定
+  PATTERN // パターン作成
+  FABRIC // 生地手配
+  TRIM // 付属手配
+  SEWING // 縫製依頼
+  PROCESSING // 加工（processingTypeId 参照・チェックリスト画面から都度追加）
+  INSPECTION // 検品
+  CLIENT_REVIEW // 先方提出・評価
+  // --- PRODUCTION phase（S-3 では enum の箱のみ。生成も導線も出さない）---
+  GRADING // グレーディング
+  SHIPPING // 出荷明細
+  DELIVERY // 納品書
+  INVOICE // 請求書
+}
+
+enum ProgressTaskPhase {
+  SAMPLE
+  PRODUCTION
+}
+
+enum ProgressTaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  DONE
+  BLOCKED
+  SKIPPED
+}
+
+enum ProgressTaskEvidenceMode {
+  MANUAL // S-3 は全行これ
+  AUTO_FROM_DOC // S-4 で伝票連携時に使用
+}
+
+enum ProgressTaskAssigneeType {
+  INTERNAL
+  FACTORY
+  SUPPLIER
+  CONTRACTOR
+}
+
+// =====================================================
 // 原価費目マスター（Phase 1A-16）
 // =====================================================
 
