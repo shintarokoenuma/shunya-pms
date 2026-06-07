@@ -35,7 +35,7 @@
 - 本番（shuttle:16099 / postgres-ab6d）：21 migrations 適用済み（S-3a 含む）。品番カルテ1件（IP-26AW-M-BT-001 / test ※採番確認用に残置）・サンプル0件。カテゴリ27件短縮形。processing_types テーブルあり（0件想定）。schema は dev と一致。パスワードはローテーション済み（新パスワードで稼働中）。
 
 ## ③ 次セッションで最初にやること（優先順）
-1. main 最新化（最新は S-3a マージ d39097f + 本引き継ぎメモ push 後）。
+1. main 最新化（最新は引き継ぎメモ更新コミット 33f2a90 系列）。
 2. 次の山＝S-3（ProgressTask＝進行チェックリスト）。仕様 v1.0 §3「核心・最重要」。慎太郎さんの「仕様書で加工を選ぶ→依頼先を選ぶ」フローの土台。
    - migration あり。ドリフト解消済みなので通常の migrate dev が使える（オフライン diff 回避はもう不要）。
    - schema 真値の横断 grep（ProgressTask は新規モデル）→ 仕様確認（taskType enum・自動生成ロジック・外部開放受け皿フィールド）→ 実装指示書 → PR必須 → dev検証 → 本番は host照合＋三重ガード。
@@ -54,6 +54,7 @@
 
 ## ⑦ 本日コミット/マージ一覧
 - PR #61 → merged d39097f（main）：S-3a 加工種別マスター 基本CRUD + migration。内訳 734c764（論理層+migration）/ 15dd4ad（UI+nav）。ブランチ削除済み。
+- 33f2a90（main・docs直push）：本引き継ぎメモ更新（以降の微修正も同系列）。
 - データ操作（コミットではない）：
   - 本番：パスワードローテーション（Regenerate + Redeploy）。
   - dev：currency-prices ドリフト破棄（DROP TABLE/COLUMN/TYPE + DELETE migration record・1トランザクション）。
