@@ -1393,6 +1393,7 @@ enum ProgressTaskType {
   PATTERN // パターン作成
   FABRIC // 生地手配
   TRIM // 付属手配
+  BODY // ボディ仕入（既製の縫製済みボディを現物仕入・PO起点・isReceived・D6）
   SEWING // 縫製依頼
   PROCESSING // 加工（processingTypeId 参照・チェックリスト画面から都度追加）
   INSPECTION // 検品
@@ -3774,6 +3775,11 @@ model PurchaseOrder {
   supplierId       String  @map("supplier_id")
   primaryProductId String? @map("primary_product_id") // 主要品番（DIRECT時）
 
+  // 進行チェックリスト紐付け（S-4・D1）
+  progressTaskId String? @map("progress_task_id")
+  // サンプル製作セット（ラウンド）紐付け（S-4・D3。生地/付属/ボディ PO をラウンドに結ぶ）
+  sampleProductionId String? @map("sample_production_id")
+
   // 発注タイプ（仕様書F-5で確定の3タイプ）
   poType PurchaseOrderType @map("po_type")
 
@@ -3882,6 +3888,8 @@ model PurchaseOrder {
   @@index([companyId, allocationType])
   @@index([companyId, orderDate])
   @@index([expectedDeliveryDate])
+  @@index([progressTaskId])
+  @@index([companyId, sampleProductionId])
   @@map("purchase_orders")
 }
 
@@ -3909,6 +3917,13 @@ enum PurchaseOrderStatus {
   COMPLETED // 完了
   CANCELLED // キャンセル
   ON_HOLD // 保留
+}
+
+/// 売り立て区分（S-4・仕様 §6-2）
+/// 明細（PoItem/WoItem）ごとに、製品単価に溶かすか個別計上かを持つ。
+enum BillingClassification {
+  INDIVIDUAL_BILLING // 個別売り立て（パターン代・版代・型代・刺繍パンチ代・グレーディング代）
+  UNIT_PRICE_INCLUDED // 製品単価にインクルード（洗い・プリント等の加工工賃）
 }
 
 /// PO明細
@@ -3953,6 +3968,15 @@ model PoItem {
   receivedQuantity Decimal? @map("received_quantity") @db.Decimal(15, 4)
   shortage         Decimal? @map("shortage") @db.Decimal(15, 4)
 
+  // 費目（S-4・D4。CostCategory 参照・スカラー列）
+  costCategoryId String? @map("cost_category_id")
+  // 売り立て区分（S-4・D4）
+  billingClassification BillingClassification? @map("billing_classification")
+  // 現物資産（版・型・刺繍パンチ等。S-4・D4 / 仕様 §6-3。本格在庫管理は B-023）
+  isPhysicalAsset        Boolean   @default(false) @map("is_physical_asset")
+  assetStorageStartDate  DateTime? @map("asset_storage_start_date") @db.Date
+  assetStorageExpiryDate DateTime? @map("asset_storage_expiry_date") @db.Date
+
   // メモ
   notes String? @db.Text
 
@@ -3964,6 +3988,7 @@ model PoItem {
 
   @@index([poId, itemOrder])
   @@index([materialId])
+  @@index([costCategoryId])
   @@map("po_items")
 }
 
@@ -4018,6 +4043,11 @@ model WorkOrder {
   contractorId String? @map("contractor_id") // 外注先（パタンナー等）の場合
   productId    String? @map("product_id") // 紐付け品番
   modelCodeId  String? @map("model_code_id") // パターン関連の場合
+
+  // 進行チェックリスト紐付け（S-4・D1。タスク側ではなく伝票側に持つ）
+  progressTaskId String? @map("progress_task_id")
+  // 加工種別マスター参照（S-4・D2。workType=PROCESSING系のとき ProcessingType を指す）
+  processingTypeId String? @map("processing_type_id")
 
   // 作業タイプ
   workType     WorkOrderType     @map("work_type")
@@ -4140,6 +4170,8 @@ model WorkOrder {
   @@index([companyId, workCategory])
   @@index([companyId, samplProductionId])
   @@index([expectedDeliveryDate])
+  @@index([progressTaskId])
+  @@index([companyId, processingTypeId])
   @@map("work_orders")
 }
 
@@ -4216,6 +4248,11 @@ model WoItem {
   completedQuantity Int? @map("completed_quantity")
   defectQuantity    Int? @map("defect_quantity")
 
+  // 費目（S-4・D4）
+  costCategoryId String? @map("cost_category_id")
+  // 売り立て区分（S-4・D4）
+  billingClassification BillingClassification? @map("billing_classification")
+
   // メモ
   notes String? @db.Text
 
@@ -4227,6 +4264,7 @@ model WoItem {
 
   @@index([woId, itemOrder])
   @@index([skuId])
+  @@index([costCategoryId])
   @@map("wo_items")
 }
 
