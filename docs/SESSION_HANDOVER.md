@@ -1,62 +1,71 @@
-# 引き継ぎメモ (2026-06-06 セッション / 仕様v1.0確定・currency-prices棚上げ・S-1完了 → 次はS-2)
+# 引き継ぎメモ (2026-06-07 セッション / S-3aマージ完了・dev ドリフト解消・本番PWローテ → 次はS-3)
 
 ## ⓪ 最重要・プロジェクト棲み分けルール（毎回必須）
 - shunya-pms（リポジトリ shintarokoenuma/shunya-pms・ローカル ~/shunya-production-system・本番 shunya-pms-web-production.up.railway.app）と saagara-v2（別リポジトリ・本番 saagara-v2-production.up.railway.app）は完全に別物。
-- 過去に VS Code の Claude Code 別ウィンドウで両者を混同した経緯あり（最悪 saagara 本番に shunya 変更が乗る事故リスク）。
-- 対策：(1) Claude Code 向け実装指示書には毎回冒頭に【対象プロジェクト】ヘッダを固定で入れる。(2) 貼る前に VS Code のそのウィンドウが ~/shunya-production-system か目視確認。
+- VS Code の Claude Code 別ウィンドウで両者を混同した過去あり。Claude Code 向け実装指示書には毎回冒頭に【対象プロジェクト】ヘッダを固定。貼る前に ~/shunya-production-system を開いているか目視確認。
+- 【本セッションの裏付け】棚上げコミット 8f821f5（ProductPrice）は saagara 作業の混入と判明＝この棲み分けルールの重要性が実証された。
+
+## ⓪-2 PR URL 3点セット運用（shunya-pr-url-checklist スキル）
+- ① マージ前の UI 確認 = ローカル（npm run dev → http://localhost:3000 / dev DB hopper:12921）
+- ② マージ操作 = GitHub PR URL（https://github.com/shintarokoenuma/shunya-pms/pull/<番号>）→ マージ = Railway main 自動デプロイ = 本番反映（不可逆）
+- ③ マージ後の本番確認 = 本番 URL（https://shunya-pms-web-production.up.railway.app / 本番 DB shuttle:16099）
 
 ## ① 本セッションの成果（完了）
-- **仕様議事録 v1.0 確定**：`docs/specs/product-sample-spec-confirmation-v1_0-2026-06-06.md`（main `e0a3130`）。§9 の6論点すべて確定。これが唯一の正（古い 06-03 版は別物）。
-- **S-1（品番カルテ基本CRUD）完了・本番反映済み**。PR #59 マージ（merged commit `53c0da5`）→ Railway 本番デプロイ Success（本番DB postgres-ab6d、No pending migrations＝schema 無変更）→ 本番 smoke test 問題なし。
-- **currency-prices-incoterms を保全棚上げ**：`8f821f5`（feat/currency-prices-incoterms 上・未 push・ローカルのみ）。記憶曖昧の未コミット作業を消さず A案で保全。正式採用は「PR化→dev dry-run backfill→マージ」。
+- S-3a（ProcessingType 加工種別マスター）完了・本番反映済み。PR #61 → merged d39097f（main）。
+  - 初の migration 山。本番デプロイログで Applying migration 20260607021614_add_processing_type_master → successfully applied 確認。
+  - model ProcessingType / enum ProcessingTypeStatus(ACTIVE/ARCHIVED) / table processing_types。採番 PRC-{連番3桁}（companyId 単位・保存時確定・プレビューあり）。
+  - precedent: Buyer/DeliveryDestination（2値ステータス軽量マスター）。Company 逆リレーション無し（companyId は文字列フィールドのみ）。
+  - 8操作（list/get/create/update/archive/restore/checkUsage/deletePermanently）+ 4重ガード物理削除。
+  - 既存 enum AiProcessingType（AI処理種別・無関係）には一切触れず。
+  - コミット内訳：734c764（論理層+migration）/ 15dd4ad（UI+nav）。
+- B-033（dev ドリフト解消・currency-prices 完全破棄）完了。
+  - 正体：8f821f5 の migration 20260603092457 が dev DB に適用されていたが対応ファイルが main に無い状態（dev に product_prices テーブル・Incoterms 列2本・Incoterms 型・migration 記録が浮いていた）。
+  - 方式B完全破棄：ProductPrice（上代/卸/原価を product×通貨で持つ＝saagara的発想・shunya 業態に不一致）も Incoterms も採用せず、dev ドリフトのみ削除。
+  - shunya の正しい価格設計：売価はテーブルに持たず「見積もりエンジン（Phase 1B・BOM→原価集計→マージン4階層継承→売価算出）」が都度計算。原価から売値を出す機能は QuotationEngine が担う。仕様 Part4 §11 の棲み分け表でも「saagara=シンプル単価・原価管理なし / shunya=詳細な原価計算」と明記。
+  - 1トランザクションで DROP TABLE product_prices / DROP COLUMN clients.default_incoterms・sales_orders.incoterms / DROP TYPE Incoterms / DELETE _prisma_migrations。破壊前カウント3つとも0（手入力データ無し）確認済み。
+  - 検証：migrate diff（schema↔dev）= empty migration ＝ dev と main schema 完全一致＝ドリフト解消の証明。feat/currency-prices-incoterms ブランチ破棄（8f821f5 は到達不能・GC待ち）。
+  - 効果：今後 migrate dev が素直に使える（S-3a で deploy 回避が必要だった根本原因が解消）。
+- 本番DBパスワードローテーション完了。
+  - Railway postgres-production（ab6d/shuttle:16099）の Config → Regenerate Password 実行 → 本番 Web を Redeploy。
+  - デプロイログで新パスワードによる DB 接続成功（No pending migrations / Ready）確認。本番 HA 構成（レプリカ2・etcd）でも問題なく反映。
+  - 手元 .env.prod.local 削除済み（旧パスワードは無効化済み）。本番認証情報のローカル転記が解消。
 
-## ② S-1 で実装したもの（本番稼働中）
-- 社内品番採番 `{brandCode}-{season}-{categoryCode}-{連番3桁}`（全大文字。season も大文字正規化＝コミット `d75da87`）。保存時確定・選択時プレビュー。
-- ModelCode 自動発番（A案）：createProduct の同一 tx で `M-{brandCode}-{4桁}` を裏で発番し modelCodeId 充填（NOT NULL を schema 無変更で満たす）。UI 非表示。modelName=productName。
-- clientId は Brand.clientId から導出（フォーム非表示）。categoryId は Zod 必須（schema は optional 据え置き）。
-- clientProductCode 常設。品番表示の主従ヘルパー（clientProductCode||productCode）。
-- status は ProductStatusHistory に記録。archive→ARCHIVED、restore は履歴ベースで直前 status に復元。
-- 8関数＋採番プレビュー。update の AuditLog snapshot は B-015 型保険（全42スカラ satisfies）。物理削除は MASTER_ADMIN・ARCHIVED・確認名・参照0の4重ガード。checkUsage は skus+collectionLinks。
-- 1A-12 撤去（案2・可逆）：型番ナビ hidden＋model-codes 各ページに MASTER_ADMIN ガード。ファイル温存。
+## ② dev / 本番 DB の状態
+- dev（hopper:12921）：ドリフト解消済み（21 migrations・up to date・schema↔DB 差分なし）。Product 2件（PA-27SS-M-BT-001 / IP-26SS-M-TS-001）温存。processing_types=0（S-3a 検証データ掃除済み）。カテゴリ27件短縮形。
+- 本番（shuttle:16099 / postgres-ab6d）：21 migrations 適用済み（S-3a 含む）。品番カルテ1件（IP-26AW-M-BT-001 / test ※採番確認用に残置）・サンプル0件。カテゴリ27件短縮形。processing_types テーブルあり（0件想定）。schema は dev と一致。パスワードはローテーション済み（新パスワードで稼働中）。
 
-## ③ dev / 本番 DB の状態
-- dev（hopper:12921）：S-1 検証データ（PA-26SS-K-OT-001 / PA-26ss-M-OT-001 ＋ ModelCode M-PA-0002/0003）は検証後に物理削除で掃除済み。クリーン。
-- 本番（ab6d/shuttle:16099）：smoke test で1件作成（残置か削除かは要判断。smoke 用なら後で archive→物理削除可）。schema 無変更。
-- 孤児 ModelCode（Product 物理削除時に自動発番 ModelCode が残る件）は現状のまま＝B-025 申し送りで確定。
+## ③ 次セッションで最初にやること（優先順）
+1. main 最新化（最新は S-3a マージ d39097f + 本引き継ぎメモ push 後）。
+2. 次の山＝S-3（ProgressTask＝進行チェックリスト）。仕様 v1.0 §3「核心・最重要」。慎太郎さんの「仕様書で加工を選ぶ→依頼先を選ぶ」フローの土台。
+   - migration あり。ドリフト解消済みなので通常の migrate dev が使える（オフライン diff 回避はもう不要）。
+   - schema 真値の横断 grep（ProgressTask は新規モデル）→ 仕様確認（taskType enum・自動生成ロジック・外部開放受け皿フィールド）→ 実装指示書 → PR必須 → dev検証 → 本番は host照合＋三重ガード。
 
-## ④ 次セッションで最初にやること（優先順）
-1. main 最新化（`git checkout main && git pull origin main`／最新は `53c0da5`）。
-2. **S-2（SampleProduction 骨格）の実装指示書を作成**。SP採番 `SP-2026-0042`・ラウンド管理（parentSampleId 系譜）・既存 status enum・チェックリスト連動は初期手動。schema 無変更見込み（既存 SampleProduction 利用）。S-1 と同じく master-patterns 準拠・PR 必須・dev 検証→本番 smoke。
-3. S-1 の実装指示書（`s-1-product-crud-implementation-brief-2026-06-06`）は docs 未保存のままなら docs/ に保存しておくと参照しやすい（docs 単独=main 直push 可）。
-4. 本番 smoke データの後始末（残すか消すか）。
+## ④ バックログ（新規・本セッション起票）
+- B-033：完了（dev ドリフト解消・currency-prices 完全破棄）。クローズ。
+- B-034：FactoryProcessingType 中間テーブル（加工種別ごとの対応可能工場マスター）。WO 作成時の工場プルダウンを「対応工場だけ」に絞る最適化。工場が増えたら検討。※「加工→依頼先を選ぶフロー」自体は S-3→S-4 でカバー済み確認。候補自動絞り込みのみ別途。
 
-## ⑤ バックログ（新規・本セッション起票／S-1 dev検証で発生）
-- **B-023**：版類（型・版・パターン・刺繍パンチ）の在庫管理・再利用判定。保管期限つき現物資産、生地/付属（消費型）と別カテゴリ。最初の山では PO 受け皿のみ。
-- **B-024**：自社ブランドの生地・付属・織りネーム在庫。OEM=消費型/自社=在庫型の区別を在庫設計の前提に組む申し送り。
-- **B-025**：量産パターン管理（型・版・品番の3層／パターン番号=型の幹で不変・洗い等の縮率違い=同番号の別版・品番=版を使う各量産案件）。ModelCode を型の串に活用。リピート導線もここ。三位一体の中身に踏み込むため後続。
-- **B-026**：シーズンのプルダウン化（大文字のみ・26SS/26AW 等）＋年度との重複解消（年度をシーズンから導出 or 統合するか要設計）。
-- **B-027**：品番カルテにサムネイル画像（画像アップロード基盤が必要・後続）。
-- **B-028**：品番カルテ一覧にカテゴリ検索追加（軽量・次の小改修で B-026 と一緒に入れられる）。
+## ⑤ 既存バックログ（継続・未着手）
+- B-016 Color拡張(PANTONE/DIC) / B-017 参照データ監査方針 / B-018 出荷・貸出伝票 / B-019 CSVインポート / B-020 quality-label-app統合 / B-021 全マスター監査網羅 / B-022 外部パートナー開放 / B-023 版類在庫 / B-024 自社ブランド在庫(消費型/在庫型) / B-025 量産パターン管理 / B-026 シーズンプルダウン化 / B-027 サムネイル画像 / B-028 品番一覧カテゴリ検索 / B-029 サンプル材料セクション / B-030 数量モデル整理(SKU確定後に持つ) / B-031 本番/dev手動投入ズレリスク記録 / B-032 ProductCategory標準シードを seed.ts に追加。
+- ※ currency-prices（8f821f5）は破棄済みのためバックログから除外。Incoterms が将来必要なら受注(SalesOrder)を本格実装する Phase で正しく入れ直す。
 
-## ⑥ 既存バックログ（継続・未着手）
-- B-016 Color 拡張(PANTONE/DIC) / B-017 参照データ系の監査方針 / B-018 出荷・貸出伝票ページ / B-019 CSVインポート / B-020 quality-label-app 統合（品質表示タスクと連携）/ B-021 全マスター監査スナップショット網羅強制 / B-022 外部パートナー開放（進行チェックの受け皿は v1.0 §7 に反映済）。
+## ⑥ 実装シーケンス（v1.0 §8 確定）
+- S-1（完了）→ S-2（完了）→ S-3a（完了）→ S-3（進行チェックリスト ProgressTask）→ S-4（発注 WO/PO 連携）。
+- S-3 以降 migration あり＝dev 検証（migrate dev 使用可）→ 本番は別途明示指示＋host照合（本番 ab6d/shuttle:16099, dev 7492/hopper:12921）＋三重ガード。
 
-## ⑦ 実装シーケンス（v1.0 §8 確定）
-- S-1（完了）→ **S-2（SampleProduction）** → S-3a（ProcessingType マスター）→ S-3（進行チェックリスト ProgressTask）→ S-4（発注 WO/PO 連携）。
-- S-1・S-2 は schema 無変更見込み。S-3a 以降は migration あり＝dev 検証→本番は別途明示指示＋host照合（本番 ab6d/shuttle:16099, dev 7492/hopper:12921）＋三重ガード全面適用。
+## ⑦ 本日コミット/マージ一覧
+- PR #61 → merged d39097f（main）：S-3a 加工種別マスター 基本CRUD + migration。内訳 734c764（論理層+migration）/ 15dd4ad（UI+nav）。ブランチ削除済み。
+- データ操作（コミットではない）：
+  - 本番：パスワードローテーション（Regenerate + Redeploy）。
+  - dev：currency-prices ドリフト破棄（DROP TABLE/COLUMN/TYPE + DELETE migration record・1トランザクション）。
+  - ローカル：feat/currency-prices-incoterms ブランチ破棄・.env.prod.local 削除。
 
-## ⑧ 本日コミット/マージ一覧
-- `e0a3130`（main）：仕様議事録 v1.0 を docs/specs/ に追加。
-- `f7e87e7`（main）：引き継ぎメモ更新（前セッション分）。
-- `8f821f5`（feat/currency-prices-incoterms・未push）：currency-prices 保全棚上げ。
-- PR #59 → merged `53c0da5`（main）：S-1 品番カルテ基本CRUD＋ModelCode自動発番＋1A-12導線撤去＋シーズン大文字化。ブランチ削除済み。
+## ⑧ 注意点・教訓
+- 8f821f5 = saagara 混入の教訓：別プロジェクトの作業が紛れ込むと「業態に合わないモデル」が schema に残る。棲み分けルール（⓪）の徹底が再度重要と確認。混入物は「一部救済」より「白紙に戻して必要時に正しく作る」方が安全（Incoterms も今回は破棄）。
+- migration ドリフトの判別：migrate status は repo migration の適用済み判定のみで「DB だけにある未追跡物」を警告しない。migrate dev は shadow 比較で検知し reset を促す。ドリフト調査は _prisma_migrations の記録 vs repo の migration ファイルを突合し、migrate diff（schema↔DB）で最終確認。
+- 本番DB操作の鉄則（継続）：host 照合（shuttle:16099）→ 破壊前カウント確認 → 1トランザクション → 検証の順。本番パスワードは Railway Config の Regenerate を使い、必ず Web サービスを Redeploy（手動変数編集は認証ズレ事故の元）。
+- Git運用：docs単独=main直push可 / コード含む=PR必須。
 
-## ⑨ 注意点
-- Git運用：docs単独=main直push可 / コード含む=PR必須（shunya-git-workflow）。
-- 業務トランザクションは S-3a 以降 migration を伴う。safety-check 全面適用。
-- currency-prices（8f821f5）は良いタイミングで PR 化。S-1 とは独立。
-
-## ⑩ 次セッション冒頭の手順
+## ⑨ 次セッション冒頭の手順
 1. このメモを貼り付け → 状態復元。
-2. main 最新化（53c0da5）。
-3. S-2 実装指示書づくりへ（必要なら既存 SampleProduction schema を横断 grep で真値確認してから）。
+2. main 最新化。
+3. S-3（ProgressTask）の仕様確認へ。仕様 v1.0 §3-3 のデータ構造（案C-1 タスク行モデル）を正本に、taskType enum・自動生成の出し分け（定型#1〜#5,#7,#8 は全生成／加工#6 は選択分のみ・processingTypeId 参照）・外部開放受け皿（assigneeType/checkedBy/checkedAt）を論点化。schema 真値の横断 grep から開始。migration は通常の migrate dev でOK。
