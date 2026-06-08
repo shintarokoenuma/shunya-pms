@@ -157,7 +157,14 @@ export default async function PurchaseOrderDetailPage({
                 <Cell label="仕入先品番" value={it.supplierItemCode ?? "—"} />
                 <Cell label="デザイン番号" value={it.designCode ?? "—"} />
                 <Cell label="カラー" value={it.colorCode ?? "—"} />
-                <Cell label="サイズ" value={it.sizeSpec ?? "—"} />
+                <Cell
+                  label="サイズ"
+                  value={
+                    it.sizeValue != null
+                      ? `${fmt(it.sizeValue)}${it.sizeUnit ?? ""}`
+                      : "—"
+                  }
+                />
                 <Cell label="数量" value={`${fmt(it.quantity)} ${it.unit}`} />
                 <Cell
                   label="単価"

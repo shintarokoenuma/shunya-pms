@@ -77,7 +77,8 @@ function emptyItem(): PurchaseOrderFormValues["items"][number] {
     description: "",
     supplierItemCode: "",
     designCode: "",
-    sizeSpec: "",
+    sizeValue: "",
+    sizeUnit: null,
     colorCode: "",
     specification: "",
     notes: "",
@@ -490,22 +491,54 @@ function ItemRow({
         />
         <FormField
           control={form.control}
-          name={`${base}.sizeSpec`}
+          name={`${base}.sizeValue`}
           render={({ field }) => (
             <FormItem>
-              <FormLabel>サイズ</FormLabel>
+              <FormLabel>サイズ（数値）</FormLabel>
               <FormControl>
                 <Input
-                  list={`size-suggest-${idx}`}
-                  placeholder="例：20cm / 15mm / 20L"
-                  {...field}
+                  type="number"
+                  step="any"
+                  placeholder="例：20"
+                  value={field.value === null || field.value === undefined ? "" : String(field.value)}
+                  onChange={(e) => field.onChange(e.target.value)}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  ref={field.ref}
                 />
               </FormControl>
-              <datalist id={`size-suggest-${idx}`}>
-                <option value="cm" />
-                <option value="mm" />
-                <option value="L" />
-              </datalist>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name={`${base}.sizeUnit`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>サイズ単位</FormLabel>
+              <Select
+                value={field.value ?? NONE}
+                onValueChange={(v) =>
+                  field.onChange(
+                    v === NONE ? null : (v as "cm" | "mm" | "m" | "inch"),
+                  )
+                }
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="単位" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  <SelectItem value={NONE}>（未選択）</SelectItem>
+                  {["cm", "mm", "m", "inch"].map((u) => (
+                    <SelectItem key={u} value={u}>
+                      {u}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
@@ -567,7 +600,7 @@ function ItemRow({
                 />
               </FormControl>
               <datalist id={`unit-suggest-${idx}`}>
-                {["個", "m", "反", "一式", "kg", "巻", "セット", "枚"].map((u) => (
+                {["個", "m", "反", "一式", "kg", "g", "巻", "セット", "枚"].map((u) => (
                   <option key={u} value={u} />
                 ))}
               </datalist>

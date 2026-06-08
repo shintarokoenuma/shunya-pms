@@ -57,7 +57,9 @@ export default async function EditPurchaseOrderPage({
       description: it.description ?? "",
       supplierItemCode: it.supplierItemCode ?? "",
       designCode: it.designCode ?? "",
-      sizeSpec: it.sizeSpec ?? "",
+      // v1.2: サイズ数値（null は空欄）+ 単位
+      sizeValue: it.sizeValue == null ? "" : toNum(it.sizeValue),
+      sizeUnit: (it.sizeUnit as "cm" | "mm" | "m" | "inch" | null) ?? null,
       colorCode: it.colorCode ?? "",
       specification: it.specification ?? "",
       notes: it.notes ?? "",
