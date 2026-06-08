@@ -96,7 +96,7 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     items: [
       { label: "見積もり", href: "/quotations", icon: Calculator, enabled: false },
-      { label: "発注", href: "/purchase-orders", icon: ShoppingCart, enabled: false },
+      { label: "発注", href: "/purchase-orders", icon: ShoppingCart, enabled: true },
       { label: "受注", href: "/sales-orders", icon: ClipboardCheck, enabled: false },
       { label: "納品・請求", href: "/deliveries", icon: Receipt, enabled: false },
     ],

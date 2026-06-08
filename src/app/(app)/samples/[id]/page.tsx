@@ -15,6 +15,10 @@ import {
   listTasks,
   listActiveProcessingTypesForSelect,
 } from "@/lib/actions/progress-tasks"
+import {
+  listPurchaseOrdersByProgressTasks,
+  type PoForTask,
+} from "@/lib/actions/purchase-orders"
 import { primaryProductCode } from "@/lib/utils/product-code"
 import { SampleProductionActions } from "../_components/sample-production-delete-button"
 import { SampleStatusControl } from "../_components/sample-status-control"
@@ -52,6 +56,18 @@ export default async function SampleProductionDetailPage({
     listActiveProcessingTypesForSelect(),
   ])
   const tasks = tasksResult.ok ? tasksResult.data.items : []
+
+  // S-4b-1: タスクに紐づく PO を一括取得し progressTaskId でグルーピング
+  const posResult = await listPurchaseOrdersByProgressTasks(
+    tasks.map((t) => t.id),
+  )
+  const posByTask: Record<string, PoForTask[]> = {}
+  if (posResult.ok) {
+    for (const po of posResult.data) {
+      if (!po.progressTaskId) continue
+      ;(posByTask[po.progressTaskId] ??= []).push(po)
+    }
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -218,6 +234,7 @@ export default async function SampleProductionDetailPage({
             sampleProductionId={item.id}
             tasks={tasks}
             processingOptions={processingOptions}
+            posByTask={posByTask}
           />
         </CardContent>
       </Card>
