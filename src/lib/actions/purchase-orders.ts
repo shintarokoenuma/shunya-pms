@@ -400,7 +400,11 @@ function buildItemRows(
       description: it.description || null,
       supplierItemCode: it.supplierItemCode || null,
       designCode: it.designCode || null,
-      sizeSpec: it.sizeSpec || null,
+      sizeValue:
+        it.sizeValue !== null && it.sizeValue !== undefined
+          ? new Prisma.Decimal(Number(it.sizeValue))
+          : null,
+      sizeUnit: it.sizeUnit || null,
       colorCode: it.colorCode || null,
       specification: it.specification || null,
       notes: it.notes || null,

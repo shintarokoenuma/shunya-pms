@@ -55,7 +55,22 @@ export const poItemInputSchema = z
     // v1.1 実務化項目（すべて任意）
     supplierItemCode: optionalString(100),
     designCode: optionalString(100),
-    sizeSpec: optionalString(100),
+    // v1.2: サイズを数値 + 単位に分解（sizeSpec 廃止）。両方任意。
+    sizeValue: z
+      .union([z.string(), z.number(), z.null()])
+      .transform((v) => {
+        if (v === "" || v === null || v === undefined) return null
+        const n = typeof v === "number" ? v : Number(v)
+        return Number.isFinite(n) ? n : null
+      })
+      .refine((v) => v === null || v >= 0, "サイズは0以上で入力してください")
+      .nullable()
+      .default(null),
+    sizeUnit: z
+      .enum(["cm", "mm", "m", "inch"])
+      .nullable()
+      .optional()
+      .transform((v) => v ?? null),
     colorCode: optionalString(50),
     specification: optionalString(10000),
     notes: optionalString(10000),
