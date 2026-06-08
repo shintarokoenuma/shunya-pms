@@ -154,9 +154,19 @@ export default async function PurchaseOrderDetailPage({
                 )}
               </div>
               <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 md:grid-cols-4">
+                <Cell label="仕入先品番" value={it.supplierItemCode ?? "—"} />
+                <Cell label="デザイン番号" value={it.designCode ?? "—"} />
+                <Cell label="カラー" value={it.colorCode ?? "—"} />
+                <Cell label="サイズ" value={it.sizeSpec ?? "—"} />
                 <Cell label="数量" value={`${fmt(it.quantity)} ${it.unit}`} />
-                <Cell label="単価" value={fmt(it.unitPrice)} />
-                <Cell label="小計" value={fmt(it.subtotal)} />
+                <Cell
+                  label="単価"
+                  value={it.unitPrice == null ? "未定" : fmt(it.unitPrice)}
+                />
+                <Cell
+                  label="小計"
+                  value={it.subtotal == null ? "未定" : fmt(it.subtotal)}
+                />
                 <Cell
                   label="費目"
                   value={
@@ -173,6 +183,12 @@ export default async function PurchaseOrderDetailPage({
                       : "—"
                   }
                 />
+                {it.specification && (
+                  <div className="col-span-2 md:col-span-4">
+                    <div className="text-xs text-muted-foreground">仕様・規格</div>
+                    <div className="whitespace-pre-wrap">{it.specification}</div>
+                  </div>
+                )}
                 {it.isPhysicalAsset && (
                   <Cell
                     label="保管"

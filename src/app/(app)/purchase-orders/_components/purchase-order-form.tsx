@@ -75,6 +75,12 @@ function emptyItem(): PurchaseOrderFormValues["items"][number] {
     materialId: null,
     customItemName: "",
     description: "",
+    supplierItemCode: "",
+    designCode: "",
+    sizeSpec: "",
+    colorCode: "",
+    specification: "",
+    notes: "",
     quantity: "",
     unit: "",
     unitPrice: "",
@@ -441,6 +447,90 @@ function ItemRow({
         />
       </div>
 
+      {/* v1.1 実務化項目 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <FormField
+          control={form.control}
+          name={`${base}.supplierItemCode`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>仕入先品番</FormLabel>
+              <FormControl>
+                <Input placeholder="例：20000" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name={`${base}.designCode`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>デザイン番号</FormLabel>
+              <FormControl>
+                <Input placeholder="例：D-A" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name={`${base}.colorCode`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>カラー番号</FormLabel>
+              <FormControl>
+                <Input placeholder="例：C#100" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name={`${base}.sizeSpec`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>サイズ</FormLabel>
+              <FormControl>
+                <Input
+                  list={`size-suggest-${idx}`}
+                  placeholder="例：20cm / 15mm / 20L"
+                  {...field}
+                />
+              </FormControl>
+              <datalist id={`size-suggest-${idx}`}>
+                <option value="cm" />
+                <option value="mm" />
+                <option value="L" />
+              </datalist>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <FormField
+        control={form.control}
+        name={`${base}.specification`}
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>仕様・規格</FormLabel>
+            <FormControl>
+              <Textarea
+                rows={2}
+                maxLength={10000}
+                placeholder="例：エレメント金属/スライダーDA8/オープン、生地幅110cm/反50m 等"
+                {...field}
+              />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <FormField
           control={form.control}
@@ -470,8 +560,17 @@ function ItemRow({
             <FormItem>
               <FormLabel>単位 *</FormLabel>
               <FormControl>
-                <Input placeholder="m / 個 / kg" {...field} />
+                <Input
+                  list={`unit-suggest-${idx}`}
+                  placeholder="個 / m / 反 / 一式"
+                  {...field}
+                />
               </FormControl>
+              <datalist id={`unit-suggest-${idx}`}>
+                {["個", "m", "反", "一式", "kg", "巻", "セット", "枚"].map((u) => (
+                  <option key={u} value={u} />
+                ))}
+              </datalist>
               <FormMessage />
             </FormItem>
           )}
@@ -481,11 +580,12 @@ function ItemRow({
           name={`${base}.unitPrice`}
           render={({ field }) => (
             <FormItem>
-              <FormLabel>単価 *</FormLabel>
+              <FormLabel>単価（未定可）</FormLabel>
               <FormControl>
                 <Input
                   type="number"
                   step="any"
+                  placeholder="未定なら空欄"
                   value={field.value === null || field.value === undefined ? "" : String(field.value)}
                   onChange={(e) => field.onChange(e.target.value)}
                   onBlur={field.onBlur}
@@ -562,6 +662,20 @@ function ItemRow({
           )}
         />
       </div>
+
+      <FormField
+        control={form.control}
+        name={`${base}.notes`}
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>メモ</FormLabel>
+            <FormControl>
+              <Textarea rows={2} maxLength={10000} placeholder="任意" {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
 
       <FormField
         control={form.control}
