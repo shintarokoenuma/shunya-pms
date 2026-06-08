@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, Plus, Trash2, FileText, ListChecks } from "lucide-react"
@@ -37,18 +38,29 @@ import {
   type ProgressTaskItem,
   type ProcessingTypeOption,
 } from "@/lib/actions/progress-tasks"
+import type { PoForTask } from "@/lib/actions/purchase-orders"
 import {
   PROGRESS_TASK_TYPE_LABELS,
   PROGRESS_TASK_STATUS_LABELS,
   PROGRESS_TASK_STATUS_BADGE_VARIANT,
   PROGRESS_TASK_STATUS_OPTIONS,
 } from "./progress-task-labels"
+import { PURCHASE_ORDER_STATUS_LABELS } from "../../purchase-orders/_components/labels"
 import { DOC_DRIVEN_TASK_TYPES } from "@/lib/progress-task-template"
+
+/** S-4b-1: 仕入先発注(PO)を起票できるタスク種別（生地/付属/ボディ） */
+const PO_TASK_TYPES: ReadonlySet<ProgressTaskType> = new Set([
+  ProgressTaskType.FABRIC,
+  ProgressTaskType.TRIM,
+  ProgressTaskType.BODY,
+])
 
 type Props = {
   sampleProductionId: string
   tasks: ProgressTaskItem[]
   processingOptions: ProcessingTypeOption[]
+  /** progressTaskId → そのタスクに紐づく PO 群（タスク行下の列挙用） */
+  posByTask: Record<string, PoForTask[]>
 }
 
 const RECEIVED_TYPES: ReadonlySet<ProgressTaskType> = new Set([
@@ -60,6 +72,7 @@ export function ProgressChecklist({
   sampleProductionId,
   tasks,
   processingOptions,
+  posByTask,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -117,7 +130,12 @@ export function ProgressChecklist({
           </thead>
           <tbody>
             {tasks.map((t) => (
-              <TaskRow key={t.id} task={t} />
+              <TaskRow
+                key={t.id}
+                task={t}
+                sampleProductionId={sampleProductionId}
+                pos={posByTask[t.id] ?? []}
+              />
             ))}
           </tbody>
         </table>
@@ -140,11 +158,21 @@ export function ProgressChecklist({
   )
 }
 
-function TaskRow({ task }: { task: ProgressTaskItem }) {
+function TaskRow({
+  task,
+  sampleProductionId,
+  pos,
+}: {
+  task: ProgressTaskItem
+  sampleProductionId: string
+  pos: PoForTask[]
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [notes, setNotes] = useState(task.notes ?? "")
-  const isDocDriven = DOC_DRIVEN_TASK_TYPES.has(task.taskType)
+  const isPoTask = PO_TASK_TYPES.has(task.taskType) // FABRIC/TRIM/BODY → PO 起票
+  const isOtherDocDriven =
+    DOC_DRIVEN_TASK_TYPES.has(task.taskType) && !isPoTask // PATTERN/SEWING/PROCESSING → S-4b-2
   const showReceived = RECEIVED_TYPES.has(task.taskType)
   const isProcessing = task.taskType === ProgressTaskType.PROCESSING
 
@@ -245,31 +273,60 @@ function TaskRow({ task }: { task: ProgressTaskItem }) {
         />
       </td>
       <td className="px-3 py-2">
-        <div className="flex items-center justify-end gap-1">
-          {isDocDriven && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled
-              title="S-4 で実装予定"
-            >
-              <FileText className="mr-1 h-3.5 w-3.5" />
-              発注書
-            </Button>
-          )}
-          {isProcessing && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              onClick={handleRemove}
-              disabled={isPending}
-              title="加工タスクを取り消す"
-            >
-              <Trash2 className="h-4 w-4 text-destructive" />
-            </Button>
+        <div className="flex flex-col items-end gap-1">
+          <div className="flex items-center justify-end gap-1">
+            {isPoTask && (
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={`/purchase-orders/new?progressTaskId=${task.id}&sampleProductionId=${sampleProductionId}`}
+                >
+                  <FileText className="mr-1 h-3.5 w-3.5" />
+                  発注を作成
+                </Link>
+              </Button>
+            )}
+            {isOtherDocDriven && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled
+                title="S-4b-2 で実装予定"
+              >
+                <FileText className="mr-1 h-3.5 w-3.5" />
+                発注書
+              </Button>
+            )}
+            {isProcessing && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleRemove}
+                disabled={isPending}
+                title="加工タスクを取り消す"
+              >
+                <Trash2 className="h-4 w-4 text-destructive" />
+              </Button>
+            )}
+          </div>
+          {isPoTask && pos.length > 0 && (
+            <ul className="space-y-0.5 text-right text-xs">
+              {pos.map((po) => (
+                <li key={po.id}>
+                  <Link
+                    href={`/purchase-orders/${po.id}`}
+                    className="font-mono text-primary hover:underline"
+                  >
+                    {po.poNumber}
+                  </Link>
+                  <span className="ml-1 text-muted-foreground">
+                    {PURCHASE_ORDER_STATUS_LABELS[po.status]}
+                  </span>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </td>

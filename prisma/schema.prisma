@@ -3941,21 +3941,25 @@ model PoItem {
   description      String? @db.Text
 
   // 仕様
-  specification String? @db.Text
-  color         String? @db.VarChar(100)
-  colorCode     String? @map("color_code") @db.VarChar(50)
-  pantone       String? @db.VarChar(50)
+  specification    String? @db.Text
+  supplierItemCode String?  @map("supplier_item_code") @db.VarChar(100) // 仕入先品番（v1.1）
+  designCode       String?  @map("design_code") @db.VarChar(100) // デザイン番号（v1.1）
+  sizeValue        Decimal? @map("size_value") @db.Decimal(15, 4) // サイズ数値（v1.2・sizeSpec から分解）
+  sizeUnit         String?  @map("size_unit") @db.VarChar(10) // cm/mm/m/inch（v1.2）
+  color            String?  @db.VarChar(100)
+  colorCode        String? @map("color_code") @db.VarChar(50)
+  pantone          String? @db.VarChar(50)
 
   // 数量
   quantity Decimal @db.Decimal(15, 4)
   unit     String  @db.VarChar(20) // m / 個 / kg
 
-  // 単価
-  unitPrice Decimal  @map("unit_price") @db.Decimal(15, 4)
+  // 単価（v1.1：金額未定可＝nullable）
+  unitPrice Decimal? @map("unit_price") @db.Decimal(15, 4)
   currency  Currency @default(JPY)
 
-  // 小計（自動計算）
-  subtotal Decimal @db.Decimal(15, 2)
+  // 小計（自動計算・単価未定時 null＝v1.1）
+  subtotal Decimal? @db.Decimal(15, 2)
 
   // JPY換算
   subtotalJpy Decimal? @map("subtotal_jpy") @db.Decimal(15, 2)

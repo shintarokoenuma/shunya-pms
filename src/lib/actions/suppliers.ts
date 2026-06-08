@@ -515,16 +515,21 @@ export async function checkSupplierUsage(id: string): Promise<SupplierUsage> {
   }
 
   // SupplierContact は Cascade 削除されるので、本削除の阻害要因にしない
-  // 将来追加: PO / Material のチェック
   const contactCount = await prisma.supplierContact.count({
     where: { supplierId: id, deletedAt: null },
   })
 
+  // S-4b-1（E8）: 紐づく PO（soft-delete 済みは除外）を実カウント＝物理削除ガード
+  const purchaseOrderCount = await prisma.purchaseOrder.count({
+    where: { supplierId: id, companyId, deletedAt: null },
+  })
+
+  // 将来追加: Material のチェック
   return {
     contactCount,
-    purchaseOrderCount: 0,
+    purchaseOrderCount,
     materialCount: 0,
-    totalRefs: 0,
+    totalRefs: purchaseOrderCount,
   }
 }
 
