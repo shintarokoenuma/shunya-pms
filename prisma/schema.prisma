@@ -3942,10 +3942,11 @@ model PoItem {
 
   // 仕様
   specification    String? @db.Text
-  supplierItemCode String? @map("supplier_item_code") @db.VarChar(100) // 仕入先品番（v1.1）
-  designCode       String? @map("design_code") @db.VarChar(100) // デザイン番号（v1.1）
-  sizeSpec         String? @map("size_spec") @db.VarChar(100) // サイズ指定値（ファスナー長/ボタン径 等・v1.1）
-  color            String? @db.VarChar(100)
+  supplierItemCode String?  @map("supplier_item_code") @db.VarChar(100) // 仕入先品番（v1.1）
+  designCode       String?  @map("design_code") @db.VarChar(100) // デザイン番号（v1.1）
+  sizeValue        Decimal? @map("size_value") @db.Decimal(15, 4) // サイズ数値（v1.2・sizeSpec から分解）
+  sizeUnit         String?  @map("size_unit") @db.VarChar(10) // cm/mm/m/inch（v1.2）
+  color            String?  @db.VarChar(100)
   colorCode        String? @map("color_code") @db.VarChar(50)
   pantone          String? @db.VarChar(50)
 
