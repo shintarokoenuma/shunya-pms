@@ -1,9 +1,8 @@
-# 引き継ぎメモ (2026-06-07/08 セッション / S-3a・S-3マージ完了・dev ドリフト解消・本番PWローテ → 次はS-4)
+# 引き継ぎメモ (2026-06-08 セッション / S-4a完了・本番反映 → S-4b仕様確定 → 次は S-4b-1 実装)
 
 ## ⓪ 最重要・プロジェクト棲み分けルール（毎回必須）
 - shunya-pms（リポジトリ shintarokoenuma/shunya-pms・ローカル ~/shunya-production-system・本番 shunya-pms-web-production.up.railway.app）と saagara-v2（別リポジトリ・本番 saagara-v2-production.up.railway.app）は完全に別物。
 - VS Code の Claude Code 別ウィンドウで両者を混同した過去あり。実装指示書には毎回冒頭に【対象プロジェクト】ヘッダを固定。貼る前に ~/shunya-production-system を開いているか目視確認。
-- 【裏付け】棚上げコミット 8f821f5（ProductPrice）は saagara 作業の混入と判明＝棲み分けルールの重要性が実証された（本セッションで完全破棄）。
 
 ## ⓪-2 PR URL 3点セット運用（shunya-pr-url-checklist スキル）
 - ① マージ前の UI 確認 = ローカル（npm run dev → http://localhost:3000 / dev DB hopper:12921）
@@ -11,58 +10,62 @@
 - ③ マージ後の本番確認 = 本番 URL（https://shunya-pms-web-production.up.railway.app / 本番 DB shuttle:16099）+ Railway デプロイログ目視
 
 ## ① 直近の完了マイルストーン
-- S-3a（ProcessingType 加工種別マスター）完了・本番反映済み。PR #61 → merged d39097f。
-  - model ProcessingType / enum ProcessingTypeStatus(ACTIVE/ARCHIVED) / table processing_types。採番 PRC-{連番3桁}（companyId 単位・保存時確定）。precedent: Buyer/DD。8操作+4重ガード物理削除。既存 enum AiProcessingType は無関係・不変更。
-- S-3（ProgressTask 進行チェックリスト）完了・マージ済み。PR #62 → merged ec0b339（author shintaro・2026-06-08）。
-  - model ProgressTask + enum 5本（ProgressTaskType/Phase/Status/EvidenceMode/AssigneeType）+ migration 20260607133904_add_progress_task_checklist。
-  - SP（ラウンド）作成時に SAMPLE 定型8種を自動生成（A-2＝ラウンド単位）。PROCESSING 行は ProcessingType マスター参照で都度追加/削除（B-2・手入力不可）。
-  - evidenceMode は MANUAL 固定・linked系FK持たない（伝票連携は S-4 で伝票側に progressTaskId? を足す方針）。status は全タスク手動チェック（DONE化で checkedByUserId/checkedAt 記録）。FABRIC/TRIM は入荷フラグ別持ち。
-  - recomputeTaskStatus は空殻・発注書ボタンは位置のみ非活性（S-4 縫い代）。既存 SP 救済の generateTasksForRound（冪等ガード）。SP create フックが唯一の既存ロジック変更。物理削除は 4重ガード。UI: SP詳細に進行チェックリストセクション。9ファイル/+1262。
-  - dev 反映済み（22 migrations・up to date・ドリフトなし）。本番は ec0b339 マージで Railway 自動 deploy 経路。【要確認】本番デプロイログ目視（Applying migration 20260607133904 → successfully applied）。
-- B-033（dev ドリフト解消・currency-prices 完全破棄）完了。8f821f5 の product_prices テーブル・Incoterms 列2本・Incoterms 型・migration 記録(20260603092457)を dev で DROP（1トランザクション・破壊前カウント0確認）。migrate diff=empty ＝ dev↔main 一致。feat/currency-prices-incoterms ブランチ破棄。→ 今後 migrate dev が素直に使える。
-  - shunya の価格設計：売価はテーブルに持たず見積もりエンジン（Phase 1B・BOM→原価集計→マージン4階層継承→売価算出）が都度計算。ProductPrice(上代/卸/原価ベタ持ち)は saagara 的発想で shunya 業態に不一致。
-- 本番DBパスワードローテーション完了。Railway postgres-production(ab6d) Regenerate → 本番 Web Redeploy → 新PWで接続成功確認。.env.prod.local 削除済み（本番接続情報のローカル転記を解消・以後ローカルから本番DB直接接続は不可）。.gitignore にも .env.prod.local を明示追加（8017721）。
+- S-4a（発注 WO/PO 連携の schema 受け皿）完了・本番反映済み。PR #63 → merged fdb7db8。migration 20260607181752_add_s4a_order_linkage_receptacles を本番（postgres-ab6d）に適用確認済み（Railway デプロイログで "All migrations have been successfully applied" 目視・23 migrations）。dev も 23 migrations・ドリフトなし。
+  - 追加（すべて非破壊・nullable/default）: enum BillingClassification(INDIVIDUAL_BILLING/UNIT_PRICE_INCLUDED) 新規 / ProgressTaskType に BODY 追加。
+  - WorkOrder: progressTaskId? / processingTypeId? + index。
+  - PurchaseOrder: progressTaskId? / sampleProductionId? + index。
+  - PoItem: costCategoryId? / billingClassification? / isPhysicalAsset(default false) / assetStorageStartDate? / assetStorageExpiryDate? + index。
+  - WoItem: costCategoryId? / billingClassification? + index。
+  - BODY enum 追従で progress-task-labels.ts に1行（BODY: "ボディ仕入"）のみ追加。他 UI/ロジック不変更。
+  - WorkOrder.samplProductionId（綴りミス・"e"抜け）は温存・不変更（リネームは B-035）。
+- S-4 仕様確認書 v1.0 確定: docs/specs/s-4-order-linkage-spec-confirmation-v1_0-2026-06-08.md（D1〜D6・必須固定タスク無しの不変条件・(あ)(い)フロー検証）。
+- S-4b 仕様確認書 v1.0 確定: docs/specs/s-4b-order-creation-spec-confirmation-v1_0-2026-06-08.md（E1〜E8・S-4b-1 PO系詳述・S-4b-2 WO系方針）。
 
 ## ② dev / 本番 DB の状態
-- dev（hopper:12921）：22 migrations・up to date・ドリフトなし。Product 2件温存。processing_types=0 / progress_tasks テーブルあり（S-3 検証データの有無は次セッション要確認・残っていれば掃除）。カテゴリ27件短縮形。
-- 本番（shuttle:16099 / postgres-ab6d）：S-3a・S-3 migration がマージ経由で適用済み（見込み・要デプロイログ目視）。品番カルテ1件（IP-26AW-M-BT-001 / test 残置）。カテゴリ27件短縮形。パスワードはローテーション済み。本番DBへローカルから直接接続する手段は現在なし（必要時は .env.prod.local を再作成→使用後ローテ&削除）。
+- dev（hopper:12921）: 23 migrations・up to date・ドリフトなし。progress_tasks=10（S-3 検証データ・温存中。掃除は S-4c 直前）/ processing_types=2。Product 2件。カテゴリ27件短縮形。
+- 本番（shuttle:16099 / postgres-ab6d）: 23 migrations 適用済み（S-4a 含む・デプロイログ確認済み）。品番カルテ1件（IP-26AW-M-BT-001 / test 残置）。カテゴリ27件短縮形。パスワードはローテーション済み（ローカルから本番DB直接接続は不可）。
+- 本番ログに単発の手動クエリエラー（2026-06-06 "column name does not exist" on product_categories）あり=カテゴリ是正中の手動 psql タイポと判断・実害なし。
 
 ## ③ 次セッションで最初にやること（優先順）
-1. main 最新化（git pull origin main）。git log origin/main --oneline -8 で実態確認（メモとのズレがないか）。
-2. 【未実施なら】S-3 の本番デプロイログ目視（migration 20260607133904 が本番に successfully applied か）。S-3 の dev 検証データが残っていれば掃除。
-3. 次の山＝S-4（発注 WO/PO 連携）。S-3 で開けた縫い代（伝票側 progressTaskId? / recomputeTaskStatus 空殻 / 発注書ボタン非活性）に中身を入れる。仕様 v1.0 §3 + docs/specs/s-3-progress-task-implementation-brief-2026-06-07.md の「S-4 縫い代」記述が出発点。migration あり＝通常の migrate dev でOK。PR必須・dev検証→本番は host照合+三重ガード。
+1. main 最新化（git pull origin main）。git log origin/main --oneline -8 で実態確認。
+2. S-4b-1（PO 系）の実装ブリーフ作成 → Claude Code 実装。仕様は docs/specs/s-4b-order-creation-spec-confirmation-v1_0-2026-06-08.md §3。
+   - PurchaseOrder + PoItem の採番(PO-{年}-{4桁}・保存時確定)・CRUD actions(list/get/create/update/soft-delete)・最小フォーム。
+   - 起点=進行チェックリストのタスク行(FABRIC/TRIM/BODY)の「発注を作成」ボタン(S-3 非活性ボタンを活性化)→ progressTaskId/sampleProductionId 紐付け。
+   - 費目(costCategoryId)・売り立て区分(billingClassification)・現物資産(isPhysicalAsset/保管期限)を PoItem フォームで入力。
+   - suppliers.ts の purchaseOrderCount を実値化(E8)。
+   - migration 見込み無し(S-4a で受け皿投入済み)。着手時に横断 grep で受け皿列が main に揃っているか確認。PR 必須。
+3. その後 S-4b-2（WO 系）→ S-4c（自動算出 recomputeTaskStatus + 発注書ボタン活性化 + コスト集計）。
 
-## ④ バックログ（本セッション起票）
-- B-033：完了（dev ドリフト解消・currency-prices 完全破棄）。クローズ。
-- B-034：FactoryProcessingType 中間テーブル（加工種別ごとの対応可能工場マスター）。WO 作成時の工場プルダウンを「対応工場だけ」に絞る最適化。工場が増えたら検討。
+## ④ 実装シーケンス（更新）
+- S-1〜S-3a・S-3（完了）→ S-4a（完了・本番反映）→ S-4b-1（PO系・次）→ S-4b-2（WO系）→ S-4c（自動算出/発注書/集計）。
+- S-4b/S-4c は migration 見込み無し（schema は S-4a で投入済み）。schema 不足が判明したら実装前に報告。
 
-## ⑤ 既存バックログ（継続・未着手）
-- B-016 Color拡張(PANTONE/DIC) / B-017 参照データ監査方針 / B-018 出荷・貸出伝票 / B-019 CSVインポート / B-020 quality-label-app統合 / B-021 全マスター監査網羅 / B-022 外部パートナー開放 / B-023 版類在庫 / B-024 自社ブランド在庫 / B-025 量産パターン管理 / B-026 シーズンプルダウン化 / B-027 サムネイル画像 / B-028 品番一覧カテゴリ検索 / B-029 サンプル材料セクション / B-030 数量モデル整理(SKU確定後) / B-031 本番/dev手動投入ズレリスク記録 / B-032 ProductCategory標準シードを seed.ts に追加。
-- ※ currency-prices(8f821f5)は破棄済み。Incoterms が将来必要なら受注(SalesOrder)を本格実装する Phase で正しく入れ直す。
+## ⑤ 本セッション起票のバックログ
+- B-035: WorkOrder.samplProductionId の綴りミス("e"抜け)を sampleProductionId にリネーム。@map は sample_production_id のままで migration 不要だが参照箇所修正が要る。優先度: 低（実害なし・整合性のみ）。
+- B-036: 案件タイプ別のタスク生成テンプレート出し分け（加工のみ/フル制作/ありボディ/ボディ仕入+加工 等で SP 作成時の初期生成を変える）。仕様 v1.0 §3-3「商品カテゴリ等での出し分けは要望が出たら段階拡張」の具体化。優先度: 中。
+- B-037: docs 直下の未追跡ファイル整理（docs/CLAUDE.md・各種zip・"docs/files 9〜12/"・docs/package-lock.json・HANDOFF-*.md 等が未追跡で堆積）。誤生成・一時物の整理（削除 or .gitignore or 正しい場所へ）。優先度: 低。
 
-## ⑥ 実装シーケンス（v1.0 §8 確定）
-- S-1（完了）→ S-2（完了）→ S-3a（完了）→ S-3（完了）→ S-4（発注 WO/PO 連携）。
-- S-4 以降 migration あり＝dev 検証（migrate dev 使用可）→ 本番は別途明示指示＋host照合（本番 ab6d/shuttle:16099, dev 7492/hopper:12921）＋三重ガード。
+## ⑥ 既存バックログ（継続・未着手）
+- B-016 Color拡張(PANTONE/DIC) / B-017 参照データ監査方針 / B-018 出荷・貸出伝票 / B-019 CSVインポート / B-020 quality-label-app統合 / B-021 全マスター監査網羅 / B-022 外部パートナー開放 / B-023 版類在庫(現物資産・再利用判定UI。S-4a で受け皿=PoItem.isPhysicalAsset/保管期限は投入済み) / B-024 自社ブランド在庫 / B-025 量産パターン管理 / B-026 シーズンプルダウン化 / B-027 サムネイル画像 / B-028 品番一覧カテゴリ検索 / B-029 サンプル材料セクション / B-030 数量モデル整理(SKU確定後) / B-031 本番/dev手動投入ズレリスク記録 / B-032 ProductCategory標準シードを seed.ts に追加 / B-034 FactoryProcessingType中間テーブル。
+- B-033（dev ドリフト解消）は完了クローズ済み。
 
-## ⑦ コミット/マージ一覧（本セッション周辺）
-- PR #61 → merged d39097f：S-3a 加工種別マスター。
-- 33f2a90：引き継ぎメモ更新（S-3a完了時点）。
-- PR #62 → merged ec0b339：S-3 進行チェックリスト（author shintaro・2026-06-08）。
-- 8017721：.gitignore に .env.prod.local 追加。
-- 5450746：S-3 実装指示書を docs/specs へ保存。
-- ba9025a：引き継ぎメモ微修正。
-- （本コミット）：引き継ぎメモ更新（S-3完了・次はS-4）。
-- データ操作（コミットではない）：本番PWローテ / dev currency-prices ドリフト破棄 / ローカル currency ブランチ破棄・.env.prod.local 削除。
+## ⑦ コミット/マージ一覧（本セッション）
+- 582343c: docs: S-4 仕様確認書 v1.0 + S-4a 実装ブリーフを docs/specs へ保存。
+- PR #63 → merged fdb7db8: S-4a 発注連携 schema 受け皿（非破壊・3ファイル/+81）。
+- docs: S-4b 仕様確認書 v1.0 保存（本締めで push。次回 git log で確認）。
+- docs: 本引き継ぎメモ（SESSION_HANDOVER.md 更新）。
 
 ## ⑧ 注意点・教訓
-- 8f821f5 = saagara 混入の教訓：別プロジェクト作業が紛れ込むと業態に合わないモデルが schema に残る。混入物は「一部救済」より「白紙に戻して必要時に正しく作る」方が安全。
-- migration ドリフトの判別：migrate status は repo migration の適用済み判定のみ。DB だけにある未追跡物は migrate diff（schema↔DB）で検知。
-- 本番DB操作の鉄則：host 照合（shuttle:16099）→ 破壊前カウント → 1トランザクション → 検証。本番PWは Railway Config の Regenerate → 必ず Web を Redeploy。
-- 並行作業の注意：本セッションは claude.ai 側で「次はS-3」とメモを書いた後、別経路で S-3 が実装・マージされた。引き継ぎメモと実態がずれ得るので、セッション開始時は必ず git log origin/main で実態を確認してからメモを信頼する。
-- Git運用：docs単独=main直push可 / コード含む=PR必須。
+- 並行作業の注意: claude.ai 側で「次は〜」と書いた後、別経路で実装・マージされ得る。セッション開始時は必ず git log origin/main で実態確認してからメモを信頼する。
+- Claude.ai 側で作成したファイルは、慎太郎さんがダウンロード→配置→push する方式で docs に入れた（cat <<'EOF' 巨大埋め込みを避けた）。実装ブリーフは Claude Code に本文貼り付けが必要。
+- migration 非破壊の確認: ADD COLUMN(nullable/default)/CREATE TYPE/ADD VALUE/CREATE INDEX のみ＝非破壊。DROP/型変更/既存NOT NULL化が出たら止める。新規列の NOT NULL DEFAULT は安全（既存行は default 埋め）。
+- enum に値を足すと網羅型(Record<enum,string>)のラベル定義が追従必須＝ビルドが落ちる。enum 追加 PR では対応ラベル1行をセットで入れる。
+- WO/PO は業務トランザクションでありマスターパターン(shunya-master-patterns §1 非適用)。8関数構成・住所4分割は当てはめない。伝票独自構成(list/get/create/update/soft-delete)。
+- 本番DB操作の鉄則: host 照合(shuttle:16099)→破壊前カウント→1トランザクション→検証。本番PWは Railway Regenerate→必ず Web Redeploy。
+- Git運用: docs単独=main直push可 / コード含む=PR必須。docs はファイル add を明示指定し未追跡物の巻き込みを防ぐ。
+- 引き継ぎメモ保存の鉄則(shunya-session-handover): ①2箇所出力 ②保存指示は本文を cat <<'EOF' に埋め込む ③保存前に git log origin/main で実態確認。
 
 ## ⑨ 次セッション冒頭の手順
 1. このメモを貼り付け → 状態復元。
 2. git log origin/main --oneline -8 で実態確認。main 最新化。
-3. S-3 本番デプロイログ目視（未実施なら）。
-4. S-4（発注 WO/PO 連携）の仕様確認へ。S-3 指示書の「S-4 縫い代」を出発点に、schema 真値の横断 grep から開始。
+3. S-4b-1（PO系）実装ブリーフ作成へ。仕様 docs/specs/s-4b-order-creation-spec-confirmation-v1_0-2026-06-08.md §3 を出発点に、schema 真値の横断 grep（S-4a 受け皿列が main にあるか）から開始。
