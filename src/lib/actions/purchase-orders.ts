@@ -502,7 +502,8 @@ export async function createPurchaseOrder(
             data: itemRows.map((r) => ({ ...r, poId: po.id })),
           })
           return po
-        })
+          // 遅延 DB での部分コミット孤児を防ぐ安全マージン（既定5秒→15秒）
+        }, { timeout: 15000 })
         break
       } catch (e) {
         lastError = e
@@ -669,7 +670,8 @@ export async function updatePurchaseOrder(
         data: itemRows.map((r) => ({ ...r, poId: id })),
       })
       return row
-    })
+      // 遅延 DB での部分コミット孤児を防ぐ安全マージン（既定5秒→15秒）
+    }, { timeout: 15000 })
 
     await prisma.auditLog.create({
       data: {
