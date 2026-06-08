@@ -385,22 +385,31 @@ export async function getPurchaseOrder(
 }
 
 // =============================================================================
-// 共通: 明細データ整形（subtotal=quantity×unitPrice 計算）
+// 共通: 明細データ整形（v1.1: 単価未定なら unitPrice=null・subtotal=null。
+//        単価があれば subtotal=quantity×unitPrice）
 // =============================================================================
 function buildItemRows(
   data: PurchaseOrderInput,
 ): Omit<Prisma.PoItemCreateManyInput, "poId">[] {
   return data.items.map((it, i) => {
-    const subtotal = Number(it.quantity) * Number(it.unitPrice)
+    const hasPrice = it.unitPrice !== null && it.unitPrice !== undefined
     return {
       itemOrder: i,
       materialId: it.materialId,
       customItemName: it.materialId ? null : it.customItemName || null,
       description: it.description || null,
+      supplierItemCode: it.supplierItemCode || null,
+      designCode: it.designCode || null,
+      sizeSpec: it.sizeSpec || null,
+      colorCode: it.colorCode || null,
+      specification: it.specification || null,
+      notes: it.notes || null,
       quantity: new Prisma.Decimal(it.quantity),
       unit: it.unit,
-      unitPrice: new Prisma.Decimal(it.unitPrice),
-      subtotal: new Prisma.Decimal(subtotal),
+      unitPrice: hasPrice ? new Prisma.Decimal(Number(it.unitPrice)) : null,
+      subtotal: hasPrice
+        ? new Prisma.Decimal(Number(it.quantity) * Number(it.unitPrice))
+        : null,
       costCategoryId: it.costCategoryId,
       billingClassification: it.billingClassification,
       isPhysicalAsset: it.isPhysicalAsset,

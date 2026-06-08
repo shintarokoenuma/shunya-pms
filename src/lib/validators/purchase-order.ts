@@ -32,11 +32,17 @@ const quantityField = z
   .transform((v) => (typeof v === "number" ? v : Number(v)))
   .refine((v) => Number.isFinite(v) && v > 0, "数量は0より大きい値で入力してください")
 
-/** 単価（>= 0） */
+/** 単価（v1.1：任意・未定可。空文字/null → null。入っていれば >= 0） */
 const unitPriceField = z
-  .union([z.string(), z.number()])
-  .transform((v) => (typeof v === "number" ? v : Number(v)))
-  .refine((v) => Number.isFinite(v) && v >= 0, "単価は0以上で入力してください")
+  .union([z.string(), z.number(), z.null()])
+  .transform((v) => {
+    if (v === "" || v === null || v === undefined) return null
+    const n = typeof v === "number" ? v : Number(v)
+    return Number.isFinite(n) ? n : null
+  })
+  .refine((v) => v === null || v >= 0, "単価は0以上で入力してください（未定なら空欄可）")
+  .nullable()
+  .default(null)
 
 // =============================================================================
 // 明細
@@ -46,6 +52,13 @@ export const poItemInputSchema = z
     materialId: optionalRelationId,
     customItemName: optionalString(255),
     description: optionalString(10000),
+    // v1.1 実務化項目（すべて任意）
+    supplierItemCode: optionalString(100),
+    designCode: optionalString(100),
+    sizeSpec: optionalString(100),
+    colorCode: optionalString(50),
+    specification: optionalString(10000),
+    notes: optionalString(10000),
     quantity: quantityField,
     unit: z.string().trim().min(1, "単位は必須です").max(20, "20文字以内"),
     unitPrice: unitPriceField,
