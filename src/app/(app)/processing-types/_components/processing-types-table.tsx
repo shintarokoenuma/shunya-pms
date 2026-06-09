@@ -14,6 +14,7 @@ import {
   PROCESSING_TYPE_STATUS_LABELS,
   PROCESSING_TYPE_STATUS_BADGE_VARIANT,
 } from "./labels"
+import { WORK_ORDER_TYPE_LABELS } from "@/lib/constants/work-order-types"
 
 type Props = {
   items: ProcessingTypeListItem[]
@@ -34,6 +35,7 @@ export function ProcessingTypesTable({ items }: Props) {
         <TableHeader>
           <TableRow>
             <TableHead>名称</TableHead>
+            <TableHead className="w-[150px]">大分類</TableHead>
             <TableHead className="w-[140px]">コード</TableHead>
             <TableHead className="w-[180px]">英語名</TableHead>
             <TableHead className="w-[90px]">並び順</TableHead>
@@ -45,6 +47,9 @@ export function ProcessingTypesTable({ items }: Props) {
           {items.map((item) => (
             <TableRow key={item.id}>
               <TableCell className="font-medium">{item.name}</TableCell>
+              <TableCell className="text-sm">
+                {WORK_ORDER_TYPE_LABELS[item.workType]}
+              </TableCell>
               <TableCell className="font-mono text-sm">{item.code}</TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {item.nameEn ?? "—"}

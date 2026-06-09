@@ -10,9 +10,14 @@ import {
 import { ProcessingTypesSearch } from "./_components/processing-types-search"
 import { ProcessingTypesTable } from "./_components/processing-types-table"
 import { ProcessingTypesPagination } from "./_components/processing-types-pagination"
-import type { ProcessingTypeStatus } from "@prisma/client"
+import type { ProcessingTypeStatus, WorkOrderType } from "@prisma/client"
 
-type SearchParams = Promise<{ q?: string; status?: string; page?: string }>
+type SearchParams = Promise<{
+  q?: string
+  status?: string
+  workType?: string
+  page?: string
+}>
 
 export default async function ProcessingTypesPage({
   searchParams,
@@ -28,6 +33,7 @@ export default async function ProcessingTypesPage({
   const params: ListProcessingTypesParams = {
     q: sp.q,
     status: sp.status as ProcessingTypeStatus | undefined,
+    workType: sp.workType as WorkOrderType | undefined,
     page,
     pageSize: 20,
   }

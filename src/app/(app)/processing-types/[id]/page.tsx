@@ -11,6 +11,7 @@ import {
   PROCESSING_TYPE_STATUS_LABELS,
   PROCESSING_TYPE_STATUS_BADGE_VARIANT,
 } from "../_components/labels"
+import { WORK_ORDER_TYPE_LABELS } from "@/lib/constants/work-order-types"
 
 type Params = Promise<{ id: string }>
 
@@ -86,6 +87,10 @@ export default async function ProcessingTypeDetailPage({
             value={<span className="font-mono">{item.code}</span>}
           />
           <DetailRow label="名称" value={item.name} />
+          <DetailRow
+            label="大分類（発注種別）"
+            value={WORK_ORDER_TYPE_LABELS[item.workType]}
+          />
           <DetailRow label="名称（英語）" value={item.nameEn ?? "—"} />
           <DetailRow label="並び順" value={String(item.sortOrder)} />
           <DetailRow
