@@ -33,6 +33,20 @@ export const SAMPLE_TASK_TEMPLATE: readonly SampleTaskTemplateRow[] = [
 export const PROCESSING_SORT_ORDER_BASE = 65
 
 /**
+ * S-4c-1(G2): 伝票駆動で status を自動算出（recomputeTaskStatus）する taskType 群。
+ * 生成時に evidenceMode=AUTO_FROM_DOC を付与する。これ以外は MANUAL。
+ * （D1: PATTERN/FABRIC/TRIM/SEWING/PROCESSING/BODY の6種）
+ */
+export const AUTO_FROM_DOC_TASK_TYPES: ReadonlySet<ProgressTaskType> = new Set([
+  ProgressTaskType.PATTERN,
+  ProgressTaskType.FABRIC,
+  ProgressTaskType.TRIM,
+  ProgressTaskType.SEWING,
+  ProgressTaskType.PROCESSING,
+  ProgressTaskType.BODY,
+])
+
+/**
  * SAMPLE 定型 8 行を createMany 用データに展開する。
  * createSampleProduction の同一 transaction 内、および generateTasksForRound から使う。
  */
@@ -48,7 +62,10 @@ export function buildSampleTaskRows(
     taskType: t.taskType,
     phase: "SAMPLE",
     status: "NOT_STARTED",
-    evidenceMode: "MANUAL",
+    // S-4c-1(G2): 6種は伝票駆動の自動算出対象として AUTO_FROM_DOC を付与。
+    evidenceMode: AUTO_FROM_DOC_TASK_TYPES.has(t.taskType)
+      ? "AUTO_FROM_DOC"
+      : "MANUAL",
     sortOrder: t.sortOrder,
     isReceived: t.isReceived,
   }))

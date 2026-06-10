@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getWorkOrder } from "@/lib/actions/work-orders"
 import { WorkOrderDeleteButton } from "../_components/work-order-delete-button"
+import { WorkOrderStatusControl } from "../_components/work-order-status-control"
 import { WORK_ORDER_TYPE_LABELS } from "@/lib/constants/work-order-types"
 import {
   WORK_ORDER_STATUS_LABELS,
@@ -72,6 +73,7 @@ export default async function WorkOrderDetailPage({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <WorkOrderStatusControl id={wo.id} status={wo.status} />
             <WorkOrderDeleteButton id={wo.id} woNumber={wo.woNumber} />
           </div>
         </div>

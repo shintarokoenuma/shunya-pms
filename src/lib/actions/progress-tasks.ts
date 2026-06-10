@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import {
   ProgressTaskStatus,
   ProgressTaskType,
+  WorkOrderStatus,
   type ProgressTask,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
@@ -253,7 +254,8 @@ export async function addProcessingTasks(
       taskType: ProgressTaskType.PROCESSING,
       phase: "SAMPLE" as const,
       status: ProgressTaskStatus.NOT_STARTED,
-      evidenceMode: "MANUAL" as const,
+      // S-4c-1(G2): PROCESSING は伝票駆動の自動算出対象
+      evidenceMode: "AUTO_FROM_DOC" as const,
       processingTypeId,
       sortOrder: PROCESSING_SORT_ORDER_BASE + existingProcessing + i,
     }))
@@ -387,6 +389,11 @@ export async function updateTask(
         afterData: { ...data },
       },
     })
+
+    // S-4c-1: 入荷済みチェックの変更は AUTO_FROM_DOC タスクの DONE 化を誘発しうる
+    if (data.isReceived !== undefined) {
+      await recomputeTaskStatus(id)
+    }
 
     if (existing.sampleProductionId) {
       revalidatePath(`/samples/${existing.sampleProductionId}`)
@@ -542,11 +549,119 @@ export async function deletePermanently(
 // 10. status 自動再計算（S-3 は空殻・S-4 で実装が入る縫い代）
 // =============================================================================
 /**
- * S-3: 何もしない（全タスク手動運用）。
- * S-4: linked 伝票（WO/PO/出荷/納品/請求）の有無・status を見て
- *      evidenceMode=AUTO_FROM_DOC・status を自動更新する。
- *      伝票側に追加する progressTaskId? を逆引きして集計する。
+ * S-4c-1(G1/G2): 紐づく live 伝票（PO/WO）を見て status を「前進のみ」で自動更新する。
+ *
+ * 不変条件・方針:
+ * - SKIPPED は終端（不触）。BLOCKED も人の判断として不触（S-4c v1.0 では BLOCKED 未記載のため
+ *   forward-only の安全側＝触らないと解釈。v1.1 で調整余地）。
+ * - evidenceMode=AUTO_FROM_DOC のタスクのみ対象（MANUAL は据え置き）。
+ * - 降格は一切しない（伝票が消えてもタスクは戻さない）。
+ * - WO 系(PATTERN/SEWING/PROCESSING/GRADING): live WO>=1 で NOT_STARTED→IN_PROGRESS、
+ *   live WO 全件 COMPLETED で →DONE。
+ * - PO 系(FABRIC/TRIM/BODY): live PO>=1 で NOT_STARTED→IN_PROGRESS、完了は isReceived(手動)が正→DONE。
+ * - 親アクションの成功後に呼ぶ補助。失敗しても親を巻き込まないよう内部で握りつぶす。
  */
-export async function recomputeTaskStatus(_taskId: string): Promise<void> {
-  return
+const WO_DRIVEN_TASK_TYPES: ReadonlySet<ProgressTaskType> = new Set([
+  ProgressTaskType.PATTERN,
+  ProgressTaskType.SEWING,
+  ProgressTaskType.PROCESSING,
+  ProgressTaskType.GRADING,
+])
+const PO_DRIVEN_TASK_TYPES: ReadonlySet<ProgressTaskType> = new Set([
+  ProgressTaskType.FABRIC,
+  ProgressTaskType.TRIM,
+  ProgressTaskType.BODY,
+])
+
+export async function recomputeTaskStatus(taskId: string): Promise<void> {
+  try {
+    const task = await prisma.progressTask.findFirst({
+      where: { id: taskId, deletedAt: null },
+      select: {
+        id: true,
+        companyId: true,
+        taskType: true,
+        status: true,
+        isReceived: true,
+        evidenceMode: true,
+        sampleProductionId: true,
+      },
+    })
+    if (!task) return
+    // 不変条件: 終端/人の判断は不触
+    if (
+      task.status === ProgressTaskStatus.SKIPPED ||
+      task.status === ProgressTaskStatus.BLOCKED
+    ) {
+      return
+    }
+    if (task.evidenceMode !== "AUTO_FROM_DOC") return
+
+    let next: ProgressTaskStatus = task.status
+
+    if (WO_DRIVEN_TASK_TYPES.has(task.taskType)) {
+      const wos = await prisma.workOrder.findMany({
+        where: {
+          companyId: task.companyId,
+          progressTaskId: taskId,
+          deletedAt: null,
+        },
+        select: { status: true },
+      })
+      if (wos.length >= 1) {
+        if (task.status === ProgressTaskStatus.NOT_STARTED) {
+          next = ProgressTaskStatus.IN_PROGRESS
+        }
+        if (
+          wos.every((w) => w.status === WorkOrderStatus.COMPLETED) &&
+          task.status !== ProgressTaskStatus.DONE
+        ) {
+          next = ProgressTaskStatus.DONE
+        }
+      }
+    } else if (PO_DRIVEN_TASK_TYPES.has(task.taskType)) {
+      const poCount = await prisma.purchaseOrder.count({
+        where: {
+          companyId: task.companyId,
+          progressTaskId: taskId,
+          deletedAt: null,
+        },
+      })
+      if (poCount >= 1 && task.status === ProgressTaskStatus.NOT_STARTED) {
+        next = ProgressTaskStatus.IN_PROGRESS
+      }
+      // 完了は入荷済み（手動）が正。発注済み≠入荷済み。
+      if (task.isReceived === true && task.status !== ProgressTaskStatus.DONE) {
+        next = ProgressTaskStatus.DONE
+      }
+    }
+
+    if (next === task.status) return
+
+    await prisma.progressTask.update({
+      where: { id: taskId },
+      data: {
+        status: next,
+        ...(next === ProgressTaskStatus.DONE
+          ? { checkedAt: new Date() }
+          : {}),
+      },
+    })
+    await prisma.auditLog.create({
+      data: {
+        companyId: task.companyId,
+        action: "STATUS_CHANGE",
+        entityType: "ProgressTask",
+        entityId: taskId,
+        beforeData: { status: task.status, auto: true },
+        afterData: { status: next, auto: true },
+      },
+    })
+    if (task.sampleProductionId) {
+      revalidatePath(`/samples/${task.sampleProductionId}`)
+    }
+  } catch {
+    // 自動算出の失敗は親アクションを巻き込まない（forward-only の補助処理）
+    return
+  }
 }
