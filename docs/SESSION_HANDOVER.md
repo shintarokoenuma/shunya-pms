@@ -41,17 +41,12 @@
 
 ## ② dev / 本番 DB の状態
 - dev（hopper:12921）: db push で最新スキーマ。**companies=1 / users=1（shin@shunya.jp）/ processing_types=10（PRC-001〜010・大分類付き）/ progress_tasks=0 / products=0**。`_prisma_migrations` 無し（⓪-3 参照）。
-- 本番（shuttle:16099 / postgres-production）: PR #65 マージ済み。**migration 2本（wo_item_nullable / add_processing_type_work_type）が Railway 自動 deploy で適用済みのはず → デプロイログで「migrations applied」を目視確認すること**。**本番 processing_types は現在0件**（10件投入は未実施・下記③参照）。品番カルテ1件（IP-26AW-M-BT-001 / test 残置）。本番PWはローテ済（ローカルから本番DB直接接続は不可・本番投入はURL一時指定）。
+- 本番（shuttle:16099 / postgres-production）: PR #65 マージ済み。**migration 2本（wo_item_nullable / add_processing_type_work_type）が Railway 自動 deploy で適用済みのはず → デプロイログで「migrations applied」を目視確認すること**。**本番 processing_types = 10件 投入済み**（PRC-001〜010・`scripts/seed-processing-types-prod.ts` を host shuttle:16099 目視のうえ対話 yes で実行・created=10/skip=0/total=10 確認済み）。品番カルテ1件（IP-26AW-M-BT-001 / test 残置）。本番PWはローテ済（ローカルから本番DB直接接続は不可・本番投入はURL一時指定）。
 
 ## ③ 次セッションで最初にやること（優先順）
+- ★本番への小分類10件投入は本セッションで完了済み（再投入不要・②参照）。
 1. main 最新化（git pull origin main）。`git log origin/main --oneline -8`（先頭 a1f9f90 のはず）。
-2. **本番への小分類10件 seed 投入（PR #65/#66 マージ済みが前提・慎太郎さん操作）**:
-   ```
-   DATABASE_URL=<本番URL> CONFIRM_PROD_SEED=PROCESSING_TYPE_10 \
-     npx tsx scripts/seed-processing-types-prod.ts
-   ```
-   → 接続先(shuttle:16099)・テナント・投入10件を表示 → `yes` 入力で投入。本番 host 照合→投入後カウント10で検証。
-3. **S-4b-2（WO 系）の実装ブリーフ作成 → Claude Code 実装**。仕様は s-4b-order-creation-spec-confirmation-v1_0 §4 を出発点。
+2. **S-4b-2（WO 系）の実装ブリーフ作成 → Claude Code 実装**。仕様は s-4b-order-creation-spec-confirmation-v1_0 §4 を出発点。
    - WorkOrder + WoItem の採番(WO-{年}-{4桁}・保存時確定)・CRUD actions(list/get/create/update/soft-delete)・最小フォーム。$transaction に {timeout:15000}。
    - 起点=進行チェックリストの PATTERN/SEWING/PROCESSING タスク行「発注を作成」(現在「S-4b-2 で実装予定」で非活性)を活性化→ progressTaskId/processingTypeId 紐付け。
    - **PROCESSING タスク起票時は processingType.workType を WorkOrder.workType にコピー**（本セッションで作った大分類土台を使う。マッピング表は不要）。processingTypeId も WO に引き継ぐ(S-4a 受け皿)。
@@ -60,14 +55,14 @@
    - WoItem の実務化(PO で入れた supplierItemCode/designCode/colorCode/sizeValue/sizeUnit/specification 相当)が要るか着手時に判断。要るなら migration（WoItem は現状これらを持たない＝PoItem と違い未拡張。schema 真値 grep 必須）。**※ wo_items.unit_price/subtotal の DROP NOT NULL は本セッションで PR #65 に同梱済み＝S-4b-2 では再実施しないこと**。
    - 進行チェックリスト検証データ(progress_tasks)が dev で 0 件なので、検証前に再投入が必要。
    - 既存 patternWoId/sewingWoId（SampleProduction）は別系統として温存。S-4 の正は progressTaskId 経由。
-4. その後 S-4c（自動算出 recomputeTaskStatus + 発注書ボタン本実装 + コスト集計）。
+3. その後 S-4c（自動算出 recomputeTaskStatus + 発注書ボタン本実装 + コスト集計）。
 
 ## ④ 実装シーケンス（更新）
 - S-1〜S-3a・S-3（完了）→ S-4a（完了・本番反映）→ S-4b-1（PO系・完了・本番反映）→ **ProcessingType 大分類化（完了・本番反映 #65/#66）** → **S-4b-2（WO系・次）** → S-4c（自動算出/発注書/集計）。
 
 ## ⑤ バックログ（本セッション起票・更新）
 - B-045: dev DB バックアップ/復元の自動化。dev が再リセットされても seed.ts + 各 seed-*.ts（dev エントリ）で1コマンド復旧できるよう手順を集約（progress_tasks/Product 等の検証データ seed も含めるか検討）。今回 dev 全消失で手復旧した教訓。優先度: 中。
-- B-031（本番/dev手動投入ズレリスク記録）と関連: 本番 processing_types 投入はマージとは別オペ（seed-prod 実行）で、忘れると本番だけ0件のまま。マージ後 seed のチェックリスト化を検討。
+- B-031（本番/dev手動投入ズレリスク記録）と関連: 本番マスター投入はマージとは別オペ（seed-prod 実行）で、忘れると本番だけ0件になりやすい（一般リスク）。※今回の processing_types は本セッションで本番投入済み。マージ後 seed のチェックリスト化を検討。
 
 ## ⑥ 既存バックログ（継続・未着手）
 - B-016 Color拡張(PANTONE/DIC) / B-017 参照データ監査方針 / B-018 出荷・貸出伝票 / B-019 CSVインポート / B-020 quality-label-app統合(自社ブランド向けで Shopify 連動と一体) / B-021 全マスター監査網羅 / B-022 外部パートナー開放 / B-023 版類在庫(現物資産・再利用判定UI。S-4a で受け皿=PoItem.isPhysicalAsset/保管期限は投入済み) / B-024 自社ブランド在庫(OEM=消費型/自社ブランド=在庫型) / B-025 量産パターン管理 / B-026 シーズンプルダウン化 / B-027 サムネイル画像 / B-028 品番一覧カテゴリ検索 / B-029 サンプル材料セクション / B-030 数量モデル整理(SKU確定後・製品サイズ展開 B-041 と関連) / B-031 本番/dev手動投入ズレリスク記録 / B-032 ProductCategory標準シードを seed.ts に追加 / B-034 FactoryProcessingType中間テーブル / B-035 WorkOrder.samplProductionId 綴りミス修正 / B-036 案件タイプ別タスク生成テンプレート出し分け / B-037 docs直下の未追跡ファイル整理。
@@ -96,5 +91,4 @@
 ## ⑨ 次セッション冒頭の手順
 1. このメモを貼り付け → 状態復元。
 2. `git log origin/main --oneline -8` で実態確認（先頭 a1f9f90）。main 最新化。
-3. 本番 processing_types 10件 seed 投入（③-2・未実施なら）。
-4. S-4b-2（WO系）実装ブリーフ作成へ。仕様 s-4b-order-creation-spec-confirmation-v1_0 §4 を出発点に、WorkOrder/WoItem の schema 真値 横断 grep（WoItem が PoItem 相当の実務化列を持つか・採番 woNumber・S-4a 受け皿 progressTaskId/processingTypeId・PROCESSING の workType コピー）から開始。dev の progress_tasks=0 なので検証データ再投入も。
+3. S-4b-2（WO系）実装ブリーフ作成へ。仕様 s-4b-order-creation-spec-confirmation-v1_0 §4 を出発点に、WorkOrder/WoItem の schema 真値 横断 grep（WoItem が PoItem 相当の実務化列を持つか・採番 woNumber・S-4a 受け皿 progressTaskId/processingTypeId・PROCESSING の workType コピー）から開始。dev の progress_tasks=0 なので検証データ再投入も。（※本番 processing_types 10件は本セッションで投入完了済み・再投入不要）
