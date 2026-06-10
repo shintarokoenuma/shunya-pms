@@ -568,16 +568,21 @@ export async function checkContractorUsage(id: string): Promise<ContractorUsage>
   }
 
   // ContractorContact は Cascade 削除されるので、本削除の阻害要因にしない
-  // 将来追加: WorkOrder（パターン/グレーディング発注）/ Product のチェック
   const contactCount = await prisma.contractorContact.count({
     where: { contractorId: id, deletedAt: null },
   })
 
+  // S-4b-2(E8): この外注先宛の作業発注（soft-delete 済みを除く）を実値化
+  const workOrderCount = await prisma.workOrder.count({
+    where: { companyId, contractorId: id, deletedAt: null },
+  })
+
   return {
     contactCount,
-    workOrderCount: 0,
+    workOrderCount,
     productCount: 0,
-    totalRefs: 0,
+    // 本削除ガード対象は WorkOrder（+ 将来 Product）。Contact は Cascade のため除外。
+    totalRefs: workOrderCount,
   }
 }
 
