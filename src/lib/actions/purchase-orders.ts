@@ -20,6 +20,19 @@ import {
   type PurchaseOrderInput,
   type PurchaseOrderListParams,
 } from "@/lib/validators/purchase-order"
+import { recomputeTaskStatus } from "./progress-tasks"
+import { recomputeSampleProductionCosts } from "./sample-production-costs"
+
+/** S-4c-1(G4): 伝票変更後に紐づくタスク status とラウンドのコスト集計を再計算する補助。 */
+async function recomputeLinks(
+  progressTaskIds: (string | null | undefined)[],
+  sampleProductionIds: (string | null | undefined)[],
+) {
+  const taskIds = [...new Set(progressTaskIds.filter((v): v is string => !!v))]
+  const spIds = [...new Set(sampleProductionIds.filter((v): v is string => !!v))]
+  for (const t of taskIds) await recomputeTaskStatus(t)
+  for (const s of spIds) await recomputeSampleProductionCosts(s)
+}
 
 /**
  * S-4b-1: 仕入先発注（PurchaseOrder / PoItem）Server Actions
@@ -549,6 +562,8 @@ export async function createPurchaseOrder(
       },
     })
 
+    await recomputeLinks([data.progressTaskId], [data.sampleProductionId])
+
     revalidatePath("/purchase-orders")
     if (data.sampleProductionId) revalidatePath(`/samples/${data.sampleProductionId}`)
     return { ok: true, data: { id: created.id, poNumber: created.poNumber } }
@@ -689,6 +704,12 @@ export async function updatePurchaseOrder(
       },
     })
 
+    // 旧IDと新IDの両方を再計算（付け替えに対応）
+    await recomputeLinks(
+      [existing.progressTaskId, updated.progressTaskId],
+      [existing.sampleProductionId, updated.sampleProductionId],
+    )
+
     revalidatePath("/purchase-orders")
     revalidatePath(`/purchase-orders/${id}`)
     if (updated.sampleProductionId)
@@ -714,7 +735,12 @@ export async function deletePurchaseOrder(
 
     const existing = await prisma.purchaseOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
-      select: { id: true, poNumber: true, sampleProductionId: true },
+      select: {
+        id: true,
+        poNumber: true,
+        sampleProductionId: true,
+        progressTaskId: true,
+      },
     })
     if (!existing) return { ok: false, error: "発注が見つかりません" }
 
@@ -734,6 +760,8 @@ export async function deletePurchaseOrder(
       },
     })
 
+    await recomputeLinks([existing.progressTaskId], [existing.sampleProductionId])
+
     revalidatePath("/purchase-orders")
     if (existing.sampleProductionId)
       revalidatePath(`/samples/${existing.sampleProductionId}`)
@@ -742,6 +770,58 @@ export async function deletePurchaseOrder(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "削除に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
+// 6. status 変更（S-4c-1・小さな専用 action。フル update と分離）
+// =============================================================================
+export async function updatePurchaseOrderStatus(
+  id: string,
+  status: PurchaseOrderStatus,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const existing = await prisma.purchaseOrder.findFirst({
+      where: { id, companyId: sess.companyId, deletedAt: null },
+      select: {
+        id: true,
+        status: true,
+        progressTaskId: true,
+        sampleProductionId: true,
+      },
+    })
+    if (!existing) return { ok: false, error: "発注が見つかりません" }
+    if (existing.status === status) return { ok: true, data: { id } }
+
+    await prisma.purchaseOrder.update({ where: { id }, data: { status } })
+
+    await prisma.auditLog.create({
+      data: {
+        companyId: sess.companyId,
+        userId: sess.userId,
+        action: "STATUS_CHANGE",
+        entityType: "PurchaseOrder",
+        entityId: id,
+        beforeData: { status: existing.status },
+        afterData: { status },
+      },
+    })
+
+    await recomputeLinks([existing.progressTaskId], [existing.sampleProductionId])
+
+    revalidatePath("/purchase-orders")
+    revalidatePath(`/purchase-orders/${id}`)
+    if (existing.sampleProductionId)
+      revalidatePath(`/samples/${existing.sampleProductionId}`)
+    return { ok: true, data: { id } }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "ステータス更新に失敗しました",
     }
   }
 }

@@ -21,6 +21,19 @@ import {
   type WorkOrderInput,
   type WorkOrderListParams,
 } from "@/lib/validators/work-order"
+import { recomputeTaskStatus } from "./progress-tasks"
+import { recomputeSampleProductionCosts } from "./sample-production-costs"
+
+/** S-4c-1(G4): 伝票変更後に紐づくタスク status とラウンドのコスト集計を再計算する補助。 */
+async function recomputeLinks(
+  progressTaskIds: (string | null | undefined)[],
+  sampleProductionIds: (string | null | undefined)[],
+) {
+  const taskIds = [...new Set(progressTaskIds.filter((v): v is string => !!v))]
+  const spIds = [...new Set(sampleProductionIds.filter((v): v is string => !!v))]
+  for (const t of taskIds) await recomputeTaskStatus(t)
+  for (const s of spIds) await recomputeSampleProductionCosts(s)
+}
 
 /**
  * S-4b-2: 作業発注（WorkOrder / WoItem）Server Actions
@@ -780,6 +793,8 @@ export async function createWorkOrder(
       },
     })
 
+    await recomputeLinks([data.progressTaskId], [data.sampleProductionId])
+
     revalidatePath("/work-orders")
     if (data.sampleProductionId)
       revalidatePath(`/samples/${data.sampleProductionId}`)
@@ -930,6 +945,11 @@ export async function updateWorkOrder(
       },
     })
 
+    await recomputeLinks(
+      [existing.progressTaskId, data.progressTaskId],
+      [existing.samplProductionId, data.sampleProductionId],
+    )
+
     revalidatePath("/work-orders")
     revalidatePath(`/work-orders/${id}`)
     if (updated.samplProductionId)
@@ -955,7 +975,12 @@ export async function deleteWorkOrder(
 
     const existing = await prisma.workOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
-      select: { id: true, woNumber: true, samplProductionId: true },
+      select: {
+        id: true,
+        woNumber: true,
+        samplProductionId: true,
+        progressTaskId: true,
+      },
     })
     if (!existing) return { ok: false, error: "作業発注が見つかりません" }
 
@@ -975,6 +1000,8 @@ export async function deleteWorkOrder(
       },
     })
 
+    await recomputeLinks([existing.progressTaskId], [existing.samplProductionId])
+
     revalidatePath("/work-orders")
     if (existing.samplProductionId)
       revalidatePath(`/samples/${existing.samplProductionId}`)
@@ -983,6 +1010,58 @@ export async function deleteWorkOrder(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "削除に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
+// 6. status 変更（S-4c-1・小さな専用 action。WO→COMPLETED でタスク DONE 化が発火）
+// =============================================================================
+export async function updateWorkOrderStatus(
+  id: string,
+  status: WorkOrderStatus,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const existing = await prisma.workOrder.findFirst({
+      where: { id, companyId: sess.companyId, deletedAt: null },
+      select: {
+        id: true,
+        status: true,
+        progressTaskId: true,
+        samplProductionId: true,
+      },
+    })
+    if (!existing) return { ok: false, error: "作業発注が見つかりません" }
+    if (existing.status === status) return { ok: true, data: { id } }
+
+    await prisma.workOrder.update({ where: { id }, data: { status } })
+
+    await prisma.auditLog.create({
+      data: {
+        companyId: sess.companyId,
+        userId: sess.userId,
+        action: "STATUS_CHANGE",
+        entityType: "WorkOrder",
+        entityId: id,
+        beforeData: { status: existing.status },
+        afterData: { status },
+      },
+    })
+
+    await recomputeLinks([existing.progressTaskId], [existing.samplProductionId])
+
+    revalidatePath("/work-orders")
+    revalidatePath(`/work-orders/${id}`)
+    if (existing.samplProductionId)
+      revalidatePath(`/samples/${existing.samplProductionId}`)
+    return { ok: true, data: { id } }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "ステータス更新に失敗しました",
     }
   }
 }
