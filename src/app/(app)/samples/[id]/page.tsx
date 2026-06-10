@@ -19,6 +19,10 @@ import {
   listPurchaseOrdersByProgressTasks,
   type PoForTask,
 } from "@/lib/actions/purchase-orders"
+import {
+  listWorkOrdersByProgressTasks,
+  type WoForTask,
+} from "@/lib/actions/work-orders"
 import { primaryProductCode } from "@/lib/utils/product-code"
 import { SampleProductionActions } from "../_components/sample-production-delete-button"
 import { SampleStatusControl } from "../_components/sample-status-control"
@@ -57,15 +61,24 @@ export default async function SampleProductionDetailPage({
   ])
   const tasks = tasksResult.ok ? tasksResult.data.items : []
 
-  // S-4b-1: タスクに紐づく PO を一括取得し progressTaskId でグルーピング
-  const posResult = await listPurchaseOrdersByProgressTasks(
-    tasks.map((t) => t.id),
-  )
+  // S-4b-1/2: タスクに紐づく PO / WO を一括取得し progressTaskId でグルーピング
+  const taskIds = tasks.map((t) => t.id)
+  const [posResult, wosResult] = await Promise.all([
+    listPurchaseOrdersByProgressTasks(taskIds),
+    listWorkOrdersByProgressTasks(taskIds),
+  ])
   const posByTask: Record<string, PoForTask[]> = {}
   if (posResult.ok) {
     for (const po of posResult.data) {
       if (!po.progressTaskId) continue
       ;(posByTask[po.progressTaskId] ??= []).push(po)
+    }
+  }
+  const wosByTask: Record<string, WoForTask[]> = {}
+  if (wosResult.ok) {
+    for (const wo of wosResult.data) {
+      if (!wo.progressTaskId) continue
+      ;(wosByTask[wo.progressTaskId] ??= []).push(wo)
     }
   }
 
@@ -233,6 +246,7 @@ export default async function SampleProductionDetailPage({
           <ProgressChecklist
             sampleProductionId={item.id}
             tasks={tasks}
+            wosByTask={wosByTask}
             processingOptions={processingOptions}
             posByTask={posByTask}
           />

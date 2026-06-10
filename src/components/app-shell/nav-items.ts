@@ -5,6 +5,7 @@ import {
   Coins,
   Factory,
   FolderTree,
+  Hammer,
   Hash,
   Layers,
   Palette,
@@ -96,7 +97,8 @@ export const NAV_SECTIONS: NavSection[] = [
   {
     items: [
       { label: "見積もり", href: "/quotations", icon: Calculator, enabled: false },
-      { label: "発注", href: "/purchase-orders", icon: ShoppingCart, enabled: true },
+      { label: "発注（仕入 PO）", href: "/purchase-orders", icon: ShoppingCart, enabled: true },
+      { label: "発注（作業 WO）", href: "/work-orders", icon: Hammer, enabled: true },
       { label: "受注", href: "/sales-orders", icon: ClipboardCheck, enabled: false },
       { label: "納品・請求", href: "/deliveries", icon: Receipt, enabled: false },
     ],
