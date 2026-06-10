@@ -39,6 +39,7 @@ import {
   type ProcessingTypeOption,
 } from "@/lib/actions/progress-tasks"
 import type { PoForTask } from "@/lib/actions/purchase-orders"
+import type { WoForTask } from "@/lib/actions/work-orders"
 import {
   PROGRESS_TASK_TYPE_LABELS,
   PROGRESS_TASK_STATUS_LABELS,
@@ -46,7 +47,7 @@ import {
   PROGRESS_TASK_STATUS_OPTIONS,
 } from "./progress-task-labels"
 import { PURCHASE_ORDER_STATUS_LABELS } from "../../purchase-orders/_components/labels"
-import { DOC_DRIVEN_TASK_TYPES } from "@/lib/progress-task-template"
+import { WORK_ORDER_STATUS_LABELS } from "../../work-orders/_components/labels"
 
 /** S-4b-1: 仕入先発注(PO)を起票できるタスク種別（生地/付属/ボディ） */
 const PO_TASK_TYPES: ReadonlySet<ProgressTaskType> = new Set([
@@ -55,12 +56,22 @@ const PO_TASK_TYPES: ReadonlySet<ProgressTaskType> = new Set([
   ProgressTaskType.BODY,
 ])
 
+/** S-4b-2: 作業発注(WO)を起票できるタスク種別（パターン/縫製/加工/グレーディング） */
+const WO_TASK_TYPES: ReadonlySet<ProgressTaskType> = new Set([
+  ProgressTaskType.PATTERN,
+  ProgressTaskType.SEWING,
+  ProgressTaskType.PROCESSING,
+  ProgressTaskType.GRADING,
+])
+
 type Props = {
   sampleProductionId: string
   tasks: ProgressTaskItem[]
   processingOptions: ProcessingTypeOption[]
   /** progressTaskId → そのタスクに紐づく PO 群（タスク行下の列挙用） */
   posByTask: Record<string, PoForTask[]>
+  /** progressTaskId → そのタスクに紐づく WO 群（タスク行下の列挙用） */
+  wosByTask: Record<string, WoForTask[]>
 }
 
 const RECEIVED_TYPES: ReadonlySet<ProgressTaskType> = new Set([
@@ -73,6 +84,7 @@ export function ProgressChecklist({
   tasks,
   processingOptions,
   posByTask,
+  wosByTask,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -135,6 +147,7 @@ export function ProgressChecklist({
                 task={t}
                 sampleProductionId={sampleProductionId}
                 pos={posByTask[t.id] ?? []}
+                wos={wosByTask[t.id] ?? []}
               />
             ))}
           </tbody>
@@ -162,17 +175,18 @@ function TaskRow({
   task,
   sampleProductionId,
   pos,
+  wos,
 }: {
   task: ProgressTaskItem
   sampleProductionId: string
   pos: PoForTask[]
+  wos: WoForTask[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [notes, setNotes] = useState(task.notes ?? "")
   const isPoTask = PO_TASK_TYPES.has(task.taskType) // FABRIC/TRIM/BODY → PO 起票
-  const isOtherDocDriven =
-    DOC_DRIVEN_TASK_TYPES.has(task.taskType) && !isPoTask // PATTERN/SEWING/PROCESSING → S-4b-2
+  const isWoTask = WO_TASK_TYPES.has(task.taskType) // PATTERN/SEWING/PROCESSING/GRADING → WO 起票
   const showReceived = RECEIVED_TYPES.has(task.taskType)
   const isProcessing = task.taskType === ProgressTaskType.PROCESSING
 
@@ -285,16 +299,14 @@ function TaskRow({
                 </Link>
               </Button>
             )}
-            {isOtherDocDriven && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled
-                title="S-4b-2 で実装予定"
-              >
-                <FileText className="mr-1 h-3.5 w-3.5" />
-                発注書
+            {isWoTask && (
+              <Button asChild variant="outline" size="sm">
+                <Link
+                  href={`/work-orders/new?progressTaskId=${task.id}&sampleProductionId=${sampleProductionId}`}
+                >
+                  <FileText className="mr-1 h-3.5 w-3.5" />
+                  発注を作成
+                </Link>
               </Button>
             )}
             {isProcessing && (
@@ -323,6 +335,23 @@ function TaskRow({
                   </Link>
                   <span className="ml-1 text-muted-foreground">
                     {PURCHASE_ORDER_STATUS_LABELS[po.status]}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {isWoTask && wos.length > 0 && (
+            <ul className="space-y-0.5 text-right text-xs">
+              {wos.map((wo) => (
+                <li key={wo.id}>
+                  <Link
+                    href={`/work-orders/${wo.id}`}
+                    className="font-mono text-primary hover:underline"
+                  >
+                    {wo.woNumber}
+                  </Link>
+                  <span className="ml-1 text-muted-foreground">
+                    {WORK_ORDER_STATUS_LABELS[wo.status]}
                   </span>
                 </li>
               ))}
