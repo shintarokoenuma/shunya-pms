@@ -23,6 +23,8 @@ import {
   listWorkOrdersByProgressTasks,
   type WoForTask,
 } from "@/lib/actions/work-orders"
+import { getSampleProductionCostBreakdown } from "@/lib/actions/sample-production-costs"
+import { CostBreakdown } from "../_components/cost-breakdown"
 import { primaryProductCode } from "@/lib/utils/product-code"
 import { SampleProductionActions } from "../_components/sample-production-delete-button"
 import { SampleStatusControl } from "../_components/sample-status-control"
@@ -81,6 +83,10 @@ export default async function SampleProductionDetailPage({
       ;(wosByTask[wo.progressTaskId] ??= []).push(wo)
     }
   }
+
+  // S-4c-1.5: コスト集計の明細内訳
+  const breakdownResult = await getSampleProductionCostBreakdown(item.id)
+  const costSections = breakdownResult.ok ? breakdownResult.data.sections : []
 
   return (
     <div className="space-y-6 p-6">
@@ -185,6 +191,7 @@ export default async function SampleProductionDetailPage({
             <CostCell label="やり直し費（WO）" value={item.totalRevisionCost} />
             <CostCell label="合計" value={item.totalCost} emphasize />
           </div>
+          <CostBreakdown sections={costSections} />
           <p className="mt-3 text-xs text-muted-foreground">
             ※ 金額未定・非JPY の明細は含まれません。発注の作成/更新/削除・ステータス変更時に自動再計算されます。
           </p>
