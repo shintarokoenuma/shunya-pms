@@ -1306,7 +1306,10 @@ model ProcessingType {
 
   // 識別
   code String @map("code") @db.VarChar(50) // 自動採番 PRC-001 形式（companyId 単位の連番）
-  name String @map("name") @db.VarChar(255) // 表示名（例：洗い）
+  name String @map("name") @db.VarChar(255) // 表示名（小分類・例：ストーンバイオ）
+
+  // 大分類（発注種別・WorkOrderType を参照。WO 起票時にこの値をコピー）
+  workType WorkOrderType @map("work_type")
 
   // 任意項目
   nameEn      String? @map("name_en") @db.VarChar(255) // 英語名（例：Washing）
@@ -1325,6 +1328,7 @@ model ProcessingType {
 
   @@unique([companyId, code])
   @@index([companyId, status])
+  @@index([companyId, workType])
   @@map("processing_types")
 }
 
@@ -4241,11 +4245,12 @@ model WoItem {
   unit     String @default("枚") @db.VarChar(20) // 枚 / 着 / 個
 
   // 単価
-  unitPrice Decimal  @map("unit_price") @db.Decimal(15, 4)
+  // S-4b-2: サンプル起点は金額未定発注を許可（量産=PRODUCTION時の必須化は後続スコープ）
+  unitPrice Decimal? @map("unit_price") @db.Decimal(15, 4)
   currency  Currency @default(JPY)
 
-  // 小計
-  subtotal    Decimal  @db.Decimal(15, 2)
+  // 小計（unitPrice 未定のとき null）
+  subtotal    Decimal? @db.Decimal(15, 2)
   subtotalJpy Decimal? @map("subtotal_jpy") @db.Decimal(15, 2)
 
   // 完了数量

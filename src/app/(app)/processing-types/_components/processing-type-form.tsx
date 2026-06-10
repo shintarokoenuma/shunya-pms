@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
-import { ProcessingTypeStatus } from "@prisma/client"
+import { ProcessingTypeStatus, type WorkOrderType } from "@prisma/client"
 import {
   processingTypeBaseSchema,
   type ProcessingTypeFormValues,
@@ -38,6 +38,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { PROCESSING_TYPE_STATUS_OPTIONS } from "./labels"
+import { WORK_ORDER_TYPE_OPTIONS } from "@/lib/constants/work-order-types"
 
 type Props =
   | { mode: "create" }
@@ -50,6 +51,8 @@ type Props =
 
 const CREATE_DEFAULTS: ProcessingTypeFormValues = {
   name: "",
+  // 必須・既定なし。未選択でプレースホルダ表示し、送信時に zod が選択を強制する。
+  workType: undefined as unknown as WorkOrderType,
   nameEn: "",
   description: "",
   sortOrder: 0,
@@ -174,6 +177,38 @@ export function ProcessingTypeForm(props: Props) {
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="workType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>大分類（発注種別）*</FormLabel>
+                  <Select
+                    value={field.value ?? ""}
+                    onValueChange={field.onChange}
+                  >
+                    <FormControl>
+                      <SelectTrigger className="md:w-[280px]">
+                        <SelectValue placeholder="大分類を選択" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {WORK_ORDER_TYPE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    発注書の大分類。WO 起票時にこの値がコピーされます（例：洗い・加工 →
+                    名称「ストーンバイオ」）。
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

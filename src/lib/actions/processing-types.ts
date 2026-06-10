@@ -1,7 +1,12 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { Prisma, ProcessingTypeStatus, type ProcessingType } from "@prisma/client"
+import {
+  Prisma,
+  ProcessingTypeStatus,
+  WorkOrderType,
+  type ProcessingType,
+} from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { runWithoutTenantContext } from "@/lib/tenant-context"
@@ -107,6 +112,7 @@ export async function generateNextProcessingTypeCodePreview(): Promise<
 export type ListProcessingTypesParams = {
   q?: string
   status?: ProcessingTypeStatus
+  workType?: WorkOrderType
   page?: number
   pageSize?: number
 }
@@ -116,6 +122,7 @@ export type ProcessingTypeListItem = Pick<
   | "id"
   | "code"
   | "name"
+  | "workType"
   | "nameEn"
   | "sortOrder"
   | "status"
@@ -148,6 +155,7 @@ export async function listProcessingTypes(
       deletedAt: null,
     }
     if (params.status) where.status = params.status
+    if (params.workType) where.workType = params.workType
     if (q.length > 0) {
       where.OR = [
         { code: { contains: q, mode: "insensitive" } },
@@ -163,6 +171,7 @@ export async function listProcessingTypes(
           id: true,
           code: true,
           name: true,
+          workType: true,
           nameEn: true,
           sortOrder: true,
           status: true,
@@ -251,6 +260,7 @@ export async function createProcessingType(
               companyId: sess.companyId,
               code,
               name: data.name,
+              workType: data.workType,
               nameEn: data.nameEn || null,
               description: data.description || null,
               sortOrder: data.sortOrder,
@@ -292,6 +302,7 @@ export async function createProcessingType(
         afterData: {
           code: created.code,
           name: data.name,
+          workType: data.workType,
           status: data.status,
         },
       },
@@ -337,6 +348,7 @@ export async function updateProcessingType(
       data: {
         // code は immutable（送らない）
         name: data.name,
+        workType: data.workType,
         nameEn: data.nameEn || null,
         description: data.description || null,
         sortOrder: data.sortOrder,
@@ -354,6 +366,7 @@ export async function updateProcessingType(
         beforeData: {
           code: existing.code,
           name: existing.name,
+          workType: existing.workType,
           nameEn: existing.nameEn,
           description: existing.description,
           sortOrder: existing.sortOrder,
@@ -362,6 +375,7 @@ export async function updateProcessingType(
         afterData: {
           code: updated.code,
           name: updated.name,
+          workType: updated.workType,
           nameEn: updated.nameEn,
           description: updated.description,
           sortOrder: updated.sortOrder,

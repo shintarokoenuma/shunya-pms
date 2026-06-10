@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { PROCESSING_TYPE_STATUS_OPTIONS } from "./labels"
+import { WORK_ORDER_TYPE_OPTIONS } from "@/lib/constants/work-order-types"
 
 export function ProcessingTypesSearch() {
   const router = useRouter()
@@ -21,12 +22,16 @@ export function ProcessingTypesSearch() {
 
   const [q, setQ] = useState(searchParams.get("q") ?? "")
   const [status, setStatus] = useState(searchParams.get("status") ?? "all")
+  const [workType, setWorkType] = useState(
+    searchParams.get("workType") ?? "all",
+  )
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     const params = new URLSearchParams()
     if (q.trim()) params.set("q", q.trim())
     if (status !== "all") params.set("status", status)
+    if (workType !== "all") params.set("workType", workType)
     startTransition(() => {
       router.push(
         params.toString()
@@ -39,12 +44,14 @@ export function ProcessingTypesSearch() {
   const handleClear = () => {
     setQ("")
     setStatus("all")
+    setWorkType("all")
     startTransition(() => {
       router.push("/processing-types")
     })
   }
 
-  const hasFilter = q.trim().length > 0 || status !== "all"
+  const hasFilter =
+    q.trim().length > 0 || status !== "all" || workType !== "all"
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
@@ -58,6 +65,19 @@ export function ProcessingTypesSearch() {
             className="pl-9"
           />
         </div>
+        <Select value={workType} onValueChange={setWorkType}>
+          <SelectTrigger className="w-full sm:w-[200px]">
+            <SelectValue placeholder="大分類" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">大分類（全て）</SelectItem>
+            {WORK_ORDER_TYPE_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={status} onValueChange={setStatus}>
           <SelectTrigger className="w-full sm:w-[200px]">
             <SelectValue placeholder="ステータス" />

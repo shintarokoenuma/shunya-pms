@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { ProcessingTypeStatus } from "@prisma/client"
+import { ProcessingTypeStatus, WorkOrderType } from "@prisma/client"
 
 /**
  * S-3a: 加工種別（ProcessingType）バリデータ
@@ -34,6 +34,10 @@ const sortOrderField = z
 export const processingTypeBaseSchema = z.object({
   // code は自動採番のため含めない
   name: requiredString(255, "名称"),
+  // 大分類（発注種別・必須）。WO 起票時にこの値をコピーする。
+  workType: z.nativeEnum(WorkOrderType, {
+    message: "大分類（発注種別）は必須です",
+  }),
   nameEn: optionalString(255),
   description: optionalString(10000),
   sortOrder: sortOrderField,
@@ -52,6 +56,7 @@ export const updateProcessingTypeSchema = processingTypeBaseSchema
 export const listProcessingTypesQuerySchema = z.object({
   q: z.string().trim().max(100).optional().default(""),
   status: z.nativeEnum(ProcessingTypeStatus).optional(),
+  workType: z.nativeEnum(WorkOrderType).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
 })

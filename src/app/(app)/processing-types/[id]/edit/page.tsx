@@ -26,6 +26,7 @@ export default async function EditProcessingTypePage({
 
   const defaultValues: ProcessingTypeFormValues = {
     name: item.name,
+    workType: item.workType,
     nameEn: item.nameEn ?? "",
     description: item.description ?? "",
     sortOrder: item.sortOrder,
