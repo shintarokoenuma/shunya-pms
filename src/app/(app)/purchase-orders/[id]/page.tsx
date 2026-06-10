@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getPurchaseOrder } from "@/lib/actions/purchase-orders"
 import { PurchaseOrderDeleteButton } from "../_components/purchase-order-delete-button"
+import { PurchaseOrderStatusControl } from "../_components/purchase-order-status-control"
 import {
   PURCHASE_ORDER_STATUS_LABELS,
   PURCHASE_ORDER_STATUS_BADGE_VARIANT,
@@ -64,6 +65,7 @@ export default async function PurchaseOrderDetailPage({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <PurchaseOrderStatusControl id={po.id} status={po.status} />
             <Button asChild variant="outline" size="sm">
               <Link href={`/purchase-orders/${id}/edit`}>
                 <Pencil className="mr-1 h-4 w-4" />

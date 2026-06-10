@@ -169,6 +169,28 @@ export default async function SampleProductionDetailPage({
         </Card>
       </div>
 
+      {/* コスト集計（S-4c-1・伝票駆動の denormalized 集計） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">コスト集計</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-x-6 gap-y-2 md:grid-cols-3">
+            <CostCell label="資材費（PO）" value={item.totalMaterialCost} />
+            <CostCell
+              label="パターン・グレーディング代（WO）"
+              value={item.totalPatternCost}
+            />
+            <CostCell label="縫製・加工費（WO）" value={item.totalSewingCost} />
+            <CostCell label="やり直し費（WO）" value={item.totalRevisionCost} />
+            <CostCell label="合計" value={item.totalCost} emphasize />
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            ※ 金額未定・非JPY の明細は含まれません。発注の作成/更新/削除・ステータス変更時に自動再計算されます。
+          </p>
+        </CardContent>
+      </Card>
+
       {/* 基本情報 */}
       <Card>
         <CardHeader>
@@ -284,6 +306,37 @@ function DetailRow({
     <div className="grid grid-cols-[160px_1fr] gap-3 text-sm py-1">
       <div className="text-muted-foreground">{label}</div>
       <div>{value}</div>
+    </div>
+  )
+}
+
+function CostCell({
+  label,
+  value,
+  emphasize = false,
+}: {
+  label: string
+  value: unknown
+  emphasize?: boolean
+}) {
+  const n =
+    value === null || value === undefined
+      ? null
+      : typeof value === "number"
+        ? value
+        : typeof value === "object" && value && "toNumber" in value
+          ? (value as { toNumber: () => number }).toNumber()
+          : Number(value)
+  const display =
+    n === null || !Number.isFinite(n) || n === 0
+      ? "—"
+      : `¥${n.toLocaleString("ja-JP")}`
+  return (
+    <div>
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className={emphasize ? "text-base font-semibold" : "text-sm"}>
+        {display}
+      </div>
     </div>
   )
 }
