@@ -4,8 +4,15 @@ import {
   Prisma,
   Currency,
   WorkOrderCategory,
+  type PurchaseOrderStatus,
+  type WorkOrderStatus,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { auth } from "@/lib/auth"
+
+export type ActionResult<T = void> =
+  | { ok: true; data: T extends void ? undefined : T }
+  | { ok: false; error: string }
 
 /**
  * S-4c-1(G3/G4): SampleProduction のコスト集計（denormalized）。
@@ -111,5 +118,308 @@ export async function recomputeSampleProductionCosts(
   } catch {
     // 集計の失敗は親アクションを巻き込まない
     return
+  }
+}
+
+// =============================================================================
+// S-4c-1.5: コスト集計の明細内訳（read 系・表示用）
+// =============================================================================
+export type CostBreakdownExcludeReason =
+  | "AMOUNT_UNDECIDED"
+  | "NON_JPY"
+  | "CATEGORY"
+
+export type CostBreakdownRow = {
+  docType: "PO" | "WO"
+  docId: string
+  docNumber: string
+  docStatus: PurchaseOrderStatus | WorkOrderStatus
+  /** 発注先名（PO=仕入先 / WO=工場 or 外注先） */
+  orderToName: string | null
+  /** 品番（PoItem.supplierItemCode 優先・無ければ素材コード。WO は null） */
+  itemCode: string | null
+  itemName: string
+  colorCode: string | null
+  quantity: number
+  unit: string
+  unitPrice: number | null
+  subtotal: number | null
+  currency: Currency
+  excluded: boolean
+  excludeReason: CostBreakdownExcludeReason | null
+}
+
+export type CostBreakdownSection = {
+  key: "material" | "pattern" | "sewing" | "revision" | "other"
+  label: string
+  rows: CostBreakdownRow[]
+  /** 集計対象（excluded=false）行の小計合計 */
+  subtotal: number
+}
+
+function dec(value: Prisma.Decimal | number | null | undefined): number | null {
+  if (value === null || value === undefined) return null
+  const n =
+    typeof value === "number"
+      ? value
+      : "toNumber" in value
+        ? value.toNumber()
+        : Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+/** WO の workCategory → 内訳セクション key（PRODUCTION/ADDITIONAL は other=集計対象外）。 */
+function woSectionKey(
+  category: WorkOrderCategory,
+): CostBreakdownSection["key"] {
+  switch (category) {
+    case WorkOrderCategory.PATTERN:
+    case WorkOrderCategory.GRADING:
+      return "pattern"
+    case WorkOrderCategory.SAMPLE:
+      return "sewing"
+    case WorkOrderCategory.REWORK:
+      return "revision"
+    default:
+      return "other" // PRODUCTION / ADDITIONAL
+  }
+}
+
+export async function getSampleProductionCostBreakdown(
+  sampleProductionId: string,
+): Promise<ActionResult<{ sections: CostBreakdownSection[] }>> {
+  try {
+    const session = await auth()
+    if (!session?.user) return { ok: false, error: "認証されていません" }
+    const companyId = session.user.companyId
+
+    const sp = await prisma.sampleProduction.findFirst({
+      where: { id: sampleProductionId, companyId },
+      select: { id: true },
+    })
+    if (!sp) return { ok: false, error: "サンプル製作セットが見つかりません" }
+
+    const sections: Record<
+      CostBreakdownSection["key"],
+      CostBreakdownSection
+    > = {
+      material: { key: "material", label: "資材費（PO）", rows: [], subtotal: 0 },
+      pattern: {
+        key: "pattern",
+        label: "パターン・グレーディング代（WO）",
+        rows: [],
+        subtotal: 0,
+      },
+      sewing: { key: "sewing", label: "縫製・加工費（WO）", rows: [], subtotal: 0 },
+      revision: {
+        key: "revision",
+        label: "やり直し費（WO）",
+        rows: [],
+        subtotal: 0,
+      },
+      other: {
+        key: "other",
+        label: "その他の作業発注（集計対象外）",
+        rows: [],
+        subtotal: 0,
+      },
+    }
+
+    const pushRow = (
+      key: CostBreakdownSection["key"],
+      row: CostBreakdownRow,
+    ) => {
+      sections[key].rows.push(row)
+      if (!row.excluded && row.subtotal !== null) {
+        sections[key].subtotal += row.subtotal
+      }
+    }
+
+    // --- PO（資材費）---
+    const pos = await prisma.purchaseOrder.findMany({
+      where: { companyId, sampleProductionId, deletedAt: null },
+      select: {
+        id: true,
+        poNumber: true,
+        status: true,
+        currency: true,
+        supplierId: true,
+      },
+      orderBy: { poNumber: "asc" },
+    })
+    if (pos.length > 0) {
+      const poItems = await prisma.poItem.findMany({
+        where: { poId: { in: pos.map((p) => p.id) } },
+        orderBy: [{ poId: "asc" }, { itemOrder: "asc" }],
+      })
+      // 発注先（仕入先）名 一括解決
+      const supplierIds = [
+        ...new Set(pos.map((p) => p.supplierId).filter((v): v is string => !!v)),
+      ]
+      const supplierMap = new Map<string, string>()
+      if (supplierIds.length > 0) {
+        const sups = await prisma.supplier.findMany({
+          where: { id: { in: supplierIds }, companyId },
+          select: { id: true, companyName: true },
+        })
+        for (const s of sups) supplierMap.set(s.id, s.companyName)
+      }
+      // materialId → 素材名 / 素材コード 一括解決
+      const materialIds = [
+        ...new Set(
+          poItems
+            .map((i) => i.materialId)
+            .filter((v): v is string => !!v),
+        ),
+      ]
+      const materialNameMap = new Map<string, string>()
+      const materialCodeMap = new Map<string, string>()
+      if (materialIds.length > 0) {
+        const mats = await prisma.material.findMany({
+          where: { id: { in: materialIds }, companyId },
+          select: { id: true, materialName: true, materialCode: true },
+        })
+        for (const m of mats) {
+          materialNameMap.set(m.id, m.materialName)
+          materialCodeMap.set(m.id, m.materialCode)
+        }
+      }
+      const poById = new Map(pos.map((p) => [p.id, p]))
+      for (const it of poItems) {
+        const po = poById.get(it.poId)!
+        const sub = dec(it.subtotal)
+        const nonJpy = po.currency !== Currency.JPY
+        const undecided = sub === null
+        const excluded = nonJpy || undecided
+        pushRow("material", {
+          docType: "PO",
+          docId: po.id,
+          docNumber: po.poNumber,
+          docStatus: po.status,
+          orderToName: supplierMap.get(po.supplierId) ?? null,
+          itemCode:
+            it.supplierItemCode ||
+            (it.materialId ? materialCodeMap.get(it.materialId) ?? null : null),
+          itemName:
+            it.customItemName ??
+            (it.materialId
+              ? materialNameMap.get(it.materialId) ?? "（素材）"
+              : "（品目未設定）"),
+          colorCode: it.colorCode || null,
+          quantity: dec(it.quantity) ?? 0,
+          unit: it.unit,
+          unitPrice: dec(it.unitPrice),
+          subtotal: sub,
+          currency: po.currency,
+          excluded,
+          excludeReason: nonJpy ? "NON_JPY" : undecided ? "AMOUNT_UNDECIDED" : null,
+        })
+      }
+    }
+
+    // --- WO（作業費）---
+    const wos = await prisma.workOrder.findMany({
+      where: { companyId, samplProductionId: sampleProductionId, deletedAt: null },
+      select: {
+        id: true,
+        woNumber: true,
+        status: true,
+        currency: true,
+        workCategory: true,
+        factoryId: true,
+        contractorId: true,
+      },
+      orderBy: { woNumber: "asc" },
+    })
+    if (wos.length > 0) {
+      const woItems = await prisma.woItem.findMany({
+        where: { woId: { in: wos.map((w) => w.id) } },
+        orderBy: [{ woId: "asc" }, { itemOrder: "asc" }],
+      })
+      // 発注先名（工場 / 外注先）一括解決
+      const factoryIds = [
+        ...new Set(wos.map((w) => w.factoryId).filter((v): v is string => !!v)),
+      ]
+      const contractorIds = [
+        ...new Set(
+          wos.map((w) => w.contractorId).filter((v): v is string => !!v),
+        ),
+      ]
+      const factoryMap = new Map<string, string>()
+      const contractorMap = new Map<string, string>()
+      if (factoryIds.length > 0) {
+        const fs = await prisma.factory.findMany({
+          where: { id: { in: factoryIds }, companyId },
+          select: { id: true, factoryName: true },
+        })
+        for (const f of fs) factoryMap.set(f.id, f.factoryName)
+      }
+      if (contractorIds.length > 0) {
+        const cs = await prisma.contractor.findMany({
+          where: { id: { in: contractorIds }, companyId },
+          select: { id: true, contractorName: true },
+        })
+        for (const c of cs) contractorMap.set(c.id, c.contractorName)
+      }
+      const woById = new Map(wos.map((w) => [w.id, w]))
+      for (const it of woItems) {
+        const wo = woById.get(it.woId)!
+        const key = woSectionKey(wo.workCategory)
+        const sub = dec(it.subtotal)
+        const nonJpy = wo.currency !== Currency.JPY
+        const undecided = sub === null
+        const isOther = key === "other"
+        const excluded = isOther || nonJpy || undecided
+        pushRow(key, {
+          docType: "WO",
+          docId: wo.id,
+          docNumber: wo.woNumber,
+          docStatus: wo.status,
+          orderToName: wo.factoryId
+            ? factoryMap.get(wo.factoryId) ?? null
+            : wo.contractorId
+              ? contractorMap.get(wo.contractorId) ?? null
+              : null,
+          itemCode: null, // WoItem に品番列なし
+          itemName: it.workDescription,
+          colorCode: it.colorCode || null,
+          quantity: it.quantity,
+          unit: it.unit,
+          unitPrice: dec(it.unitPrice),
+          subtotal: sub,
+          currency: wo.currency,
+          excluded,
+          excludeReason: isOther
+            ? "CATEGORY"
+            : nonJpy
+              ? "NON_JPY"
+              : undecided
+                ? "AMOUNT_UNDECIDED"
+                : null,
+        })
+      }
+    }
+
+    // 明細のあるセクションのみ返す（順序固定）
+    const order: CostBreakdownSection["key"][] = [
+      "material",
+      "pattern",
+      "sewing",
+      "revision",
+      "other",
+    ]
+    return {
+      ok: true,
+      data: {
+        sections: order
+          .map((k) => sections[k])
+          .filter((s) => s.rows.length > 0),
+      },
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "内訳取得に失敗しました",
+    }
   }
 }
