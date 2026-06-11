@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth"
 import { getOrderPdfData } from "@/lib/pdf/order-data"
 import { renderOrderPdfBuffer } from "@/lib/pdf/render"
+import { uploadOrderPdf } from "@/lib/gcs"
 
 // 発注書 PDF（PO）オンデマンド生成・ダウンロード（S-4c-2）。
 export async function GET(
@@ -18,6 +19,12 @@ export async function GET(
   }
 
   const buffer = await renderOrderPdfBuffer(data)
+  // B-053: GCS へ控えを保存（失敗しても null が返るだけで返却は継続）。
+  await uploadOrderPdf({
+    kind: "purchase-order",
+    orderNumber: data.docNumber,
+    buffer,
+  })
   return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/pdf",
