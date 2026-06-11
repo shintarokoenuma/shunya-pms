@@ -36,7 +36,15 @@ const styles = StyleSheet.create({
   },
   orderTo: { width: "48%" },
   orderToName: { fontSize: 13, fontWeight: "bold", marginBottom: 2 },
-  orderToHint: { fontSize: 8, color: "#666" },
+  orderToHint: { fontSize: 8, color: "#666", marginTop: 2 },
+  targetBox: {
+    marginTop: 4,
+    padding: 4,
+    border: "0.5pt solid #bbb",
+    backgroundColor: "#fafafa",
+  },
+  targetLine: { fontSize: 9, lineHeight: 1.5 },
+  targetLabel: { color: "#666" },
   orderFrom: { width: "48%", textAlign: "right", lineHeight: 1.5 },
   orderFromName: { fontSize: 11, fontWeight: "bold", marginBottom: 2 },
   small: { fontSize: 8, color: "#444" },
@@ -55,10 +63,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     fontWeight: "bold",
   },
-  cName: { width: "30%", paddingHorizontal: 4 },
-  cCode: { width: "16%", paddingHorizontal: 4 },
-  cColor: { width: "12%", paddingHorizontal: 4 },
-  cQty: { width: "16%", paddingHorizontal: 4, textAlign: "right" },
+  cName: { width: "28%", paddingHorizontal: 4 },
+  cCode: { width: "15%", paddingHorizontal: 4 },
+  cColor: { width: "11%", paddingHorizontal: 4 },
+  cQty: { width: "10%", paddingHorizontal: 4, textAlign: "right" },
+  cUnit: { width: "10%", paddingHorizontal: 4, textAlign: "left" },
   cPrice: { width: "13%", paddingHorizontal: 4, textAlign: "right" },
   cSub: { width: "13%", paddingHorizontal: 4, textAlign: "right" },
   mono: { fontFamily: PDF_FONT_FAMILY },
@@ -101,6 +110,25 @@ export function OrderDocument({ data }: { data: OrderPdfData }) {
         <View style={styles.partiesRow}>
           <View style={styles.orderTo}>
             <Text style={styles.orderToName}>{data.orderToName} 御中</Text>
+            {data.target ? (
+              <View style={styles.targetBox}>
+                {data.target.brandName ? (
+                  <Text style={styles.targetLine}>
+                    <Text style={styles.targetLabel}>ブランド: </Text>
+                    {data.target.brandName}
+                  </Text>
+                ) : null}
+                <Text style={styles.targetLine}>
+                  <Text style={styles.targetLabel}>品名: </Text>
+                  {data.target.productName}
+                  {data.target.season ? `（${data.target.season}）` : ""}
+                </Text>
+                <Text style={styles.targetLine}>
+                  <Text style={styles.targetLabel}>品番: </Text>
+                  {data.target.itemNumber}
+                </Text>
+              </View>
+            ) : null}
             {data.title ? <Text style={styles.orderToHint}>{data.title}</Text> : null}
           </View>
           <View style={styles.orderFrom}>
@@ -121,6 +149,7 @@ export function OrderDocument({ data }: { data: OrderPdfData }) {
             <Text style={styles.cCode}>品番</Text>
             <Text style={styles.cColor}>C#</Text>
             <Text style={styles.cQty}>数量</Text>
+            <Text style={styles.cUnit}>単位</Text>
             <Text style={styles.cPrice}>単価</Text>
             <Text style={styles.cSub}>金額</Text>
           </View>
@@ -131,9 +160,8 @@ export function OrderDocument({ data }: { data: OrderPdfData }) {
               <Text style={styles.cColor}>
                 {it.colorCode ? `C/#${it.colorCode}` : "—"}
               </Text>
-              <Text style={styles.cQty}>
-                {it.quantity.toLocaleString("ja-JP")} {it.unit}
-              </Text>
+              <Text style={styles.cQty}>{it.quantity.toLocaleString("ja-JP")}</Text>
+              <Text style={styles.cUnit}>{it.unit}</Text>
               <Text style={styles.cPrice}>{yen(c, it.unitPrice)}</Text>
               <Text style={styles.cSub}>{yen(c, it.subtotal)}</Text>
             </View>

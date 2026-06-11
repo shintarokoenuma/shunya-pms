@@ -1,5 +1,6 @@
 import { Prisma, Currency } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
+import { primaryProductCode } from "@/lib/utils/product-code"
 
 /**
  * S-4c-2: 発注書 PDF 用に PO/WO を正規化した型。
@@ -15,11 +16,21 @@ export type OrderPdfItem = {
   subtotal: number | null
 }
 
+/** 対象品番ブロック（縫製仕様書ヘッダと同語彙: ブランド/品名/品番）。 */
+export type OrderPdfTarget = {
+  brandName: string | null
+  productName: string
+  itemNumber: string
+  season: string | null
+}
+
 export type OrderPdfData = {
   docKind: "PO" | "WO"
   docNumber: string
   orderDate: Date
   orderToName: string
+  /** どの品番のための発注か（SampleProduction 未紐付けなら null） */
+  target: OrderPdfTarget | null
   title: string | null
   description: string | null
   expectedDeliveryDate: Date | null
@@ -29,6 +40,40 @@ export type OrderPdfData = {
   total: number
   /** 金額未定明細を含むか（フッタ注記の出し分け） */
   hasUndecided: boolean
+}
+
+/** SampleProduction → Product → Brand を辿り対象品番ブロックを解決（未紐付けは null）。 */
+async function resolveTarget(
+  sampleProductionId: string | null,
+  companyId: string,
+): Promise<OrderPdfTarget | null> {
+  if (!sampleProductionId) return null
+  const sp = await prisma.sampleProduction.findFirst({
+    where: { id: sampleProductionId, companyId },
+    select: { productId: true },
+  })
+  if (!sp) return null
+  const product = await prisma.product.findFirst({
+    where: { id: sp.productId, companyId },
+    select: {
+      productName: true,
+      productCode: true,
+      clientProductCode: true,
+      season: true,
+      brandId: true,
+    },
+  })
+  if (!product) return null
+  const brand = await prisma.brand.findFirst({
+    where: { id: product.brandId, companyId },
+    select: { brandName: true },
+  })
+  return {
+    brandName: brand?.brandName ?? null,
+    productName: product.productName,
+    itemNumber: primaryProductCode(product),
+    season: product.season,
+  }
 }
 
 function dec(v: Prisma.Decimal | number | null | undefined): number | null {
@@ -65,10 +110,12 @@ export async function getOrderPdfData(
         expectedDeliveryDate: true,
         currency: true,
         supplierId: true,
+        sampleProductionId: true,
       },
     })
     if (!po) return null
 
+    const target = await resolveTarget(po.sampleProductionId, companyId)
     const [supplier, items] = await Promise.all([
       prisma.supplier.findFirst({
         where: { id: po.supplierId, companyId },
@@ -101,6 +148,7 @@ export async function getOrderPdfData(
       docNumber: po.poNumber,
       orderDate: po.orderDate,
       orderToName: supplier?.companyName ?? "（発注先未設定）",
+      target,
       title: po.title,
       description: po.description,
       expectedDeliveryDate: po.expectedDeliveryDate,
@@ -133,10 +181,12 @@ export async function getOrderPdfData(
       currency: true,
       factoryId: true,
       contractorId: true,
+      samplProductionId: true,
     },
   })
   if (!wo) return null
 
+  const target = await resolveTarget(wo.samplProductionId, companyId)
   const [factory, contractor, items] = await Promise.all([
     wo.factoryId
       ? prisma.factory.findFirst({
@@ -159,6 +209,7 @@ export async function getOrderPdfData(
     orderDate: wo.orderDate,
     orderToName:
       factory?.factoryName ?? contractor?.contractorName ?? "（発注先未設定）",
+    target,
     title: wo.title,
     description: wo.description,
     expectedDeliveryDate: wo.expectedDeliveryDate,
