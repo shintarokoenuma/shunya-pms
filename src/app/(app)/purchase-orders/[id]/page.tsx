@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ChevronLeft, Pencil } from "lucide-react"
+import { ChevronLeft, Pencil, FileText } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -66,6 +66,12 @@ export default async function PurchaseOrderDetailPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <PurchaseOrderStatusControl id={po.id} status={po.status} />
+            <Button asChild variant="outline" size="sm">
+              <a href={`/api/purchase-orders/${po.id}/pdf`} target="_blank" rel="noopener">
+                <FileText className="mr-1 h-4 w-4" />
+                発注書 PDF
+              </a>
+            </Button>
             <Button asChild variant="outline" size="sm">
               <Link href={`/purchase-orders/${id}/edit`}>
                 <Pencil className="mr-1 h-4 w-4" />
