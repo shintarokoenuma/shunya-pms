@@ -54,7 +54,22 @@ export function CostBreakdown({
                   >
                     {r.docNumber}
                   </Link>
-                  <span className="text-muted-foreground">{r.itemName}</span>
+                  {r.orderToName && (
+                    <span className="text-muted-foreground">
+                      {r.orderToName}
+                    </span>
+                  )}
+                  {r.itemCode && (
+                    <span className="font-mono text-muted-foreground">
+                      {r.itemCode}
+                    </span>
+                  )}
+                  <span className="font-medium">{r.itemName}</span>
+                  {r.colorCode && (
+                    <span className="text-muted-foreground">
+                      C/#{r.colorCode}
+                    </span>
+                  )}
                   <span className="tabular-nums">
                     {r.quantity.toLocaleString("ja-JP")}
                     {r.unit} ×{" "}

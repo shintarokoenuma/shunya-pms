@@ -134,7 +134,12 @@ export type CostBreakdownRow = {
   docId: string
   docNumber: string
   docStatus: PurchaseOrderStatus | WorkOrderStatus
+  /** 発注先名（PO=仕入先 / WO=工場 or 外注先） */
+  orderToName: string | null
+  /** 品番（PoItem.supplierItemCode 優先・無ければ素材コード。WO は null） */
+  itemCode: string | null
   itemName: string
+  colorCode: string | null
   quantity: number
   unit: string
   unitPrice: number | null
@@ -233,7 +238,13 @@ export async function getSampleProductionCostBreakdown(
     // --- PO（資材費）---
     const pos = await prisma.purchaseOrder.findMany({
       where: { companyId, sampleProductionId, deletedAt: null },
-      select: { id: true, poNumber: true, status: true, currency: true },
+      select: {
+        id: true,
+        poNumber: true,
+        status: true,
+        currency: true,
+        supplierId: true,
+      },
       orderBy: { poNumber: "asc" },
     })
     if (pos.length > 0) {
@@ -241,7 +252,19 @@ export async function getSampleProductionCostBreakdown(
         where: { poId: { in: pos.map((p) => p.id) } },
         orderBy: [{ poId: "asc" }, { itemOrder: "asc" }],
       })
-      // materialId → 素材名 一括解決
+      // 発注先（仕入先）名 一括解決
+      const supplierIds = [
+        ...new Set(pos.map((p) => p.supplierId).filter((v): v is string => !!v)),
+      ]
+      const supplierMap = new Map<string, string>()
+      if (supplierIds.length > 0) {
+        const sups = await prisma.supplier.findMany({
+          where: { id: { in: supplierIds }, companyId },
+          select: { id: true, companyName: true },
+        })
+        for (const s of sups) supplierMap.set(s.id, s.companyName)
+      }
+      // materialId → 素材名 / 素材コード 一括解決
       const materialIds = [
         ...new Set(
           poItems
@@ -249,13 +272,17 @@ export async function getSampleProductionCostBreakdown(
             .filter((v): v is string => !!v),
         ),
       ]
-      const materialMap = new Map<string, string>()
+      const materialNameMap = new Map<string, string>()
+      const materialCodeMap = new Map<string, string>()
       if (materialIds.length > 0) {
         const mats = await prisma.material.findMany({
           where: { id: { in: materialIds }, companyId },
-          select: { id: true, materialName: true },
+          select: { id: true, materialName: true, materialCode: true },
         })
-        for (const m of mats) materialMap.set(m.id, m.materialName)
+        for (const m of mats) {
+          materialNameMap.set(m.id, m.materialName)
+          materialCodeMap.set(m.id, m.materialCode)
+        }
       }
       const poById = new Map(pos.map((p) => [p.id, p]))
       for (const it of poItems) {
@@ -269,9 +296,16 @@ export async function getSampleProductionCostBreakdown(
           docId: po.id,
           docNumber: po.poNumber,
           docStatus: po.status,
+          orderToName: supplierMap.get(po.supplierId) ?? null,
+          itemCode:
+            it.supplierItemCode ||
+            (it.materialId ? materialCodeMap.get(it.materialId) ?? null : null),
           itemName:
             it.customItemName ??
-            (it.materialId ? materialMap.get(it.materialId) ?? "（素材）" : "（品目未設定）"),
+            (it.materialId
+              ? materialNameMap.get(it.materialId) ?? "（素材）"
+              : "（品目未設定）"),
+          colorCode: it.colorCode || null,
           quantity: dec(it.quantity) ?? 0,
           unit: it.unit,
           unitPrice: dec(it.unitPrice),
@@ -292,6 +326,8 @@ export async function getSampleProductionCostBreakdown(
         status: true,
         currency: true,
         workCategory: true,
+        factoryId: true,
+        contractorId: true,
       },
       orderBy: { woNumber: "asc" },
     })
@@ -300,6 +336,31 @@ export async function getSampleProductionCostBreakdown(
         where: { woId: { in: wos.map((w) => w.id) } },
         orderBy: [{ woId: "asc" }, { itemOrder: "asc" }],
       })
+      // 発注先名（工場 / 外注先）一括解決
+      const factoryIds = [
+        ...new Set(wos.map((w) => w.factoryId).filter((v): v is string => !!v)),
+      ]
+      const contractorIds = [
+        ...new Set(
+          wos.map((w) => w.contractorId).filter((v): v is string => !!v),
+        ),
+      ]
+      const factoryMap = new Map<string, string>()
+      const contractorMap = new Map<string, string>()
+      if (factoryIds.length > 0) {
+        const fs = await prisma.factory.findMany({
+          where: { id: { in: factoryIds }, companyId },
+          select: { id: true, factoryName: true },
+        })
+        for (const f of fs) factoryMap.set(f.id, f.factoryName)
+      }
+      if (contractorIds.length > 0) {
+        const cs = await prisma.contractor.findMany({
+          where: { id: { in: contractorIds }, companyId },
+          select: { id: true, contractorName: true },
+        })
+        for (const c of cs) contractorMap.set(c.id, c.contractorName)
+      }
       const woById = new Map(wos.map((w) => [w.id, w]))
       for (const it of woItems) {
         const wo = woById.get(it.woId)!
@@ -314,7 +375,14 @@ export async function getSampleProductionCostBreakdown(
           docId: wo.id,
           docNumber: wo.woNumber,
           docStatus: wo.status,
+          orderToName: wo.factoryId
+            ? factoryMap.get(wo.factoryId) ?? null
+            : wo.contractorId
+              ? contractorMap.get(wo.contractorId) ?? null
+              : null,
+          itemCode: null, // WoItem に品番列なし
           itemName: it.workDescription,
+          colorCode: it.colorCode || null,
           quantity: it.quantity,
           unit: it.unit,
           unitPrice: dec(it.unitPrice),
