@@ -1,7 +1,7 @@
 import { auth } from "@/lib/auth"
 import { getOrderPdfData } from "@/lib/pdf/order-data"
 import { renderOrderPdfBuffer } from "@/lib/pdf/render"
-import { uploadOrderPdf } from "@/lib/gcs"
+import { uploadOrderPdf, timestampJst } from "@/lib/gcs"
 
 // 発注書 PDF（WO）オンデマンド生成・ダウンロード（S-4c-2）。
 export async function GET(
@@ -19,16 +19,19 @@ export async function GET(
   }
 
   const buffer = await renderOrderPdfBuffer(data)
+  // B-055: DL ファイル名と GCS 控えのタイムスタンプを同一値にする（突合可能に）。
+  const stamp = timestampJst(new Date())
   // B-053: GCS へ控えを保存（失敗しても null が返るだけで返却は継続）。
   await uploadOrderPdf({
     kind: "work-order",
     orderNumber: data.docNumber,
     buffer,
+    timestamp: stamp,
   })
   return new Response(new Uint8Array(buffer), {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="${data.docNumber}.pdf"`,
+      "Content-Disposition": `attachment; filename="${data.docNumber}_${stamp}.pdf"`,
       "Cache-Control": "no-store",
     },
   })

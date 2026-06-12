@@ -56,12 +56,17 @@ function getStorageContext(): StorageContext | null {
   }
 }
 
-/** yyyyMMdd-HHmmss（ローカルタイムではなく UTC 基準で安定させる）。 */
-function timestampUtc(d: Date): string {
+/**
+ * yyyyMMdd-HHmmss を JST (Asia/Tokyo) 基準で生成する。
+ * コンテナTZ非依存: UTC エポックに +9時間して getUTC* で整形する
+ * （Railway コンテナは UTC。JST は DST が無いため固定 +9h で正しい）。
+ */
+export function timestampJst(d: Date): string {
   const p = (n: number, w = 2) => String(n).padStart(w, "0")
+  const jst = new Date(d.getTime() + 9 * 60 * 60 * 1000)
   return (
-    `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}` +
-    `-${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}`
+    `${jst.getUTCFullYear()}${p(jst.getUTCMonth() + 1)}${p(jst.getUTCDate())}` +
+    `-${p(jst.getUTCHours())}${p(jst.getUTCMinutes())}${p(jst.getUTCSeconds())}`
   )
 }
 
@@ -69,6 +74,9 @@ export type UploadOrderPdfParams = {
   kind: "purchase-order" | "work-order"
   orderNumber: string
   buffer: Buffer
+  /** JST タイムスタンプ(yyyyMMdd-HHmmss)。DL ファイル名と突合させるため route 側で生成して渡す。
+   *  未指定なら内部生成（後方互換）。 */
+  timestamp?: string
 }
 
 /**
@@ -82,7 +90,7 @@ export async function uploadOrderPdf(
   const ctx = getStorageContext()
   if (!ctx) return null
 
-  const stamp = timestampUtc(new Date())
+  const stamp = params.timestamp ?? timestampJst(new Date())
   const objectPath = `${params.kind}/${params.orderNumber}/${stamp}.pdf`
 
   try {
