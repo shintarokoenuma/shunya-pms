@@ -12,7 +12,13 @@ import {
 } from "@/components/ui/card"
 import { getProduct } from "@/lib/actions/products"
 import { listSampleProductions } from "@/lib/actions/sample-productions"
+import {
+  getBomByProductId,
+  listMaterialsForBomSelect,
+  listSuppliersForBomSelect,
+} from "@/lib/actions/boms"
 import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
+import { BomSection, type BomItemView } from "../_components/bom-section"
 import {
   primaryProductCode,
   secondaryProductCode,
@@ -52,6 +58,37 @@ export default async function ProductDetailPage({
     pageSize: 50,
   })
   const samples = samplesResult.ok ? samplesResult.data.items : []
+
+  // QE-0b: 資材表（BOM）。Decimal はクライアントへ渡すため number に正規化。
+  const [bomResult, bomMaterials, bomSuppliers] = await Promise.all([
+    getBomByProductId(id),
+    listMaterialsForBomSelect(),
+    listSuppliersForBomSelect(),
+  ])
+  const bom = bomResult.ok ? bomResult.data : null
+  const toNum = (v: { toNumber: () => number } | null) =>
+    v == null ? null : v.toNumber()
+  const bomItems: BomItemView[] = (bom?.items ?? []).map((it) => ({
+    id: it.id,
+    itemCategory: it.itemCategory,
+    materialId: it.materialId,
+    materialLabel: it.material
+      ? `${it.material.materialCode} ${it.material.materialName}`
+      : null,
+    customMaterialName: it.customMaterialName,
+    supplierId: it.supplierId,
+    supplierLabel: it.supplier
+      ? `${it.supplier.supplierCode} ${it.supplier.companyName}`
+      : null,
+    usagePerUnit: toNum(it.usagePerUnit),
+    unit: it.unit,
+    lossRate: it.lossRate.toNumber(),
+    procurementMode: it.procurementMode,
+    unitPrice: toNum(it.unitPrice),
+    colorCode: it.colorCode,
+    colorName: it.colorName,
+    notes: it.notes,
+  }))
 
   return (
     <div className="space-y-6 p-6">
@@ -293,6 +330,22 @@ export default async function ProductDetailPage({
         </CardHeader>
         <CardContent>
           <SampleProductionsTable items={samples} showProduct={false} />
+        </CardContent>
+      </Card>
+
+      {/* 資材表（BOM・QE-0b） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">資材表（BOM）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BomSection
+            productId={item.id}
+            bomId={bom?.id ?? null}
+            items={bomItems}
+            materials={bomMaterials}
+            suppliers={bomSuppliers}
+          />
         </CardContent>
       </Card>
 
