@@ -79,7 +79,23 @@ BomItem.usagePerUnit を手入力。
 QE-0 実装 (Material 拡張 migration + Bom/BomItem + MarkingRecord + UI) の
 実装ブリーフへ。
 
+## 正誤 (2026-06-12)
+QE-0a 実装着手時に現行 schema を精査した結果、以下を訂正する。
+
+- **Q1 補足**: `Specification` / `Bom` / `BomItem`（+ enum `BomStatus` / `BomItemCategory`）は
+  schema 上は**既に存在**する（元設計 20260516 quotation_engine 由来・機能未実装の休眠・dev/本番とも
+  データ0件）。よって「新設」ではなく、**既存 `Bom` を Product 直結に拡張する案(A)で確定**:
+  - `Bom.specificationId` を必須 unique → **nullable @unique に緩和**（Postgres は NULL 複数可。リレーションも optional 化）
+  - `Bom.productId`（nullable・scalar FK）を追加。新規 QE-0系 BOM では validator で必須担保
+  - `BomItem.usagePerUnit` / `BomItem.unitPrice` を**必須→nullable に緩和**（入力途中・金額未定を許容）
+  - `BomItem` に `procurementMode` / `usageSource` / `markingRecordId` を追加
+  - `BomItem` には既存どおり `deletedAt` を持たない（Bom への cascade で管理）。`itemCategory` は既存必須を維持
+  - データ0件のため上記の制約緩和は実害なし（非破壊）
+- **Q4 補足**: `fabricWidth`（既存 Decimal(8,2)）/ `standardLossRate`（既存 Decimal(5,2)）/ `standardUsage`
+  は Material に**既存**。新規追加は **`rollLength` / `rollPrice` のみ**（既存の fabricWidth 等は流用・精度変更なし）。
+
 ## 改訂履歴
 | 日付 | バージョン | 内容 |
 |---|---|---|
 | 2026-06-12 | v1.0 | QE-0 データ基盤確定 (Q1-Q6 + 用尺入力2系統 + B-056 起票) |
+| 2026-06-12 | v1.0 正誤 | QE-0a 実装時の現行 schema 精査を反映: 既存 Bom/BomItem を Product 直結へ拡張する案(A)確定・Material 新規は rollLength/rollPrice のみ |
