@@ -1133,6 +1133,10 @@ model Material {
   standardUsage    Decimal? @map("standard_usage") @db.Decimal(8, 4) // 標準用尺（m/枚）
   standardLossRate Decimal? @map("standard_loss_rate") @db.Decimal(5, 2) // 標準ロス率（%）
 
+  // QE-0a（原反の数値化）。fabricWidth / standardLossRate / standardUsage は既存を流用。
+  rollLength Decimal? @map("roll_length") @db.Decimal(10, 2) // 原反長（m）
+  rollPrice  Decimal? @map("roll_price") @db.Decimal(15, 2) // 反単価。基本は メーター単価×原反長 で導出、反売り別建て時のみ実値
+
   // 単価
   unitPrice Decimal? @map("unit_price") @db.Decimal(15, 4)
   currency  Currency @default(JPY)
@@ -2594,9 +2598,10 @@ enum DesignVersionStatus {
 /// 仕様書バージョンに紐付け
 /// 見積もりエンジンと連動
 model Bom {
-  id              String @id @default(uuid())
-  companyId       String @map("company_id")
-  specificationId String @unique @map("specification_id") // 1仕様書に1BOM
+  id              String  @id @default(uuid())
+  companyId       String  @map("company_id")
+  specificationId String? @unique @map("specification_id") // 1仕様書に1BOM（QE-0a: nullable 緩和。Product 直結 BOM では null）
+  productId       String? @map("product_id") // QE-0a: Product 直結 BOM（scalar FK・house style）。新規 QE-0系では validator で必須担保
 
   // バージョン情報（specificationのバージョンと連動）
   version String @db.VarChar(20)
@@ -2622,10 +2627,11 @@ model Bom {
   deletedAt DateTime? @map("deleted_at")
 
   // リレーション
-  specification Specification @relation(fields: [specificationId], references: [id], onDelete: Cascade)
+  specification Specification? @relation(fields: [specificationId], references: [id], onDelete: Cascade)
   items         BomItem[]
 
   @@index([companyId])
+  @@index([companyId, productId])
   @@map("bom")
 }
 
@@ -2660,7 +2666,7 @@ model BomItem {
   supplierId String? @map("supplier_id")
 
   // 数量・単位
-  usagePerUnit      Decimal  @map("usage_per_unit") @db.Decimal(10, 4) // 1枚あたり使用量
+  usagePerUnit      Decimal? @map("usage_per_unit") @db.Decimal(10, 4) // 1枚あたり使用量（QE-0a: 入力途中を許容し nullable 緩和）
   lossRate          Decimal  @default(0) @map("loss_rate") @db.Decimal(5, 2) // ロス率%
   totalUsagePerUnit Decimal? @map("total_usage_per_unit") @db.Decimal(10, 4) // ロス込み（自動計算）
   unit              String   @db.VarChar(20) // m / 個 / kg
@@ -2671,11 +2677,16 @@ model BomItem {
   pantone   String? @db.VarChar(50)
 
   // 単価
-  unitPrice Decimal  @map("unit_price") @db.Decimal(15, 4)
+  unitPrice Decimal? @map("unit_price") @db.Decimal(15, 4) // QE-0a: 金額未定を許容し nullable 緩和（PoItem v1.1 と同方針）
   currency  Currency @default(JPY)
 
   // 1枚あたり原価（自動計算）
   costPerUnit Decimal? @map("cost_per_unit") @db.Decimal(15, 4)
+
+  // QE-0a 追加（取り切り計算・用尺出所）
+  procurementMode FabricProcurementMode? @map("procurement_mode") // 生地行のみ・QE-1 取り切り計算で参照
+  usageSource     UsageSource            @default(MANUAL) @map("usage_source") // 用尺の出所
+  markingRecordId String?                @map("marking_record_id") // マーキング実測への紐付け（scalar FK）
 
   // 貿易データ（マスターから引用、案件で上書き可能）
   hsCode        String? @map("hs_code") @db.VarChar(20)
@@ -9294,4 +9305,56 @@ model WebhookLog {
   @@index([receivedAt])
   @@index([isProcessed])
   @@map("webhook_logs")
+}
+
+// =====================================================
+// QE-0a: 見積もりエンジン データ基盤（マーキング実測 + enum）
+// 仕様: docs/specs/qe-0-quotation-foundation-spec-confirmation-v1_0-2026-06-12.md
+// ※ Bom / BomItem は既存モデルを Product 直結へ拡張（案A）。本ブロックは新規分のみ。
+// =====================================================
+
+/// 生地の調達モード（QE-1 取り切り計算で参照・生地行のみ使用）
+enum FabricProcurementMode {
+  ROLL // 反売り（取り切り）
+  METER // メーター売り（必要量×単価）
+}
+
+/// 用尺の出所
+enum UsageSource {
+  MANUAL // 直接入力
+  MARKING_SHEET // マーキング図からの転記
+  CAD // CAD 連携（B-047 予約）
+}
+
+/// マーキング図の実測値（用尺の入力系統B）。原本 PDF は QE-0c で GCS 添付（カラムだけ先行）。
+/// house style: 既存モデルへの FK は scalar のみ（@relation 不使用・明示クエリで結合）。
+model MarkingRecord {
+  id         String  @id @default(uuid())
+  companyId  String  @map("company_id")
+  productId  String  @map("product_id") // Product への FK（scalar）
+  materialId String? @map("material_id")
+
+  markerName String? @map("marker_name") @db.VarChar(255) // 例: SY16-16SY-082(esgrey)
+
+  fabricWidth Decimal @map("fabric_width") @db.Decimal(6, 1) // 生地幅 cm（必須）
+  totalUnits  Int     @map("total_units") // 総着数（必須）
+  totalLength Decimal @map("total_length") @db.Decimal(10, 1) // 総用尺 cm（必須）
+
+  usagePerUnitDerived Decimal? @map("usage_per_unit_derived") @db.Decimal(10, 4) // 1着用尺 m（totalLength÷totalUnits÷100）
+  yieldRate           Decimal? @map("yield_rate") @db.Decimal(5, 1) // 収率 %
+  partsCount          Int?     @map("parts_count") // パーツ数
+  patternPitch        Decimal? @map("pattern_pitch") @db.Decimal(6, 1) // 柄ピッチ
+  sizeCombination     String?  @map("size_combination") @db.VarChar(255) // サイズ組み合せ
+
+  source              UsageSource @default(MARKING_SHEET) // CAD は B-047 予約
+  originalFileGcsPath String?     @map("original_file_gcs_path") @db.VarChar(500) // 原本PDF（QE-0c）
+
+  notes String? @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([companyId, productId])
+  @@map("marking_records")
 }
