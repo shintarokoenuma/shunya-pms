@@ -1,4 +1,4 @@
-# 引き継ぎメモ (2026-06-10〜11 セッション / S-4 発注連携 一巡完了・発注書PDF v1.2 まで本番反映)
+# 引き継ぎメモ (2026-06-12 セッション / B-053・B-055 完了・QE-0a/0b 本番反映・次は QE-0c→QE-1)
 
 ## ⓪ プロジェクト棲み分け（毎回必須）
 - shunya-pms（shintarokoenuma/shunya-pms・~/shunya-production-system・shunya-pms-web-production.up.railway.app）と saagara-v2 は完全に別物。実装指示書は冒頭に【対象プロジェクト】ヘッダ固定。貼る前に ~/shunya-production-system を開いているか目視。
@@ -9,61 +9,100 @@
 - ② マージ=GitHub PR→Railway自動デプロイ=本番反映(不可逆)
 - ③ マージ後=本番URL + Railwayデプロイログ目視
 
-## ① 本セッションの完了マイルストーン（PR #68〜#75・全て本番反映済み）
-- PR #68: dev サンプルマスター一括シード scripts/seed-dev-sample-data.ts（マスター15種・冪等・本番拒否ガード。dev消失復旧手順が prisma/seed.ts→processing-types→本スクリプトで一本化）
-- PR #69 (5cc5ed9): S-4b-2 WO系。WorkOrder/WoItem CRUD・採番WO-{年}-{4桁}(P2002のみリトライ)・チェックリスト起点(PATTERN/SEWING/PROCESSING/GRADING活性化)・PROCESSING起点は WO.workType=ProcessingType.workType コピー+processingTypeId引継ぎ(D2)・workCategory=taskType導出+変更可・workOrderCount実値化(E8)・nav「発注(作業WO)」/「発注(仕入PO)」改称
-- PR #70 (bf3c735): S-4c-1。recomputeTaskStatus(forward-only・AUTO_FROM_DOC のみ・SKIPPED/BLOCKED不触・降格なし・FABRIC/TRIM/BODYの完了はisReceivedが正・WO系は全件COMPLETEDでDONE)+コスト集計(G3マッピング・denormalized・伝票create/update/delete/status変更で再計算)+PO/WO status変更action&select新設+SPコスト集計カード
-- PR #71 (e45300e): S-4c-1.5+1.6。コスト内訳表示(セクション別明細・伝票リンク・集計対象外行はバッジ可視化)+実務語彙拡張(発注先名/品番=supplierItemCode→素材コード/C#色)。B-052起票
-- PR #72 (41f6b2e): S-4c-2 発注書PDF v1.0(@react-pdf/renderer+NotoSansJP静的TTF同梱~4.7MB・serverExternalPackages設定・A4縦・社判ヘッダ・明細表・未定除外注記・自動改頁)。route /api/{purchase,work}-orders/[id]/pdf(auth+companyIdスコープ・未認証は307→/login前段遮断)。生成/出力分離(B-053のGCS差し込み構造)
-- PR #73 (b793cd5): company-profile.ts 実値の main 取り込み(株式会社shunya / 〒150-0043 東京都渋谷区道玄坂1-22-10 見真ビル1F / TEL 03-5459-1177 / FAX 03-5459-1181 / MAIL info@shunya.cc)。★PR #72マージ後に差し替えた行き違いの修正(教訓⑦参照)
-- PR #74 (dc54753): PDF v1.1。対象品番ブロック(「御中」直下にブランド/品名(season)/品番。経路: PO.sampleProductionId / WO.samplProductionId(B-035綴り温存)→SP.productId→Product(productName/品番=primaryProductCode[先方品番優先]/season)→Brand.brandName。未紐付けはnull非表示)+数量/単位の2列分離
-- PR #75 (1af616a): PDF v1.2。数量/単位の間隔拡大(数量paddingRight 14pt/単位paddingLeft 12pt・列幅 数量単位各11%・品名26%)。慎太郎さん視認「完璧」
-- docs直push: eeaa587(S-4c仕様v1.0)・aeeb9d0(S-4c-2仕様v1.0)
-- ★本番で実運用データ入力開始（SP-2026-0003・天竺PO・VIVAN WO等）。コスト集計・発注書PDFが実データで稼働確認済み
+## ① 本セッションの完了マイルストーン（全て本番反映済み・PR番号順）
+- PR #76 (317d2df): B-053 発注書PDF の GCS 控え保存。src/lib/gcs.ts 新設（@google-cloud/storage・
+  serverExternalPackages 追加）。uploadOrderPdf(kind/orderNumber/buffer/timestamp?)・パス規約
+  {kind}/{orderNumber}/{yyyyMMdd-HHmmss}.pdf（履歴保持・上書きなし）。env3つ(GCP_PROJECT_ID/
+  GCS_BUCKET_NAME/GCP_SERVICE_ACCOUNT_KEY_BASE64)を Base64→JSON 復号して credentials 直渡し。
+  ★graceful degradation: 未設定/失敗は console.error(キー非表示)で null・例外投げず PDF 返却を阻害しない。
+  PO/WO の pdf route に結線。生成/出力分離（H2）。
+- PR #77 (c367f4a): B-055 タイムスタンプ JST 化。gcs.ts の timestampJst()（UTCエポック+9h→getUTC*・
+  コンテナTZ非依存）。さらに DL ファイル名を {orderNumber}_{yyyyMMdd-HHmmss}.pdf にし、route で
+  stamp を1回生成して GCS 控えと DL名のタイムスタンプを一致（突合可能）。
+- QE-0 仕様確定（docs 直push）: a912b0d 含む。qe-0-quotation-foundation-spec-confirmation-v1_0-2026-06-12.md
+  （Q1〜Q6 + 用尺入力2系統 + 正誤 + v1.1追補）。
+- PR #78 (01d629a): QE-0a 見積基盤 schema。★着手時に Specification/Bom/BomItem(+enum)が既存
+  （元設計20260516由来・休眠・データ0件）と判明 → 案A=既存 Bom を Product 直結へ拡張で確定:
+  - Bom: specificationId 必須→nullable@unique 緩和 / productId(scalar)追加 / @@index([companyId,productId])
+  - BomItem: usagePerUnit・unitPrice を必須→nullable 緩和 / procurementMode・usageSource(@default MANUAL)・
+    markingRecordId 追加（itemCategory 既存必須維持・deletedAt は無し=cascade管理）
+  - Material: rollLength/rollPrice 追加（fabricWidth/standardLossRate/standardUsage は既存流用）
+  - MarkingRecord 新設 + enum FabricProcurementMode{ROLL,METER}/UsageSource{MANUAL,MARKING_SHEET,CAD}
+  - migration 1本(非破壊: CREATE TYPE/TABLE/INDEX + ADD COLUMN群 + DROP NOT NULL×2)。dev は db push。
+- PR #79 (2844f21): QE-0b BOM(資材表) CRUD。品番カルテ詳細に「資材表（BOM）」カード。
+  validators/bom.ts(materialId XOR custom / 数値範囲) / actions/boms.ts(createBom 冪等・getBomByProductId・
+  addBomItem/updateBomItem/deleteBomItem 物理削除 + select補助) / bom-section.tsx(追加/編集モーダル+削除)。
+  素材選択で 単位/ロス率/単価/仕入先 を初期表示・ロス込み用尺/1着概算を参考表示(非保存)。usageSource は
+  MANUAL 固定・markingRecordId は UI 非対象(QE-0c)。
+- docs 直push: B-056(マーキングAI読み取り)・B-057(資材表→PO下書き生成) 起票。QE-0 v1.1追補
+  (BOM役割定義=品番直結の現時点の正・BomItem3項目追加方針)。
 
-## ② 仕様確定（本セッション）
-- S-4c v1.0 (docs/specs/s-4c-auto-recompute-spec-confirmation-v1_0-2026-06-10.md): G1 forward-only / G2 evidenceMode(6種生成時AUTO_FROM_DOC・既存MANUALは対象外放置) / G3 集計マッピング(資材=PO全部・パターン=PATTERN|GRADING・縫製加工=SAMPLE合算・やり直し=REWORK・PRODUCTION/ADDITIONALは集計外・未定/非JPY除外) / G4 同一トリガー / G5 S-4c-1/2分割
-- S-4c-2 v1.0 (docs/specs/s-4c-2-order-pdf-spec-confirmation-v1_0-2026-06-11.md): H1 react-pdf+NotoSansJP / H2 オンデマンド生成→GCS保存はB-053(運営前必須・レイアウト確定後) / H3 最小レイアウト→実物レビューで調整(v1.1/v1.2で実施済み) / H4 送付=B-049・縫製仕様書帳票=B-054(最終フェーズ)
-- 実Excel縫製仕様書を原本参照として記録(社判ブロック・資材表語彙[仕入先/品番/C#/数量/単価]・付属表/サイズ表/詳細図タブ構造はB-054の設計材料)
+## ② B-053 GCS の確認状況（重要）
+- SA = shunya-pms-storage@shunya-pms.iam.gserviceaccount.com（project shunya-pms）。
+- dev バケット shunya-pms-documents-dev: 書き込みOK（uploadOrderPdf 単体 + ブラウザ DL で確認済み）。
+- 本番バケット shunya-pms-documents-prod: 当初 403(storage.objects.create 権限なし)→慎太郎さんが権限付与→
+  再診断で write→delete OK 確認済み。
+- Railway 本番に env3つ設定済み（本番は GCS_BUCKET_NAME=shunya-pms-documents-prod）。
+  ローカル .env は dev バケット（GCS変数も設定済み）。
 
 ## ③ Railway環境マッピング（本ファイル§③が唯一の正）
-- 本番DB: postgres-production / postgres-ab6d / shuttle.proxy.rlwy.net:16099（27 migrations・本セッション migration 追加なし）
-- dev DB: postgres-development / hopper.proxy.rlwy.net:12921（db push運用・_prisma_migrations無し）
+- 本番DB: postgres-production / postgres-ab6d / shuttle.proxy.rlwy.net:16099
+  （本セッション read-only 確認時点で _prisma_migrations=44・finished_at is null=0 で健全。
+   QE-0a #78 マージ後に +1 適用される）。本番URLはローカル .env に無し→ Railway CLI の
+   DATABASE_PUBLIC_URL から取得（PWは表示しない運用）。
+- dev DB: postgres-development / hopper.proxy.rlwy.net:12921（db push運用・_prisma_migrations無し）。
 - dev は db push / 本番は Railway migrate deploy の二系統。dev に migrate dev は打たない。
 
 ## ④ dev DB 状態
-- マスター: seed-dev-sample-data.ts 投入済み120件(Client/Brand/Supplier/Factory/Contractor/Buyer/DD/ModelCode/Material/カテゴリ2種/Color51/CostCategory39/TextilePatternType9)+processing_types 10
-- SP-2026-0001(タスクはevidenceMode=MANUAL=自動算出対象外・PO/WO検証データぶら下がり)・SP-VERIFY-S4C1(AUTOタスク・PO-VERIFY-*/WO-VERIFY-*・コスト¥42,000)・[S4B2-VERIFY] WO3件
-- 検証データは温存中。掃除は任意(UIのsoft-deleteで可)
+- QE-0a 反映済み（db push）: bom/bom_items/marking_records テーブルあり・全0件。materials に roll_length/roll_price。
+- マスター: seed-dev-sample-data.ts 投入済み120件 + processing_types 10。
+- 検証残置データ: SP-2026-0001 / SP-VERIFY-S4C1(PO-VERIFY-*/WO-VERIFY-*・コスト集計検証用) /
+  [S4B2-VERIFY] WO。掃除は任意(UI の soft-delete)。QE 検証は新規 [QE0x-VERIFY] を作って都度後始末する流儀。
 
 ## ⑤ 次セッションの優先順
-1. B-053: 発注書PDFのGCS保存統合(運営開始前・必須)。レイアウトはv1.2で確定済みのため着手可。GCPコンソール手順書(バケット+サービスアカウント+Railway環境変数)を Claude が用意してから実装ブリーフ
-2. ★次の山 = 見積もりエンジン(Phase 1B 最重要)の仕様確認開始。入口で B-039(規格・サイズ構造化=用尺数値化)+B-052(量産見積・原反取り切り: 必要量=用尺×数量×(1+ロス率)→反数=切り上げ(必要量÷原反長)→反数×反単価。原反長列はMaterial未存在で設計時追加)+原反長マスター項目を一緒に設計。実績原価(S-4c-1)との「見積vs実績」突合がB-044オーナー指標に直結
-3. ついで回収候補: B-048(PO採番リトライのP2002限定修正・WO側は適用済み)
-4. ローカル古ブランチ掃除(マージ済み約20本: phase1a系・S-1/S-2系・s4c系等。git branch -d で安全に)
+1. QE-0c: BomItem に supplierItemCode / designNumber / sizeSpec を追加（QE-0 v1.1 §Q2）+ BOM 編集UIへ反映。
+   併せて MarkingRecord の UI（用尺入力系統B・1着用尺自動導出）+ 原本PDF の GCS 添付（B-053 基盤を流用）。
+   ※ schema 変更（BomItem 3列・MarkingRecord.originalFileGcsPath は既存）あり→ migration 1本。
+2. QE-1: 量産見積計算（原反取り切り）= B-052 本体。
+   必要量=用尺×数量×(1+ロス率) → 反数=切り上げ(必要量÷原反長) → 反数×反単価。procurementMode ROLL/METER で分岐。
+   実績原価(S-4c-1)との「見積 vs 実績」突合が B-044 オーナー指標に直結。
+3. B-057: 資材表→PO 下書き生成（QE-0c/QE-1 の後）。
+4. 回収候補: B-048(PO採番リトライのP2002限定・WO側は適用済み)。
+5. ★現場Excel参照資料の格納（保留中）: docs/reference/ に 27SS各プラント管理表 / INSONNIA_SMASHING_25SS
+   コスト表 / 裏地マーカー図(SY16-16SY-082).pdf + 構造メモ を入れる予定だったが、~/Downloads が
+   アクセス不可(Operation not permitted)で原本コピー不可・メモ本文も未受領のため未着手。
+   → 原本をアクセス可能な場所(Desktop 配下 or リポジトリ内)に置く or Downloads アクセス権付与が必要。
+   QE-1 設計の原本資料。
 
-## ⑥ バックログ（本セッション起票/更新）
-- B-048: generatePoNumber リトライのエラー分類(P2002のみリトライ・他は伝播)。WO側は#69で適用済み・PO側未対応
-- B-052: 量産見積・原反取り切り計算(docs/phase1a-improvement-backlog.md に詳細記載済み)
-- B-053: 発注書PDFのGCS保存統合(運営前必須・レイアウト確定済みで着手可)
-- B-054: 縫製仕様書の帳票出力(最終フェーズ・実Excel構造が原本)
-- (S-4c仕様書内) B-049: 送付フロー / B-050: totalProcessingCost専用列 / B-051: 非JPY換算集計
-- 継続: B-020/B-023〜028/B-031(dev消失実例追記未了)/B-034/B-035(samplProductionId綴り温存中)/B-036/B-037/B-038〜041/B-043〜047
+## ⑥ バックログ（本セッション起票/更新・docs/phase1a-improvement-backlog.md）
+- B-056: マーキング図PDF/パターンデータの AI 自動読み取り（Phase 1E・MarkingRecord+原本添付が基盤）。
+- B-057: 資材表→PO 下書き生成（QE-0c/QE-1 後）。
+- B-047: CAD連携の用尺見込み計算（東レCAD等・MarkingRecord.source=CAD 予約済み）。
+- 継続: B-048 / B-049(発注書送付) / B-050(totalProcessingCost専用列) / B-051(非JPY換算) /
+  B-052(量産見積=QE-1) / B-053(本番反映済・要バケット運用) / B-054(縫製仕様書帳票・最終フェーズ) /
+  B-039(規格サイズ構造化) / B-020/B-023〜028/B-031/B-034/B-035(samplProductionId綴り温存中)/B-036/B-037/
+  B-038/B-040/B-041/B-043〜046。
 
 ## ⑦ 注意点・教訓（本セッション）
-- ★マージとブランチ作業の順序行き違い: PR #72 を慎太郎さんがマージ+ブランチ削除した後に Claude Code が同ブランチへ実値差し替えを積み、孤立ブランチ化(main未反映・本番はプレースホルダのまま)。push出力の「* [new branch]」が再作成のサイン。fd9c013をcherry-pickしてPR #73で回収。教訓: マージ前に「差し替え系の追加コミットが全て済んでいるか」を確認してからマージ依頼を出す。Claude(.ai)側も「マージしてください」を出すタイミングを差し替え完了報告の後にする
-- 古いNextAuth JWT: dev DB再seed後はブラウザの旧ユーザーIDが audit_logs FK違反を起こす→ログアウト/再ログインで解消(6/10実例)
-- 採番リトライがFK違反を「採番衝突」に偽装してデバッグを妨げた(B-048の動機)。新規採番実装はP2002のみリトライが標準
-- recomputeTaskStatus検証で「効かない」と見えたらまず対象タスクの deletedAt/evidenceMode を疑う(soft-delete済みタスクを掴んでいた実例)
-- ProgressTaskStatus には仕様書未記載の BLOCKED があり「不触」で実装(SKIPPED同様・調整余地)
-- PO/WO の status 変更手段は S-4c-1 で新設(それまでDRAFT固定)。status変更も再計算トリガー
-- react-pdf: serverExternalPackages 必須・フォントはfontsource静的TTF(japanese subset・各2.3MB)・CJK改行はregisterHyphenationCallbackで文字単位・帳票の品番表示はprimaryProductCode(先方品番優先)を踏襲
-- 未認証APIはアプリauth層が307→/loginで前段遮断(route側401はfallback)。アプリ共通挙動
-- npm run dev はプロジェクトroot で。git log のページャは q で抜ける
-- 引き継ぎメモ: ①2箇所出力 ②保存指示は本文cat<<'EOF'埋め込み ③保存前にgit log origin/mainで実態確認
+- ★既存 schema の事前精査を必ず行う: QE-0a で Bom/BomItem/Specification が既存と判明（ブリーフは新設前提）。
+  着手前 grep で衝突回避→案A(既存拡張)に切替えた。新規モデル作成系のブリーフは必ず同名/類似モデルの
+  存在を schema で確認してから着手。
+- Material 既存カラムの重複回避: fabricWidth/standardLossRate/standardUsage は既存。新規は roll系2列のみ。
+  既存モデルにカラム追加すると audit snapshot の Record<...Field,unknown> が網羅エラーになる
+  （materials.ts の beforeData/afterData に rollLength/rollPrice を追加して修復）。
+- GCS 切り分け: dev で動いても本番バケットは別途権限が要る（403 storage.objects.create）。
+  診断は使い捨てスクリプトで client_email/project_id のみ表示・private_key/Base64 は絶対に出さない。
+- 本番DB read-only 確認は Railway CLI の DATABASE_PUBLIC_URL を変数に取り込み host 照合のうえ SELECT のみ。
+  PW は表示しない。書き込み/ALTER/migration はしない。
+- squash merge のため git branch --merged は0件になる。マージ済みローカルブランチ掃除は gh で PR state=MERGED
+  を確認して git branch -D（feat/qe0a-bom-marking-schema が現在ローカル残存・#78マージ済みで削除可）。
+- BomItem は deletedAt 無し=物理削除（削除は確認ダイアログ+AuditLog snapshot で痕跡）。
+- ~/Downloads はこの環境からアクセス不可。原本ファイルはアクセス可能な場所に置いてもらう。
+- 引き継ぎメモ: ①2箇所出力 ②保存指示は本文 cat<<'EOF' 埋め込み ③保存前に git log origin/main で実態確認。
 
 ## ⑧ 次セッション冒頭の手順
-1. このメモを貼り付け→状態復元
-2. git log origin/main --oneline -5 で先頭確認(1af616a=PR#75 か、その後のdocsコミット)
-3. main最新化・ローカルブランチ掃除(feat/s4c2-pdf-v1_1, feat/s4c2-pdf-v1_2, chore/s4c2-company-profile-real 等)
-4. ⑤の優先順で着手(B-053 GCS手順書 → 見積もりエンジン仕様確認)
+1. このメモを貼り付け→状態復元。
+2. git log origin/main --oneline -5 で先頭確認（2844f21=PR#79、またはその後のdocsコミット）。main 最新化。
+3. ローカル残ブランチ掃除（feat/qe0a-bom-marking-schema は #78マージ済み・git branch -D で削除可）。
+4. ⑤の優先順で着手: QE-0c（BomItem 3項目 + MarkingRecord UI + PDF添付）→ QE-1（取り切り計算）。
+   現場Excel参照資料の格納はアクセス可能な場所に原本が置かれ次第。
