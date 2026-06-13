@@ -95,6 +95,8 @@ export default async function ProductDetailPage({
     sizeUnit: it.sizeUnit,
     usageSource: it.usageSource,
     markingRecordId: it.markingRecordId,
+    costSource: it.costSource,
+    purchaseOrderId: it.purchaseOrderId,
     colorCode: it.colorCode,
     colorName: it.colorName,
     notes: it.notes,
