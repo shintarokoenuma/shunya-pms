@@ -5,8 +5,11 @@ import {
   Prisma,
   MaterialStatus,
   SupplierStatus,
+  BomItemCategory,
+  ProgressTaskType,
   type Bom,
   type BomItem,
+  type Currency,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
@@ -431,5 +434,288 @@ export async function deleteBomItem(
     return { ok: true, data: { id: itemId } }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "明細削除に失敗しました" }
+  }
+}
+
+// =============================================================================
+// QE-0d: PO→BOM コスト引き当て
+//   仕様: docs/specs/qe-0d-po-bom-cost-linkage-spec-confirmation-v1_0-2026-06-13.md（v1.1）
+//   - 参照は purchaseOrderId（PO の id・不変）。PoItem.id は参照しない（PO 編集で再作成され
+//     id が変わるため・spec §2-1）。値は引き当て時点でスナップショットコピー＝自動同期なし。
+// =============================================================================
+
+/** 取り込み候補の PoItem 1行（Decimal は client へ渡すため文字列化）。 */
+export type PoItemImportRow = {
+  id: string
+  customItemName: string | null
+  supplierItemCode: string | null
+  designCode: string | null
+  sizeValue: string | null
+  sizeUnit: string | null
+  colorCode: string | null
+  color: string | null
+  specification: string | null
+  unitPrice: string | null // 未定は null
+  currency: Currency
+  unit: string
+  quantity: string // 表示参考のみ・取り込まない
+  alreadyInBom: boolean // 同一 bom 内に supplierItemCode 一致の既存 BomItem あり（C4・表示のみ）
+}
+
+/** 取り込みモーダルの PO 単位グループ。 */
+export type PoImportGroup = {
+  poId: string
+  poNumber: string
+  poType: string
+  supplierId: string
+  supplierLabel: string | null
+  progressTaskId: string | null
+  taskType: ProgressTaskType | null
+  items: PoItemImportRow[]
+}
+
+/**
+ * 同一品番（Product）に紐づく PO の PoItem 一覧を取り込み候補として返す（C1）。
+ * PO に productId 直結が無いため、ProgressTask.productId 経由（progressTaskId）と
+ * primaryProductId の OR で絞る。companyId スコープ・deletedAt:null。
+ */
+export async function listPoItemsForBomImport(
+  productId: string,
+): Promise<PoImportGroup[]> {
+  const sess = await requireSession()
+  if (!sess.ok) return []
+
+  // ① 当該品番の ProgressTask（taskType 導出用）
+  const tasks = await prisma.progressTask.findMany({
+    where: { companyId: sess.companyId, productId },
+    select: { id: true, taskType: true },
+  })
+  const taskTypeByTaskId = new Map(tasks.map((t) => [t.id, t.taskType]))
+  const taskIds = tasks.map((t) => t.id)
+
+  // ② 紐づく PO（progressTaskId in taskIds OR primaryProductId 一致）
+  const pos = await prisma.purchaseOrder.findMany({
+    where: {
+      companyId: sess.companyId,
+      deletedAt: null,
+      OR: [
+        ...(taskIds.length ? [{ progressTaskId: { in: taskIds } }] : []),
+        { primaryProductId: productId },
+      ],
+    },
+    select: {
+      id: true,
+      poNumber: true,
+      poType: true,
+      supplierId: true,
+      progressTaskId: true,
+    },
+    orderBy: [{ orderDate: "desc" }, { poNumber: "desc" }],
+  })
+  if (pos.length === 0) return []
+
+  // ③ items・仕入先名・重複判定の素材を一括取得
+  const poIds = pos.map((p) => p.id)
+  const supplierIds = [...new Set(pos.map((p) => p.supplierId))]
+  const [poItems, suppliers, bom] = await Promise.all([
+    prisma.poItem.findMany({
+      where: { poId: { in: poIds } },
+      orderBy: [{ poId: "asc" }, { itemOrder: "asc" }],
+    }),
+    prisma.supplier.findMany({
+      where: { id: { in: supplierIds }, companyId: sess.companyId },
+      select: { id: true, supplierCode: true, companyName: true },
+    }),
+    prisma.bom.findFirst({
+      where: { companyId: sess.companyId, productId, deletedAt: null },
+      select: { id: true },
+    }),
+  ])
+  const supLabel = new Map(
+    suppliers.map((s) => [s.id, `${s.supplierCode} ${s.companyName}`]),
+  )
+
+  // 重複フラグ用: 既存 BOM の supplierItemCode 集合（C4・表示のみ）
+  let existingCodes = new Set<string>()
+  if (bom) {
+    const existing = await prisma.bomItem.findMany({
+      where: { bomId: bom.id, supplierItemCode: { not: null } },
+      select: { supplierItemCode: true },
+    })
+    existingCodes = new Set(
+      existing.map((e) => e.supplierItemCode).filter((v): v is string => !!v),
+    )
+  }
+
+  const itemsByPo = new Map<string, PoItemImportRow[]>()
+  for (const i of poItems) {
+    const row: PoItemImportRow = {
+      id: i.id,
+      customItemName: i.customItemName,
+      supplierItemCode: i.supplierItemCode,
+      designCode: i.designCode,
+      sizeValue: i.sizeValue?.toString() ?? null,
+      sizeUnit: i.sizeUnit,
+      colorCode: i.colorCode,
+      color: i.color,
+      specification: i.specification,
+      unitPrice: i.unitPrice?.toString() ?? null,
+      currency: i.currency,
+      unit: i.unit,
+      quantity: i.quantity.toString(),
+      alreadyInBom: !!i.supplierItemCode && existingCodes.has(i.supplierItemCode),
+    }
+    const arr = itemsByPo.get(i.poId)
+    if (arr) arr.push(row)
+    else itemsByPo.set(i.poId, [row])
+  }
+
+  return pos.map((p) => ({
+    poId: p.id,
+    poNumber: p.poNumber,
+    poType: p.poType,
+    supplierId: p.supplierId,
+    supplierLabel: supLabel.get(p.supplierId) ?? null,
+    progressTaskId: p.progressTaskId,
+    taskType: p.progressTaskId
+      ? taskTypeByTaskId.get(p.progressTaskId) ?? null
+      : null,
+    items: itemsByPo.get(p.id) ?? [],
+  }))
+}
+
+/** taskType → BomItemCategory 既定マッピング（C5・人が後修正前提）。 */
+function defaultCategoryForTaskType(
+  taskType: ProgressTaskType | null,
+): BomItemCategory {
+  if (taskType === ProgressTaskType.FABRIC) return BomItemCategory.MAIN_FABRIC
+  if (taskType === ProgressTaskType.TRIM) return BomItemCategory.ACCESSORY
+  return BomItemCategory.OTHER // BODY 含むその他
+}
+
+/**
+ * チェックした PoItem を BomItem 新規行として一括起票（コスト軸引き当て）。
+ * §4 マッピング厳守。costSource=PURCHASE_ORDER / purchaseOrderId=親PO.id /
+ * usagePerUnit=null / usageSource=MANUAL（用尺は取り込まない）。
+ */
+export async function importPoItemsToBom(input: {
+  bomId: string
+  poItemIds: string[]
+}): Promise<ActionResult<{ count: number }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const { bomId, poItemIds } = input
+    if (!poItemIds || poItemIds.length === 0)
+      return { ok: false, error: "取り込む明細が選択されていません" }
+
+    const bom = await findBomInCompany(bomId, sess.companyId)
+    if (!bom) return { ok: false, error: "BOM が見つかりません" }
+
+    // PoItem 取得 → 親 PO の companyId 越境チェック（他社混入防止）
+    const poItems = await prisma.poItem.findMany({
+      where: { id: { in: poItemIds } },
+    })
+    if (poItems.length !== poItemIds.length)
+      return { ok: false, error: "一部の発注明細が見つかりません" }
+
+    const poIds = [...new Set(poItems.map((i) => i.poId))]
+    const pos = await prisma.purchaseOrder.findMany({
+      where: { id: { in: poIds }, companyId: sess.companyId },
+      select: { id: true, supplierId: true, progressTaskId: true },
+    })
+    const poById = new Map(pos.map((p) => [p.id, p]))
+    // 全 PoItem の親 PO が自社のものであることを保証
+    if (poItems.some((i) => !poById.has(i.poId)))
+      return { ok: false, error: "他社の発注明細は取り込めません" }
+
+    // taskType（itemCategory 既定マッピング用）
+    const taskIds = [
+      ...new Set(
+        pos.map((p) => p.progressTaskId).filter((v): v is string => !!v),
+      ),
+    ]
+    const tasks = taskIds.length
+      ? await prisma.progressTask.findMany({
+          where: { id: { in: taskIds }, companyId: sess.companyId },
+          select: { id: true, taskType: true },
+        })
+      : []
+    const taskTypeByTaskId = new Map(tasks.map((t) => [t.id, t.taskType]))
+
+    // itemOrder 連番（既存 max+1 起点）
+    const last = await prisma.bomItem.findFirst({
+      where: { bomId },
+      orderBy: { itemOrder: "desc" },
+      select: { itemOrder: true },
+    })
+    let order = (last?.itemOrder ?? -1) + 1
+
+    const created = await prisma.$transaction(async (tx) => {
+      const ids: string[] = []
+      for (const i of poItems) {
+        const po = poById.get(i.poId)!
+        const taskType = po.progressTaskId
+          ? taskTypeByTaskId.get(po.progressTaskId) ?? null
+          : null
+        const row = await tx.bomItem.create({
+          data: {
+            bomId,
+            itemOrder: order++,
+            itemCategory: defaultCategoryForTaskType(taskType),
+            materialId: null,
+            customMaterialName: i.customItemName,
+            customMaterialNameEn: i.customItemNameEn,
+            supplierId: po.supplierId, // 親 PO 由来
+            // コスト軸引き当て
+            costSource: "PURCHASE_ORDER",
+            purchaseOrderId: i.poId,
+            unitPrice: i.unitPrice,
+            currency: i.currency,
+            unit: i.unit,
+            lossRate: new Prisma.Decimal(0),
+            supplierItemCode: i.supplierItemCode,
+            designCode: i.designCode,
+            sizeValue: i.sizeValue,
+            sizeUnit: i.sizeUnit,
+            specification: i.specification,
+            colorCode: i.colorCode,
+            colorName: i.color,
+            // 用尺軸は取り込まない
+            usagePerUnit: null,
+            usageSource: "MANUAL",
+            markingRecordId: null,
+          },
+          select: { id: true },
+        })
+        ids.push(row.id)
+        await tx.auditLog.create({
+          data: {
+            companyId: sess.companyId,
+            userId: sess.userId,
+            action: "CREATE",
+            entityType: "BomItem",
+            entityId: row.id,
+            afterData: {
+              bomId,
+              source: "PO_IMPORT",
+              poItemId: i.id,
+              purchaseOrderId: i.poId,
+              supplierItemCode: i.supplierItemCode,
+            },
+          },
+        })
+      }
+      return ids
+    })
+
+    revalidatePath(`/products/${bom.productId}`)
+    return { ok: true, data: { count: created.length } }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "発注明細の取り込みに失敗しました",
+    }
   }
 }

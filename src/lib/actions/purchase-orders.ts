@@ -744,6 +744,16 @@ export async function deletePurchaseOrder(
     })
     if (!existing) return { ok: false, error: "発注が見つかりません" }
 
+    // QE-0d 削除ガード: purchaseOrderId で参照中の BomItem（コスト引き当て元）。
+    // markings.ts:deleteMarkingRecord を鏡写し。PO は soft-delete・id 不変のため成立。
+    const refCount = await prisma.bomItem.count({ where: { purchaseOrderId: id } })
+    if (refCount > 0) {
+      return {
+        ok: false,
+        error: `${refCount}件の資材明細から参照されています。先に明細側の参照を外してください。`,
+      }
+    }
+
     await prisma.purchaseOrder.update({
       where: { id },
       data: { deletedAt: new Date() },

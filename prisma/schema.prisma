@@ -2694,6 +2694,10 @@ model BomItem {
   usageSource     UsageSource            @default(MANUAL) @map("usage_source") // 用尺の出所
   markingRecordId String?                @map("marking_record_id") // マーキング実測への紐付け（scalar FK）
 
+  // QE-0d 追加（コスト軸の出所・PO 引き当て）
+  costSource      CostSource @default(MANUAL) @map("cost_source") // コストの出所
+  purchaseOrderId String?    @map("purchase_order_id") // 引き当て元 PO（scalar FK・@relation なし＝markingRecordId と同方式）
+
   // 貿易データ（マスターから引用、案件で上書き可能）
   hsCode        String? @map("hs_code") @db.VarChar(20)
   originCountry String? @map("origin_country") @db.VarChar(2)
@@ -9330,6 +9334,12 @@ enum UsageSource {
   MANUAL // 直接入力
   MARKING_SHEET // マーキング図からの転記
   CAD // CAD 連携（B-047 予約）
+}
+
+/// コストの出所（QE-0d: PO 引き当て）
+enum CostSource {
+  MANUAL // 直接入力
+  PURCHASE_ORDER // 発注から引き当て
 }
 
 /// マーキング図の実測値（用尺の入力系統B）。原本 PDF は QE-0c で GCS 添付（カラムだけ先行）。

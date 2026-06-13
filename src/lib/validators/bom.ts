@@ -78,6 +78,11 @@ export const bomItemInputSchema = z
     // 用尺の出所・マーキング転記
     usageSource: z.nativeEnum(UsageSource).default(UsageSource.MANUAL),
     markingRecordId: optionalRelationId,
+    // QE-0d: コストの出所・PO 引き当て（手入力フォームは基本 MANUAL。PURCHASE_ORDER は
+    //   importPoItemsToBom 専用 action でのみ立てる。buildItemData は本2項目に触れず、
+    //   手入力での更新時も既存値を保持する＝引き当て済み行を MANUAL に戻さない）
+    costSource: z.enum(["MANUAL", "PURCHASE_ORDER"]).default("MANUAL"),
+    purchaseOrderId: z.string().nullish(),
     colorCode: optionalString(50),
     colorName: optionalString(100),
     notes: optionalString(10000),

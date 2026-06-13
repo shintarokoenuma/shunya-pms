@@ -61,3 +61,16 @@ export const USAGE_SOURCE_LABELS: Record<"MANUAL" | "MARKING_SHEET", string> = {
   MANUAL: "直接入力",
   MARKING_SHEET: "マーキング図から転記",
 }
+
+/** コストの出所（QE-0d）。 */
+export const COST_SOURCE_LABELS: Record<"MANUAL" | "PURCHASE_ORDER", string> = {
+  MANUAL: "直接入力",
+  PURCHASE_ORDER: "発注から引き当て",
+}
+
+/** PO タイプの日本語ラベル（取り込みモーダル表示用）。 */
+export const PO_TYPE_LABELS: Record<string, string> = {
+  SPEC_BASED: "仕様書発注",
+  ONLINE: "オンライン発注",
+  STANDARD: "通常発注",
+}

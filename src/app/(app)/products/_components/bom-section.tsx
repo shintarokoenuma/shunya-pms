@@ -1,15 +1,16 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useForm, type SubmitHandler } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Loader2, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react"
+import { Loader2, Plus, Pencil, Trash2, AlertTriangle, Download } from "lucide-react"
 import {
   BomItemCategory,
   type FabricProcurementMode,
   type UsageSource,
+  type CostSource,
 } from "@prisma/client"
 import {
   bomItemInputSchema,
@@ -21,14 +22,18 @@ import {
   addBomItem,
   updateBomItem,
   deleteBomItem,
+  listPoItemsForBomImport,
+  importPoItemsToBom,
   type BomMaterialOption,
   type BomSupplierOption,
   type BomMarkingOption,
+  type PoImportGroup,
 } from "@/lib/actions/boms"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Table,
   TableBody,
@@ -70,6 +75,8 @@ import {
   BOM_UNIT_OPTIONS,
   SIZE_UNIT_OPTIONS,
   USAGE_SOURCE_LABELS,
+  COST_SOURCE_LABELS,
+  PO_TYPE_LABELS,
 } from "./bom-labels"
 
 const NONE = "__none__"
@@ -93,6 +100,8 @@ export type BomItemView = {
   sizeUnit: string | null
   usageSource: UsageSource
   markingRecordId: string | null
+  costSource: CostSource
+  purchaseOrderId: string | null
   colorCode: string | null
   colorName: string | null
   notes: string | null
@@ -123,6 +132,7 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<BomItemView | null>(null)
   const [deleting, setDeleting] = useState<BomItemView | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
 
   const handleCreateBom = () => {
     startCreate(async () => {
@@ -154,7 +164,15 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setImportOpen(true)}
+        >
+          <Download className="mr-1 h-4 w-4" />
+          発注から取り込む
+        </Button>
         <Button
           size="sm"
           variant="outline"
@@ -246,6 +264,13 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                     </TableCell>
                     <TableCell className="text-right text-sm">
                       {it.unitPrice === null ? "未定" : `¥${num(it.unitPrice)}`}
+                      {it.costSource === "PURCHASE_ORDER" && (
+                        <div>
+                          <Badge variant="outline" className="text-[10px]">
+                            {COST_SOURCE_LABELS.PURCHASE_ORDER}
+                          </Badge>
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-right text-sm">
                       {estimate === null ? "—" : `¥${estimate.toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`}
@@ -294,6 +319,18 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
           onClose={() => setDialogOpen(false)}
           onSaved={() => {
             setDialogOpen(false)
+            router.refresh()
+          }}
+        />
+      )}
+
+      {importOpen && (
+        <PoImportDialog
+          bomId={bomId}
+          productId={productId}
+          onClose={() => setImportOpen(false)}
+          onImported={() => {
+            setImportOpen(false)
             router.refresh()
           }}
         />
@@ -963,6 +1000,185 @@ function BomItemDialog({
             </DialogFooter>
           </form>
         </Form>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// =============================================================================
+// QE-0d: 発注から取り込むモーダル（用尺軸の1行内 select とは別物の専用 UI）。
+//   PO 単位グループ表示・PoItem チェックボックス・1操作1PO 繰り返し可。
+// =============================================================================
+function PoImportDialog({
+  bomId,
+  productId,
+  onClose,
+  onImported,
+}: {
+  bomId: string
+  productId: string
+  onClose: () => void
+  onImported: () => void
+}) {
+  const [loading, setLoading] = useState(true)
+  const [groups, setGroups] = useState<PoImportGroup[]>([])
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [isPending, startTransition] = useTransition()
+
+  useEffect(() => {
+    let active = true
+    listPoItemsForBomImport(productId)
+      .then((g) => {
+        if (active) setGroups(g)
+      })
+      .catch(() => {
+        if (active) toast.error("発注候補の取得に失敗しました")
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [productId])
+
+  const toggle = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const totalItems = groups.reduce((acc, g) => acc + g.items.length, 0)
+
+  const handleImport = () => {
+    if (selected.size === 0) {
+      toast.error("取り込む明細を選択してください")
+      return
+    }
+    startTransition(async () => {
+      const r = await importPoItemsToBom({
+        bomId,
+        poItemIds: [...selected],
+      })
+      if (!r.ok) {
+        toast.error(r.error)
+        return
+      }
+      toast.success(`${r.data.count}件の明細を取り込みました`)
+      onImported()
+    })
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>発注から取り込む</DialogTitle>
+          <DialogDescription>
+            この品番に紐づく発注の明細を資材表へ起票します（単価・通貨・仕入先をコピー。用尺は空・後でマーキングから引き当て）。区分は発注の種別から既定設定後、必要に応じて修正してください。
+          </DialogDescription>
+        </DialogHeader>
+
+        {loading ? (
+          <div className="py-10 text-center text-sm text-muted-foreground">
+            <Loader2 className="mx-auto mb-2 h-5 w-5 animate-spin" />
+            候補を読み込み中…
+          </div>
+        ) : groups.length === 0 || totalItems === 0 ? (
+          <div className="rounded-md border border-dashed py-10 text-center text-sm text-muted-foreground">
+            この品番に紐づく発注明細がありません。
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {groups.map((g) => (
+              <div key={g.poId} className="rounded-md border">
+                <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2 text-sm">
+                  <div className="font-medium">
+                    {g.poNumber}
+                    <span className="ml-2 text-muted-foreground">
+                      {PO_TYPE_LABELS[g.poType] ?? g.poType}
+                      {g.supplierLabel ? ` / ${g.supplierLabel}` : ""}
+                    </span>
+                  </div>
+                </div>
+                {g.items.length === 0 ? (
+                  <div className="px-3 py-3 text-xs text-muted-foreground">
+                    明細なし
+                  </div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[40px]" />
+                        <TableHead>品名</TableHead>
+                        <TableHead className="w-[120px]">仕入先品番</TableHead>
+                        <TableHead className="w-[120px]">色</TableHead>
+                        <TableHead className="w-[90px]">サイズ</TableHead>
+                        <TableHead className="w-[110px] text-right">単価</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {g.items.map((it) => (
+                        <TableRow key={it.id}>
+                          <TableCell>
+                            <Checkbox
+                              checked={selected.has(it.id)}
+                              onCheckedChange={() => toggle(it.id)}
+                            />
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            <div className="font-medium">
+                              {it.customItemName ?? "—"}
+                            </div>
+                            {it.alreadyInBom && (
+                              <Badge variant="outline" className="mt-0.5 text-[10px]">
+                                BOM に既存
+                              </Badge>
+                            )}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs">
+                            {it.supplierItemCode ?? "—"}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {it.colorCode ? `C/#${it.colorCode} ` : ""}
+                            {it.color ?? ""}
+                            {!it.colorCode && !it.color ? "—" : ""}
+                          </TableCell>
+                          <TableCell className="text-xs">
+                            {it.sizeValue !== null
+                              ? `${it.sizeValue}${it.sizeUnit ?? ""}`
+                              : "—"}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            {it.unitPrice === null
+                              ? "未定"
+                              : `${it.currency} ${Number(it.unitPrice).toLocaleString("ja-JP", { maximumFractionDigits: 4 })}`}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={isPending}>
+            キャンセル
+          </Button>
+          <Button onClick={handleImport} disabled={isPending || selected.size === 0}>
+            {isPending ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-1 h-4 w-4" />
+            )}
+            選択した{selected.size > 0 ? `${selected.size}件を` : ""}取り込む
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   )
