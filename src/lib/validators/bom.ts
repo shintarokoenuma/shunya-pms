@@ -1,13 +1,19 @@
 import { z } from "zod"
-import { BomItemCategory, FabricProcurementMode } from "@prisma/client"
+import {
+  BomItemCategory,
+  FabricProcurementMode,
+  UsageSource,
+} from "@prisma/client"
 
 /**
- * QE-0b: BOM（資材表）バリデータ。
- * 仕様: docs/specs/qe-0-quotation-foundation-spec-confirmation-v1_0-2026-06-12.md（Q1〜Q3）
+ * QE-0b/0c: BOM（資材表）バリデータ。
+ * 仕様: docs/specs/qe-0-quotation-foundation-spec-confirmation-v1_0-2026-06-12.md（Q1〜Q3 + v1.1）
  * - 品目は materialId か customMaterialName のどちらか一方必須。
- * - 数値: usagePerUnit >= 0（任意）/ lossRate 0〜100 / unitPrice >= 0（任意）。
+ * - 数値: usagePerUnit >= 0（任意）/ lossRate 0〜100 / unitPrice >= 0（任意）/ sizeValue >= 0（任意）。
  * - unit は DB 必須（NOT NULL）のため必須。
- * - usageSource は QE-0b では MANUAL 固定・markingRecordId は UI 非対象（action 側で固定）。
+ * - QE-0c: 実務4カラム（supplierItemCode/designCode/sizeValue/sizeUnit）追加。
+ * - usageSource は MANUAL / MARKING_SHEET（CAD は B-047 予約・UI 非対象）。
+ *   MARKING_SHEET なら markingRecordId 必須・MANUAL なら markingRecordId は null に正規化。
  */
 
 const optionalString = (max: number) =>
@@ -60,6 +66,18 @@ export const bomItemInputSchema = z
       .optional()
       .transform((v) => v ?? null),
     unitPrice: optionalNonNegative("単価"),
+    // QE-0c 実務4カラム
+    supplierItemCode: optionalString(100),
+    designCode: optionalString(100),
+    sizeValue: optionalNonNegative("サイズ"),
+    sizeUnit: z
+      .enum(["cm", "mm", "m", "inch"])
+      .nullable()
+      .optional()
+      .transform((v) => v ?? null),
+    // 用尺の出所・マーキング転記
+    usageSource: z.nativeEnum(UsageSource).default(UsageSource.MANUAL),
+    markingRecordId: optionalRelationId,
     colorCode: optionalString(50),
     colorName: optionalString(100),
     notes: optionalString(10000),
@@ -71,6 +89,25 @@ export const bomItemInputSchema = z
       path: ["customMaterialName"],
     },
   )
+  // CAD は UI 非対象（B-047 予約）
+  .refine((d) => d.usageSource !== UsageSource.CAD, {
+    message: "用尺の出所が不正です",
+    path: ["usageSource"],
+  })
+  // MARKING_SHEET なら markingRecordId 必須
+  .refine(
+    (d) => d.usageSource !== UsageSource.MARKING_SHEET || !!d.markingRecordId,
+    {
+      message: "マーキング転記の場合はマーキング実測の選択が必須です",
+      path: ["markingRecordId"],
+    },
+  )
+  // MANUAL なら markingRecordId を null に正規化
+  .transform((d) => ({
+    ...d,
+    markingRecordId:
+      d.usageSource === UsageSource.MARKING_SHEET ? d.markingRecordId : null,
+  }))
 
 export type BomItemFormValues = z.input<typeof bomItemInputSchema>
 export type BomItemInput = z.infer<typeof bomItemInputSchema>

@@ -110,3 +110,64 @@ export async function uploadOrderPdf(
     return null
   }
 }
+
+/**
+ * QE-0c: マーキング図 原本PDF を GCS に保存する。
+ * パス規約: marking/{productId}/{yyyyMMdd-HHmmss}.pdf（履歴保持・上書きなし。識別子は productId）。
+ * 失敗/未設定は null を返す（呼び出し側＝添付 action は null をエラー扱いにする＝控え保存と違い保存自体が目的）。
+ */
+export async function uploadMarkingPdf(
+  productId: string,
+  buffer: Buffer,
+): Promise<{ gcsPath: string } | null> {
+  const ctx = getStorageContext()
+  if (!ctx) return null
+
+  const stamp = timestampJst(new Date())
+  const objectPath = `marking/${productId}/${stamp}.pdf`
+  try {
+    await ctx.storage
+      .bucket(ctx.bucketName)
+      .file(objectPath)
+      .save(buffer, { contentType: "application/pdf", resumable: false })
+    return { gcsPath: `gs://${ctx.bucketName}/${objectPath}` }
+  } catch (e) {
+    console.error(
+      `[gcs] マーキング原本PDFのアップロードに失敗しました (${objectPath}):`,
+      e instanceof Error ? e.message : "unknown error",
+    )
+    return null
+  }
+}
+
+/**
+ * gs://bucket/object 形式のパスから署名付き読み取りURL（有効期限15分）を生成する。
+ * バケットは非公開のためダウンロード/プレビューはこれ経由。失敗/未設定は null。
+ */
+export async function getSignedReadUrl(gcsPath: string): Promise<string | null> {
+  const ctx = getStorageContext()
+  if (!ctx) return null
+  const m = gcsPath.match(/^gs:\/\/([^/]+)\/(.+)$/)
+  if (!m) {
+    console.error("[gcs] gcsPath の形式が不正です")
+    return null
+  }
+  const [, bucket, object] = m
+  try {
+    const [url] = await ctx.storage
+      .bucket(bucket)
+      .file(object)
+      .getSignedUrl({
+        version: "v4",
+        action: "read",
+        expires: Date.now() + 15 * 60 * 1000, // 15分
+      })
+    return url
+  } catch (e) {
+    console.error(
+      "[gcs] 署名URLの生成に失敗しました:",
+      e instanceof Error ? e.message : "unknown error",
+    )
+    return null
+  }
+}
