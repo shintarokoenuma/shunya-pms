@@ -2671,6 +2671,12 @@ model BomItem {
   totalUsagePerUnit Decimal? @map("total_usage_per_unit") @db.Decimal(10, 4) // ロス込み（自動計算）
   unit              String   @db.VarChar(20) // m / 個 / kg
 
+  // QE-0c 追加（PoItem v1.1/v1.2 と命名・構造統一）
+  supplierItemCode String?  @map("supplier_item_code") @db.VarChar(100) // 仕入先品番
+  designCode       String?  @map("design_code") @db.VarChar(100) // デザイン番号
+  sizeValue        Decimal? @map("size_value") @db.Decimal(15, 4) // サイズ数値
+  sizeUnit         String?  @map("size_unit") @db.VarChar(10) // cm/mm/m/inch
+
   // カラー指定（生地等）
   colorCode String? @map("color_code") @db.VarChar(50)
   colorName String? @map("color_name") @db.VarChar(100)
@@ -9337,14 +9343,21 @@ model MarkingRecord {
   markerName String? @map("marker_name") @db.VarChar(255) // 例: SY16-16SY-082(esgrey)
 
   fabricWidth Decimal @map("fabric_width") @db.Decimal(6, 1) // 生地幅 cm（必須）
-  totalUnits  Int     @map("total_units") // 総着数（必須）
-  totalLength Decimal @map("total_length") @db.Decimal(10, 1) // 総用尺 cm（必須）
 
-  usagePerUnitDerived Decimal? @map("usage_per_unit_derived") @db.Decimal(10, 4) // 1着用尺 m（totalLength÷totalUnits÷100）
+  // 着用尺 m（直接入力。マーキング図等から読み取った値。アプリは計算しない）
+  usagePerUnit Decimal @map("usage_per_unit") @db.Decimal(10, 4)
+
+  // 巻きメーター数 m（任意・このロットの実規格。QE-1 取り切り計算で使用）
+  rollLength Decimal? @map("roll_length") @db.Decimal(10, 1)
+
+  // CAD 連携（B-047/B-056）に備えてカラムは温存。QE-0c では入力UI 撤去・換算もしない
+  totalUnits  Int?     @map("total_units") // 総着数（CAD 連携用に温存）
+  totalLength Decimal? @map("total_length") @db.Decimal(10, 1) // 総用尺 cm（CAD 連携用に温存）
+
   yieldRate           Decimal? @map("yield_rate") @db.Decimal(5, 1) // 収率 %
   partsCount          Int?     @map("parts_count") // パーツ数
   patternPitch        Decimal? @map("pattern_pitch") @db.Decimal(6, 1) // 柄ピッチ
-  sizeCombination     String?  @map("size_combination") @db.VarChar(255) // サイズ組み合せ
+  sizeCombination     String?  @map("size_combination") @db.VarChar(255) // UI撤去済み・何人取り等のコメントはメモに集約（カラム温存）
 
   source              UsageSource @default(MARKING_SHEET) // CAD は B-047 予約
   originalFileGcsPath String?     @map("original_file_gcs_path") @db.VarChar(500) // 原本PDF（QE-0c）

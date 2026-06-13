@@ -6,7 +6,11 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, Plus, Pencil, Trash2, AlertTriangle } from "lucide-react"
-import { BomItemCategory, type FabricProcurementMode } from "@prisma/client"
+import {
+  BomItemCategory,
+  type FabricProcurementMode,
+  type UsageSource,
+} from "@prisma/client"
 import {
   bomItemInputSchema,
   type BomItemFormValues,
@@ -19,6 +23,7 @@ import {
   deleteBomItem,
   type BomMaterialOption,
   type BomSupplierOption,
+  type BomMarkingOption,
 } from "@/lib/actions/boms"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -63,6 +68,8 @@ import {
   PROCUREMENT_MODE_OPTIONS,
   FABRIC_CATEGORIES,
   BOM_UNIT_OPTIONS,
+  SIZE_UNIT_OPTIONS,
+  USAGE_SOURCE_LABELS,
 } from "./bom-labels"
 
 const NONE = "__none__"
@@ -80,6 +87,12 @@ export type BomItemView = {
   lossRate: number
   procurementMode: FabricProcurementMode | null
   unitPrice: number | null
+  supplierItemCode: string | null
+  designCode: string | null
+  sizeValue: number | null
+  sizeUnit: string | null
+  usageSource: UsageSource
+  markingRecordId: string | null
   colorCode: string | null
   colorName: string | null
   notes: string | null
@@ -91,6 +104,7 @@ type Props = {
   items: BomItemView[]
   materials: BomMaterialOption[]
   suppliers: BomSupplierOption[]
+  markings: BomMarkingOption[]
 }
 
 function num(n: number | null): string {
@@ -103,7 +117,7 @@ function withLoss(usage: number | null, lossRate: number): number | null {
   return usage * (1 + lossRate / 100)
 }
 
-export function BomSection({ productId, bomId, items, materials, suppliers }: Props) {
+export function BomSection({ productId, bomId, items, materials, suppliers, markings }: Props) {
   const router = useRouter()
   const [creating, startCreate] = useTransition()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -189,6 +203,17 @@ export function BomSection({ productId, bomId, items, materials, suppliers }: Pr
                       <div className="font-medium">
                         {it.materialLabel ?? it.customMaterialName ?? "—"}
                       </div>
+                      {it.supplierItemCode && (
+                        <div className="font-mono text-xs text-muted-foreground">
+                          品番 {it.supplierItemCode}
+                        </div>
+                      )}
+                      {it.sizeValue !== null && it.sizeUnit && (
+                        <div className="text-xs text-muted-foreground">
+                          サイズ {num(it.sizeValue)}
+                          {it.sizeUnit}
+                        </div>
+                      )}
                       {(it.colorCode || it.colorName) && (
                         <div className="text-xs text-muted-foreground">
                           {it.colorCode ? `C/#${it.colorCode}` : ""} {it.colorName ?? ""}
@@ -202,6 +227,11 @@ export function BomSection({ productId, bomId, items, materials, suppliers }: Pr
                     </TableCell>
                     <TableCell className="text-sm">
                       {it.usagePerUnit === null ? "—" : `${num(it.usagePerUnit)} ${it.unit}`}
+                      {it.usageSource === "MARKING_SHEET" && (
+                        <Badge variant="outline" className="ml-1 text-[10px]">
+                          実測
+                        </Badge>
+                      )}
                       {lossUsage !== null && (
                         <div className="text-xs text-muted-foreground">
                           ロス込 {num(lossUsage)}
@@ -260,6 +290,7 @@ export function BomSection({ productId, bomId, items, materials, suppliers }: Pr
           editing={editing}
           materials={materials}
           suppliers={suppliers}
+          markings={markings}
           onClose={() => setDialogOpen(false)}
           onSaved={() => {
             setDialogOpen(false)
@@ -344,6 +375,12 @@ function emptyValues(): BomItemFormValues {
     lossRate: "",
     procurementMode: null,
     unitPrice: "",
+    supplierItemCode: "",
+    designCode: "",
+    sizeValue: "",
+    sizeUnit: null,
+    usageSource: "MANUAL",
+    markingRecordId: null,
     colorCode: "",
     colorName: "",
     notes: "",
@@ -355,6 +392,7 @@ function BomItemDialog({
   editing,
   materials,
   suppliers,
+  markings,
   onClose,
   onSaved,
 }: {
@@ -362,10 +400,12 @@ function BomItemDialog({
   editing: BomItemView | null
   materials: BomMaterialOption[]
   suppliers: BomSupplierOption[]
+  markings: BomMarkingOption[]
   onClose: () => void
   onSaved: () => void
 }) {
   const [isPending, startTransition] = useTransition()
+  const hasMarkings = markings.length > 0
 
   const defaultValues: BomItemFormValues = editing
     ? {
@@ -378,6 +418,12 @@ function BomItemDialog({
         lossRate: String(editing.lossRate),
         procurementMode: editing.procurementMode,
         unitPrice: editing.unitPrice === null ? "" : String(editing.unitPrice),
+        supplierItemCode: editing.supplierItemCode ?? "",
+        designCode: editing.designCode ?? "",
+        sizeValue: editing.sizeValue === null ? "" : String(editing.sizeValue),
+        sizeUnit: (editing.sizeUnit as "cm" | "mm" | "m" | "inch" | null) ?? null,
+        usageSource: editing.usageSource === "CAD" ? "MANUAL" : editing.usageSource,
+        markingRecordId: editing.markingRecordId,
         colorCode: editing.colorCode ?? "",
         colorName: editing.colorName ?? "",
         notes: editing.notes ?? "",
@@ -394,7 +440,9 @@ function BomItemDialog({
   const watchUsage = form.watch("usagePerUnit")
   const watchLoss = form.watch("lossRate")
   const watchPrice = form.watch("unitPrice")
+  const watchUsageSource = form.watch("usageSource")
   const isFabric = FABRIC_CATEGORIES.has(watchCategory as BomItemCategory)
+  const isMarking = watchUsageSource === "MARKING_SHEET"
 
   // 参考表示
   const preview = useMemo(() => {
@@ -556,18 +604,184 @@ function BomItemDialog({
               )}
             />
 
+            {/* QE-0c 実務4カラム（仕入先品番 / デザイン番号 / サイズ） */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <FormField
+                control={form.control}
+                name="supplierItemCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>仕入先品番</FormLabel>
+                    <FormControl>
+                      <Input placeholder="例：1060341" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="designCode"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>デザイン番号</FormLabel>
+                    <FormControl>
+                      <Input placeholder="例：D-A" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="sizeValue"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>サイズ（数値）</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="any"
+                        placeholder="例：56"
+                        value={field.value === null || field.value === undefined ? "" : String(field.value)}
+                        onChange={(e) => field.onChange(e.target.value)}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="sizeUnit"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>サイズ単位</FormLabel>
+                    <Select
+                      value={field.value ?? NONE}
+                      onValueChange={(v) =>
+                        field.onChange(v === NONE ? null : (v as "cm" | "mm" | "m" | "inch"))
+                      }
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="単位" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NONE}>（未選択）</SelectItem>
+                        {SIZE_UNIT_OPTIONS.map((u) => (
+                          <SelectItem key={u} value={u}>
+                            {u}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* 用尺の出所（MANUAL / マーキング転記） */}
+            <div className="rounded-md border p-3 space-y-3">
+              <FormField
+                control={form.control}
+                name="usageSource"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>用尺の出所</FormLabel>
+                    <Select
+                      value={field.value}
+                      onValueChange={(v) => {
+                        field.onChange(v)
+                        if (v === "MANUAL") {
+                          form.setValue("markingRecordId", null)
+                        }
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger className="md:w-[280px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="MANUAL">{USAGE_SOURCE_LABELS.MANUAL}</SelectItem>
+                        <SelectItem value="MARKING_SHEET" disabled={!hasMarkings}>
+                          {USAGE_SOURCE_LABELS.MARKING_SHEET}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {!hasMarkings && (
+                      <FormDescription>
+                        マーキング実測が未登録です（下部「マーキング実測」で登録すると転記できます）
+                      </FormDescription>
+                    )}
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {isMarking && (
+                <FormField
+                  control={form.control}
+                  name="markingRecordId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>マーキング実測 *</FormLabel>
+                      <Select
+                        value={field.value ?? ""}
+                        onValueChange={(v) => {
+                          field.onChange(v)
+                          const m = markings.find((mm) => mm.id === v)
+                          if (m) {
+                            // 転記時点の着用尺をコピー（以後は自動追従しない）
+                            form.setValue("usagePerUnit", m.usagePerUnit)
+                          }
+                        }}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="マーキング図を選択" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {markings.map((m) => (
+                            <SelectItem key={m.id} value={m.id}>
+                              {m.markerName ?? "（無名）"}
+                              <span className="ml-2 text-muted-foreground">
+                                着用尺{m.usagePerUnit}m / 幅{m.fabricWidth}cm
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        選択時点の1着用尺をコピーします。マーキング側を後で編集しても自動追従しません（再選択で更新）。
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+            </div>
+
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <FormField
                 control={form.control}
                 name="usagePerUnit"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>用尺（1着）</FormLabel>
+                    <FormLabel>用尺（1着）{isMarking && "（実測転記）"}</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         step="any"
                         placeholder="例：2.4195"
+                        readOnly={isMarking}
+                        className={isMarking ? "bg-muted" : undefined}
                         value={field.value === null || field.value === undefined ? "" : String(field.value)}
                         onChange={(e) => field.onChange(e.target.value)}
                         onBlur={field.onBlur}

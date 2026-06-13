@@ -52,3 +52,12 @@ export const PROCUREMENT_MODE_OPTIONS: {
 
 /** 単位プルダウン（PoItem の流儀に揃える + BOM 用に組/巻 を追加）。 */
 export const BOM_UNIT_OPTIONS = ["m", "個", "組", "巻", "kg", "本", "枚", "一式"] as const
+
+/** サイズ単位（PoItem v1.2 と同型）。 */
+export const SIZE_UNIT_OPTIONS = ["cm", "mm", "m", "inch"] as const
+
+/** 用尺の出所（CAD は B-047 予約・UI 非対象）。 */
+export const USAGE_SOURCE_LABELS: Record<"MANUAL" | "MARKING_SHEET", string> = {
+  MANUAL: "直接入力",
+  MARKING_SHEET: "マーキング図から転記",
+}

@@ -16,9 +16,12 @@ import {
   getBomByProductId,
   listMaterialsForBomSelect,
   listSuppliersForBomSelect,
+  listMarkingsForBomSelect,
 } from "@/lib/actions/boms"
+import { getMarkingRecordsByProductId } from "@/lib/actions/markings"
 import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
 import { BomSection, type BomItemView } from "../_components/bom-section"
+import { MarkingSection, type MarkingView } from "../_components/marking-section"
 import {
   primaryProductCode,
   secondaryProductCode,
@@ -59,11 +62,12 @@ export default async function ProductDetailPage({
   })
   const samples = samplesResult.ok ? samplesResult.data.items : []
 
-  // QE-0b: 資材表（BOM）。Decimal はクライアントへ渡すため number に正規化。
-  const [bomResult, bomMaterials, bomSuppliers] = await Promise.all([
+  // QE-0b/0c: 資材表（BOM）。Decimal はクライアントへ渡すため number に正規化。
+  const [bomResult, bomMaterials, bomSuppliers, bomMarkings] = await Promise.all([
     getBomByProductId(id),
     listMaterialsForBomSelect(),
     listSuppliersForBomSelect(),
+    listMarkingsForBomSelect(id),
   ])
   const bom = bomResult.ok ? bomResult.data : null
   const toNum = (v: { toNumber: () => number } | null) =>
@@ -85,10 +89,37 @@ export default async function ProductDetailPage({
     lossRate: it.lossRate.toNumber(),
     procurementMode: it.procurementMode,
     unitPrice: toNum(it.unitPrice),
+    supplierItemCode: it.supplierItemCode,
+    designCode: it.designCode,
+    sizeValue: toNum(it.sizeValue),
+    sizeUnit: it.sizeUnit,
+    usageSource: it.usageSource,
+    markingRecordId: it.markingRecordId,
     colorCode: it.colorCode,
     colorName: it.colorName,
     notes: it.notes,
   }))
+
+  // QE-0c: マーキング実測
+  const markingResult = await getMarkingRecordsByProductId(id)
+  const markingViews: MarkingView[] = (markingResult.ok ? markingResult.data : []).map(
+    (m) => ({
+      id: m.id,
+      markerName: m.markerName,
+      materialId: m.materialId,
+      materialLabel: m.material
+        ? `${m.material.materialCode} ${m.material.materialName}`
+        : null,
+      usagePerUnit: m.usagePerUnit.toNumber(),
+      fabricWidth: m.fabricWidth.toNumber(),
+      rollLength: toNum(m.rollLength),
+      yieldRate: toNum(m.yieldRate),
+      partsCount: m.partsCount,
+      patternPitch: toNum(m.patternPitch),
+      hasPdf: !!m.originalFileGcsPath,
+      notes: m.notes,
+    }),
+  )
 
   return (
     <div className="space-y-6 p-6">
@@ -345,6 +376,21 @@ export default async function ProductDetailPage({
             items={bomItems}
             materials={bomMaterials}
             suppliers={bomSuppliers}
+            markings={bomMarkings}
+          />
+        </CardContent>
+      </Card>
+
+      {/* マーキング実測（QE-0c・用尺入力系統B） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">マーキング実測</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <MarkingSection
+            productId={item.id}
+            items={markingViews}
+            materials={bomMaterials}
           />
         </CardContent>
       </Card>

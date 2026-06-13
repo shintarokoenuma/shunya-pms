@@ -93,6 +93,36 @@ export async function listSuppliersForBomSelect(): Promise<BomSupplierOption[]> 
   })
 }
 
+/** QE-0c: マーキング転記（系統B）用。当該品番の live MarkingRecord 一覧。 */
+export type BomMarkingOption = {
+  id: string
+  markerName: string | null
+  usagePerUnit: string // 着用尺 m（転記元）
+  fabricWidth: string // cm
+}
+export async function listMarkingsForBomSelect(
+  productId: string,
+): Promise<BomMarkingOption[]> {
+  const sess = await requireSession()
+  if (!sess.ok) return []
+  const rows = await prisma.markingRecord.findMany({
+    where: { companyId: sess.companyId, productId, deletedAt: null },
+    select: {
+      id: true,
+      markerName: true,
+      usagePerUnit: true,
+      fabricWidth: true,
+    },
+    orderBy: [{ createdAt: "desc" }],
+  })
+  return rows.map((r) => ({
+    id: r.id,
+    markerName: r.markerName,
+    usagePerUnit: r.usagePerUnit.toString(),
+    fabricWidth: r.fabricWidth.toString(),
+  }))
+}
+
 // =============================================================================
 // 取得（Product 直結の現行 BOM + 明細）
 // =============================================================================
@@ -209,7 +239,8 @@ export async function createBom(
 }
 
 // =============================================================================
-// 明細データ整形（QE-0b: usageSource は MANUAL 固定）
+// 明細データ整形（QE-0c: usageSource/markingRecordId・実務4カラム対応。
+//   markingRecordId は validator で MANUAL のとき null 正規化済み）
 // =============================================================================
 function buildItemData(
   data: BomItemInput,
@@ -226,9 +257,15 @@ function buildItemData(
     unit: data.unit,
     lossRate: new Prisma.Decimal(Number(data.lossRate)),
     procurementMode: data.procurementMode,
-    usageSource: "MANUAL", // QE-0b 固定（系統B は QE-0c）
+    usageSource: data.usageSource,
+    markingRecordId: data.markingRecordId,
     unitPrice:
       data.unitPrice !== null ? new Prisma.Decimal(Number(data.unitPrice)) : null,
+    supplierItemCode: data.supplierItemCode || null,
+    designCode: data.designCode || null,
+    sizeValue:
+      data.sizeValue !== null ? new Prisma.Decimal(Number(data.sizeValue)) : null,
+    sizeUnit: data.sizeUnit,
     colorCode: data.colorCode || null,
     colorName: data.colorName || null,
     notes: data.notes || null,
