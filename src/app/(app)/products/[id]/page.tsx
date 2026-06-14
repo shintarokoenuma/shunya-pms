@@ -19,7 +19,9 @@ import {
   listMarkingsForBomSelect,
 } from "@/lib/actions/boms"
 import { getMarkingRecordsByProductId } from "@/lib/actions/markings"
+import { listSkusForProduct } from "@/lib/actions/skus"
 import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
+import { QuantityMatrixSection } from "../_components/quantity-matrix-section"
 import { BomSection, type BomItemView } from "../_components/bom-section"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
 import {
@@ -61,6 +63,10 @@ export default async function ProductDetailPage({
     pageSize: 50,
   })
   const samples = samplesResult.ok ? samplesResult.data.items : []
+
+  // B-064: 数量マトリクス（色×サイズ＋数量群）。read-only・量産ライフサイクルの値。
+  const skusResult = await listSkusForProduct(id)
+  const skus = skusResult.ok ? skusResult.data : []
 
   // QE-0b/0c: 資材表（BOM）。Decimal はクライアントへ渡すため number に正規化。
   const [bomResult, bomMaterials, bomSuppliers, bomMarkings] = await Promise.all([
@@ -347,6 +353,9 @@ export default async function ProductDetailPage({
           )}
         </CardContent>
       </Card>
+
+      {/* 数量マトリクス（B-064・量産 色×サイズ） */}
+      <QuantityMatrixSection skus={skus} />
 
       {/* サンプル製作セット（S-2） */}
       <Card>
