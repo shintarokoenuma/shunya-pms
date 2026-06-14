@@ -30,7 +30,7 @@
 - bom_items=5 / po_items=5 / テスト品番 AOI-26AW-CUT_SEWN-001（id 7671eb90-4bc8-46e0-996b-2e119550be80）温存。
 
 ## ⑤ 次セッション優先順
-1. B-064 数量マトリクス表示の実装指示書作成（最初の実装）。着手前 live grep: Sku の色×サイズ現フィールド／products/[id] ページ骨格／既存描画。スキーマ変更ゼロ見込み＝dev 確認・本番 smoke test。
+1. B-064 数量マトリクス表示の実装指示書作成（最初の実装）。【2026-06-15 確定=C】表示＋空状態UIのみ・スキーマ変更ゼロ・書き込みaction無し。⚠️前提修正: SKUはdev 0件・生成導線も未実装（「既存データの可視化のみ」は誤り）。Sku数量群は量産ライフサイクルの数で、指定数=orderedQuantity/取り切り=productionQuantity（分離済）。サンプルはSPで別系統。希望数は出どころ未定（saagara-v2/CSV/先方）→別タスク。詳細は addendum v0.3(2026-06-15)。着手前 live grep: products/[id] カード構造／getProduct に skus include か別action／空状態UI置き場。
 2. ③+B-062 β の設計詳細。着手前 live grep: Bom.specificationId/productId の現 nullability・BomItem 現フィールド・調達カラーの持ち方（新テーブル or JSON）。migration あり＝三重ガード。
 3. B-063 スコープ確定。着手前 live grep: model Color の存在・colorNameEn の有無・Sku 色列の現状。未 build なら色マスター確定+build を内包。
 4. B-027 絵型は最後。
