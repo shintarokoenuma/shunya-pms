@@ -48,3 +48,6 @@ prisma/*.bak
 # Prisma backups
 prisma/*.bak
 .env.prod.local
+
+# Claude Code local (personal) settings — 共有する .claude/settings.json は追跡可
+.claude/settings.local.json
