@@ -29,6 +29,8 @@ import {
   type BomMarkingOption,
   type PoImportGroup,
 } from "@/lib/actions/boms"
+import { type ColorwayRow } from "@/lib/actions/product-colorways"
+import { upsertBomItemColorway } from "@/lib/actions/bom-item-colorways"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -105,6 +107,12 @@ export type BomItemView = {
   colorCode: string | null
   colorName: string | null
   notes: string | null
+  // B-062 β 次PR: 資材×カラーウェイの調達カラー（C/#）
+  colorways: {
+    productColorwayId: string
+    supplierColorCode: string
+    supplierColorName: string | null
+  }[]
 }
 
 type Props = {
@@ -114,6 +122,8 @@ type Props = {
   materials: BomMaterialOption[]
   suppliers: BomSupplierOption[]
   markings: BomMarkingOption[]
+  /** B-062 β 次PR: ACTIVE カラーウェイ列（0件なら列を出さない＝二段構えのフォールバック） */
+  colorwayColumns: ColorwayRow[]
 }
 
 function num(n: number | null): string {
@@ -126,7 +136,7 @@ function withLoss(usage: number | null, lossRate: number): number | null {
   return usage * (1 + lossRate / 100)
 }
 
-export function BomSection({ productId, bomId, items, materials, suppliers, markings }: Props) {
+export function BomSection({ productId, bomId, items, materials, suppliers, markings, colorwayColumns }: Props) {
   const router = useRouter()
   const [creating, startCreate] = useTransition()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -200,6 +210,14 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                 <TableHead className="w-[120px]">用尺</TableHead>
                 <TableHead className="w-[80px]">ロス率</TableHead>
                 <TableHead className="w-[110px]">調達</TableHead>
+                {colorwayColumns.map((cw) => (
+                  <TableHead key={cw.id} className="w-[90px] text-center">
+                    <span className="font-mono">{cw.colorwayCode}</span>
+                    <span className="block text-[10px] font-normal text-muted-foreground">
+                      {cw.colorwayName}
+                    </span>
+                  </TableHead>
+                ))}
                 <TableHead className="w-[110px] text-right">単価</TableHead>
                 <TableHead className="w-[130px] text-right">1着概算</TableHead>
                 <TableHead className="w-[90px]" />
@@ -262,6 +280,19 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                         ? PROCUREMENT_MODE_LABELS[it.procurementMode]
                         : "—"}
                     </TableCell>
+                    {colorwayColumns.map((cw) => (
+                      <TableCell key={cw.id} className="text-center">
+                        <ColorwayCell
+                          bomItemId={it.id}
+                          productColorwayId={cw.id}
+                          initial={
+                            it.colorways.find(
+                              (c) => c.productColorwayId === cw.id,
+                            )?.supplierColorCode ?? ""
+                          }
+                        />
+                      </TableCell>
+                    ))}
                     <TableCell className="text-right text-sm">
                       {it.unitPrice === null ? "未定" : `¥${num(it.unitPrice)}`}
                       {it.costSource === "PURCHASE_ORDER" && (
@@ -1181,5 +1212,56 @@ function PoImportDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// =============================================================================
+// B-062 β 次PR: 資材×カラーウェイの調達カラー(C/#) インライン編集セル。
+//   onBlur / Enter で upsert（空文字なら delete）→ router.refresh()。
+// =============================================================================
+function ColorwayCell({
+  bomItemId,
+  productColorwayId,
+  initial,
+}: {
+  bomItemId: string
+  productColorwayId: string
+  initial: string
+}) {
+  const router = useRouter()
+  const [value, setValue] = useState(initial)
+  const [saving, startTransition] = useTransition()
+
+  const save = () => {
+    const trimmed = value.trim()
+    if (trimmed === initial.trim()) return // 変化なしは何もしない
+    startTransition(async () => {
+      const r = await upsertBomItemColorway({
+        bomItemId,
+        productColorwayId,
+        supplierColorCode: trimmed,
+        supplierColorName: "",
+      })
+      if (!r.ok) {
+        toast.error(r.error)
+        setValue(initial) // 失敗時は元に戻す
+        return
+      }
+      router.refresh()
+    })
+  }
+
+  return (
+    <Input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+      }}
+      disabled={saving}
+      placeholder="—"
+      className="h-7 w-[72px] text-center font-mono text-xs"
+    />
   )
 }

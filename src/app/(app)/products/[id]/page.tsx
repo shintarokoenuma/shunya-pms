@@ -21,6 +21,7 @@ import {
 import { getMarkingRecordsByProductId } from "@/lib/actions/markings"
 import { listSkusForProduct } from "@/lib/actions/skus"
 import { listColorways } from "@/lib/actions/product-colorways"
+import { listColorwaysByBomItems } from "@/lib/actions/bom-item-colorways"
 import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
 import { QuantityMatrixSection } from "../_components/quantity-matrix-section"
 import { ColorwaySection } from "../_components/colorway-section"
@@ -82,6 +83,13 @@ export default async function ProductDetailPage({
     listMarkingsForBomSelect(id),
   ])
   const bom = bomResult.ok ? bomResult.data : null
+
+  // B-062 β 次PR: 資材×カラーウェイの調達カラー（C/#）を bom 配下一括取得し bomItemId で畳む。
+  const bicResult = bom
+    ? await listColorwaysByBomItems(bom.id)
+    : null
+  const bicByItem = bicResult?.ok ? bicResult.data : {}
+
   const toNum = (v: { toNumber: () => number } | null) =>
     v == null ? null : v.toNumber()
   const bomItems: BomItemView[] = (bom?.items ?? []).map((it) => ({
@@ -112,6 +120,7 @@ export default async function ProductDetailPage({
     colorCode: it.colorCode,
     colorName: it.colorName,
     notes: it.notes,
+    colorways: bicByItem[it.id] ?? [],
   }))
 
   // QE-0c: マーキング実測
@@ -404,6 +413,7 @@ export default async function ProductDetailPage({
             materials={bomMaterials}
             suppliers={bomSuppliers}
             markings={bomMarkings}
+            colorwayColumns={colorways.filter((c) => c.status === "ACTIVE")}
           />
         </CardContent>
       </Card>
