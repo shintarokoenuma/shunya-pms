@@ -31,6 +31,7 @@ import {
 } from "@/lib/actions/boms"
 import { type ColorwayRow } from "@/lib/actions/product-colorways"
 import { upsertBomItemColorway } from "@/lib/actions/bom-item-colorways"
+import { normalizeSupplierColorCode } from "@/lib/validators/bom-item-colorway"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -1233,13 +1234,14 @@ function ColorwayCell({
   const [saving, startTransition] = useTransition()
 
   const save = () => {
-    const trimmed = value.trim()
-    if (trimmed === initial.trim()) return // 変化なしは何もしない
+    // C/# 接頭辞を剥がして番号だけ保存（validator と二重でも冪等）
+    const normalized = normalizeSupplierColorCode(value)
+    if (normalized === normalizeSupplierColorCode(initial)) return // 変化なしは何もしない
     startTransition(async () => {
       const r = await upsertBomItemColorway({
         bomItemId,
         productColorwayId,
-        supplierColorCode: trimmed,
+        supplierColorCode: normalized,
         supplierColorName: "",
       })
       if (!r.ok) {
