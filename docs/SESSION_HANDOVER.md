@@ -29,7 +29,8 @@
 
 ## ④ dev DB（hopper:12921）
 - db push で product_colorways / bom_item_colorways 反映済み。テスト品番 AOI-26AW-CUT_SEWN-001（id 7671eb90-4bc8-46e0-996b-2e119550be80）にカラーウェイ A(ブラック)/B(ベージュ) を検証投入。bom_items=5 / po_items=5 / skus=0 は変化なし。
-- ⚠️ 本番(shuttle:16099)にも検証で ProductColorway A/B を投入してしまった（本番画面確認の過程で）。実害は小（他テーブル未参照・連鎖なし）。【未決】アーカイブで見えなくするか放置か→慎太郎さん判断待ち。次セッション冒頭で要処理。
+- ✅【クローズ・2026-06-15 セッション5】本番(shuttle:16099)に検証で投入していた ProductColorway A/B（id ef88999f… / f3535fc5…）を物理削除・COMMIT 済み。id 限定2件・ドライラン(ROLLBACK)検証後に本実行・連鎖被害なし（bom_item_colorways=0）。本番 product_colorways=0 を別接続および本番画面で確認済み。本件クローズ。
+- dev DB(hopper:12921) 側の検証カラーウェイ A/B は dev のため残置（検証用・実害なし）。
 
 ## ⑤ 次セッション優先順
 1. β 次 PR: BomItemColorway 編集 UI（付属マトリクスのカラーウェイ×C/# 入力）。着手前に colorway-section.tsx / bom-section.tsx の現状と BomItem 編集導線を live grep。schema は本セッションで作成済み=この PR は migration なし（UI/actions のみ）。
@@ -52,7 +53,6 @@
 
 ## ⑧ 次セッション冒頭の手順
 1. このメモを貼り付け→状態復元
-2. ④の本番 ProductColorway A/B 検証データの処理（アーカイブ or 放置）を先に片付ける
-3. shunya-design-reread スキルで β 次 PR の spec（v0.4 §2・§4）を読み直してから設計
-4. git log origin/main --oneline -5 で先頭が f654ce5 か確認
-5. ⑤-1（BomItemColorway 編集 UI）から着手。着手前 live grep
+2. shunya-design-reread スキルで β 次 PR の spec（v0.4 §2・§4）を読み直してから設計
+3. git log origin/main --oneline -5 で先頭確認
+4. ⑤-1（BomItemColorway 編集 UI）から着手。着手前 live grep
