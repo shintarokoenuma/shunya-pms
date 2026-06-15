@@ -2008,6 +2008,7 @@ model Product {
   skus            Sku[]
   statusHistory   ProductStatusHistory[]
   collectionLinks CollectionProduct[]
+  colorways       ProductColorway[] // B-062 β: カラー展開
 
   @@unique([companyId, productCode])
   @@index([companyId, status])
@@ -2709,12 +2710,60 @@ model BomItem {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  bom Bom @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  bom       Bom               @relation(fields: [bomId], references: [id], onDelete: Cascade)
+  colorways BomItemColorway[] // B-062 β: 資材×カラーウェイの調達カラー
 
   @@index([bomId, itemOrder])
   @@index([materialId])
   @@index([supplierId])
   @@map("bom_items")
+}
+
+/// 製品のカラー展開（カラーウェイ）。品番カルテのカラー軸の親。SKU 非依存。
+model ProductColorway {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+  productId String @map("product_id")
+
+  colorwayCode String @map("colorway_code") @db.VarChar(50)
+  colorwayName String @map("colorway_name") @db.VarChar(100)
+
+  colorId  String? @map("color_id")
+  colorHex String? @map("color_hex") @db.VarChar(7)
+
+  sortOrder Int    @default(0) @map("sort_order")
+  status    String @default("ACTIVE") @db.VarChar(20)
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  product       Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  bomItemColors BomItemColorway[]
+
+  @@unique([productId, colorwayCode])
+  @@index([companyId, productId])
+  @@map("product_colorways")
+}
+
+/// 資材×カラーウェイの調達カラー（先方 C/#）。v0.1 §2「C/# のみカラーウェイ別」を担う。
+model BomItemColorway {
+  id                String @id @default(uuid())
+  bomItemId         String @map("bom_item_id")
+  productColorwayId String @map("product_colorway_id")
+
+  supplierColorCode String  @map("supplier_color_code") @db.VarChar(100)
+  supplierColorName String? @map("supplier_color_name") @db.VarChar(100)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  bomItem         BomItem         @relation(fields: [bomItemId], references: [id], onDelete: Cascade)
+  productColorway ProductColorway @relation(fields: [productColorwayId], references: [id], onDelete: Cascade)
+
+  @@unique([bomItemId, productColorwayId])
+  @@index([productColorwayId])
+  @@map("bom_item_colorways")
 }
 
 enum BomItemCategory {
@@ -3801,7 +3850,7 @@ model PurchaseOrder {
   primaryProductId String? @map("primary_product_id") // 主要品番（DIRECT時）
 
   // 進行チェックリスト紐付け（S-4・D1）
-  progressTaskId String? @map("progress_task_id")
+  progressTaskId     String? @map("progress_task_id")
   // サンプル製作セット（ラウンド）紐付け（S-4・D3。生地/付属/ボディ PO をラウンドに結ぶ）
   sampleProductionId String? @map("sample_production_id")
 
@@ -3966,14 +4015,14 @@ model PoItem {
   description      String? @db.Text
 
   // 仕様
-  specification    String? @db.Text
+  specification    String?  @db.Text
   supplierItemCode String?  @map("supplier_item_code") @db.VarChar(100) // 仕入先品番（v1.1）
   designCode       String?  @map("design_code") @db.VarChar(100) // デザイン番号（v1.1）
   sizeValue        Decimal? @map("size_value") @db.Decimal(15, 4) // サイズ数値（v1.2・sizeSpec から分解）
   sizeUnit         String?  @map("size_unit") @db.VarChar(10) // cm/mm/m/inch（v1.2）
   color            String?  @db.VarChar(100)
-  colorCode        String? @map("color_code") @db.VarChar(50)
-  pantone          String? @db.VarChar(50)
+  colorCode        String?  @map("color_code") @db.VarChar(50)
+  pantone          String?  @db.VarChar(50)
 
   // 数量
   quantity Decimal @db.Decimal(15, 4)
@@ -3998,13 +4047,13 @@ model PoItem {
   shortage         Decimal? @map("shortage") @db.Decimal(15, 4)
 
   // 費目（S-4・D4。CostCategory 参照・スカラー列）
-  costCategoryId String? @map("cost_category_id")
+  costCategoryId         String?                @map("cost_category_id")
   // 売り立て区分（S-4・D4）
-  billingClassification BillingClassification? @map("billing_classification")
+  billingClassification  BillingClassification? @map("billing_classification")
   // 現物資産（版・型・刺繍パンチ等。S-4・D4 / 仕様 §6-3。本格在庫管理は B-023）
-  isPhysicalAsset        Boolean   @default(false) @map("is_physical_asset")
-  assetStorageStartDate  DateTime? @map("asset_storage_start_date") @db.Date
-  assetStorageExpiryDate DateTime? @map("asset_storage_expiry_date") @db.Date
+  isPhysicalAsset        Boolean                @default(false) @map("is_physical_asset")
+  assetStorageStartDate  DateTime?              @map("asset_storage_start_date") @db.Date
+  assetStorageExpiryDate DateTime?              @map("asset_storage_expiry_date") @db.Date
 
   // メモ
   notes String? @db.Text
@@ -4074,7 +4123,7 @@ model WorkOrder {
   modelCodeId  String? @map("model_code_id") // パターン関連の場合
 
   // 進行チェックリスト紐付け（S-4・D1。タスク側ではなく伝票側に持つ）
-  progressTaskId String? @map("progress_task_id")
+  progressTaskId   String? @map("progress_task_id")
   // 加工種別マスター参照（S-4・D2。workType=PROCESSING系のとき ProcessingType を指す）
   processingTypeId String? @map("processing_type_id")
 
@@ -4279,7 +4328,7 @@ model WoItem {
   defectQuantity    Int? @map("defect_quantity")
 
   // 費目（S-4・D4）
-  costCategoryId String? @map("cost_category_id")
+  costCategoryId        String?                @map("cost_category_id")
   // 売り立て区分（S-4・D4）
   billingClassification BillingClassification? @map("billing_classification")
 
@@ -9364,10 +9413,10 @@ model MarkingRecord {
   totalUnits  Int?     @map("total_units") // 総着数（CAD 連携用に温存）
   totalLength Decimal? @map("total_length") @db.Decimal(10, 1) // 総用尺 cm（CAD 連携用に温存）
 
-  yieldRate           Decimal? @map("yield_rate") @db.Decimal(5, 1) // 収率 %
-  partsCount          Int?     @map("parts_count") // パーツ数
-  patternPitch        Decimal? @map("pattern_pitch") @db.Decimal(6, 1) // 柄ピッチ
-  sizeCombination     String?  @map("size_combination") @db.VarChar(255) // UI撤去済み・何人取り等のコメントはメモに集約（カラム温存）
+  yieldRate       Decimal? @map("yield_rate") @db.Decimal(5, 1) // 収率 %
+  partsCount      Int?     @map("parts_count") // パーツ数
+  patternPitch    Decimal? @map("pattern_pitch") @db.Decimal(6, 1) // 柄ピッチ
+  sizeCombination String?  @map("size_combination") @db.VarChar(255) // UI撤去済み・何人取り等のコメントはメモに集約（カラム温存）
 
   source              UsageSource @default(MARKING_SHEET) // CAD は B-047 予約
   originalFileGcsPath String?     @map("original_file_gcs_path") @db.VarChar(500) // 原本PDF（QE-0c）
