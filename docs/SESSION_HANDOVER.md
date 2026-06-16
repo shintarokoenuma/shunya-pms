@@ -1,4 +1,4 @@
-# 引き継ぎメモ (2026-06-16 セッション5 / B-062 β 完了 PR #83・#84 本番反映済み)
+# 引き継ぎメモ (2026-06-16 セッション6 / B-063(B-2) 完了 PR #85 本番反映済み)
 
 ## ⓪ プロジェクト棲み分け（毎回必須）
 - shunya-pms（shintarokoenuma/shunya-pms・~/shunya-production-system・shunya-pms-web-production.up.railway.app）と saagara-v2 は完全に別物。実装指示書は冒頭に【対象プロジェクト】ヘッダ固定。貼る前に ~/shunya-production-system を開いているか目視。
@@ -9,55 +9,62 @@
 - ② マージ=GitHub PR→Railway自動デプロイ=本番反映(不可逆)。
 - ③ マージ後=本番URL + デプロイログ目視。migration入りPRは「Applying migration ...」行が③の本体。migration なしPRは「No pending migrations to apply.」が正常（エラーではない）。
 - 【dev起動の罠】schema/migration変更後に dev が古いプロセスを掴むと prisma.<新model> が undefined → findFirst / Internal Server Error。対処: lsof -ti:3000,3001 | xargs kill -9 → npx prisma generate → rm -rf .next → npm run dev。起動ポートが3001にズレてないか必ず確認。
-- 【本番確認の罠】カラーウェイ等「データ0件なら列を出さない」系UIは、本番にデータが無いと変更が見えない＝バグではない。本番反映の確認は「データ非依存の変更点」で見る（例: 列順変更は全品番に効く）。本番に検証データを入れて確認しない。
+- 【今回の追加教訓・index-browser】"use client" のコンポーネントが "use server"（prisma 同梱）の actions ファイルから型を import すると、ブラウザバンドルに @prisma/client が漏れ `.prisma/client/index-browser` 解決エラーになる。import type でも漏れる。対処=型を中立モジュール（src/lib/types/*.ts・prisma非依存）に逃がして client はそこから import。今回 ColorPickerOption を src/lib/types/color.ts へ分離して解消。
+- 【本番確認の罠】「データ0件なら出さない/データ依存」系UIは本番にデータが無いと変更が見えない＝バグではない。本番反映の確認はデータ非依存の変更点で見る（今回は「HEX 欄が readOnly・更新ボタンが押せる」で確認）。本番に検証データを入れない。
 
-## ① 本セッションの成果（B-062 β 完了）
-- PR #83（squash f654ce5）= β 先行: ProductColorway + BomItemColorway 2テーブル新設（migration 32本目）＋ProductColorway CRUD＋品番カルテ「カラー展開」カード。本番 migration 適用確認済み（前セッション末）。
-- PR #84（squash 41f8096）= β 次PR: 資材表(BOM)に BomItemColorway インライン編集。migration なし（テーブルは#83済）。本番反映確認済み（列順が新並びになっているのが反映の証拠）。
-- #84 で4回の追加修正を反映: ①C/#接頭辞の正規化ガード（normalizeSupplierColorCode・validator transform + client保存前・冪等・大文字C/#も剥がす・英字番号C99/D21/M003は保護） ②B案=カラーウェイ列群に「先方カラー No.（C/#）」を colSpan でまたぐ2段グループヘッダ・セルは番号のみ表示 ③列順=区分→品目→[カラーウェイ列群]→用尺→単価→1着概算→ロス率→調達 ④dev既存データ正規化（保存時normalizeで既に番号化済み・要修正0件で実害なし）。
+## ① 本セッションの成果（B-063(B-2) 完了）
+- PR #85（squash fc9c883）= ProductColorway → Color マスター「(ホ) 緩い参照（@relation 張らず純 String?）」配線＋ハイブリッドカラーピッカー（検索＋スウォッチグリッド）。migration なし・DDL不変・本番colors(51件)不変。本番反映確認済み（HEX readOnly・更新ボタンで確認）。
+- 当初 (イ) 緩い参照（@relation だけ張る）で実装→ schema と DB の「意図的 drift」が残り「次の migrate 生成時に FK が紛れる」地雷を内包すると判明 → 慎太郎さん判断で (ホ) に切替（@relation 2行削除して純 scalar）。migrate diff で dev⇔schema 空差分（drift ゼロ）を実測確認。
+- マージ後 origin/main 先頭 = fc9c883。drift = No difference detected.（確認済み）。
 
-## ② β 設計の確定事項（v0.4・実装で確定）
-- カラーウェイの実体 = ProductColorway（SKUの親・SKU非依存・品番内ローカルマスター）。SP単位ではない（軸はカラーウェイ）。全社の色辞書 Color マスターとは別レイヤー（橋渡しは colorId 配線=B-063）。
-- 資材×カラーウェイの C/# = BomItemColorway 子テーブル（ProductColorway を FK 参照）。BomItemColorway に companyId 列なし→親(bomItem→bom)経由で companyId 検証。
-- 既存 BomItem 単色列（colorCode/colorName/pantone）は併存（全色共通資材=芯地等の受け皿）。「色変動品=BomItemColorway / 全色共通品=本体単色列」の二段構え。
-- C/# はデータには番号のみ保存（先方カラー番号は番号のみが前提）。「C/#」接頭辞は表示専用で、列群グループ見出しに1回だけ出す。入力で接頭辞を打たれても normalize で剥がして番号保存。
-- ProductColorway.colorId? は #83 で列だけ作成済み・β では未配線。Color マスター連携・色名解決・Sku色FK化は B-063。
+## ② B-063(B-2) 設計の確定事項（実装で確定）
+- ProductColorway.colorId は **純 String? scalar**（Color への DB FK 制約なし・Prisma relation も張らない）。色は colorId 文字列で保存、表示 hex は ProductColorway 自前の colorHex を使う。FK 正規化（@relation/FK制約）は帳票フェーズの別タスクに送る（colorNameEn・Sku FK 化と同梱予定）。
+- カラーピッカー = ハイブリッド：上部に検索（color_number/color_name 部分一致）＋本体スウォッチグリッド（hue_group×tone_step）＋「00 カラー未定」別枠ボタン。shadcn Command/Popover 未導入のため Input+グリッドで自前実装（依存追加なし）。
+- 色の供給は **色マスター選択が唯一の経路**。表示色(HEX)は readOnly＝手入力不可（慎太郎さん判断で hex 手入力単独保存の経路は廃止）。00 選択時は hex を空にクリア。マスターに無い色を使いたい時は「まず Color マスターに追加してから選ぶ」運用（color-master の集約思想と一致）。
+- listActiveColorsForPicker()：id/colorNumber/colorName/hueGroup/toneStep/hex のみ・auth+companyId+deletedAt:null+status=ACTIVE・sortOrder昇順・read のみ。
+- B-063 残（未着手）：colorNameEn 追加 migration / Material.availableColors 改訂1 / Sku 色 FK 化 / ProductColorway.colorId の FK 正規化 → すべて「帳票フェーズ」で実施。今回スコープ外。
 
 ## ③ Railway環境（唯一の正）
 - 本番DB postgres-production/postgres-ab6d/shuttle:16099（migrate deploy・_prisma_migrations あり）。
 - dev DB postgres-development/hopper:12921（db push・_prisma_migrations 無し・migrate系打たない）。
-- migration 32本（本セッションで増減なし。#84 は migration なし）。GCS dev=...-dev / prod=...-prod。
-- Prisma 6.19.3→7.8.0 のメジャーアップ案内がデプロイログに出るが未対応・今は無視。アップは別途検討（バックログ候補）。
+- migration 32本（本セッションで増減なし。#85 は migration なし）。GCS dev=...-dev / prod=...-prod。
+- Prisma 6.19.3→7.8.0 メジャーアップ案内はデプロイログに出るが未対応・今は無視。
 
 ## ④ dev DB（hopper:12921）
-- テスト品番 AOI-26AW-CUT_SEWN-001（id 7671eb90-4bc8-46e0-996b-2e119550be80）にカラーウェイ A(ブラック)/B(ベージュ)、BomItemColorway 8行（017/020/512/510/M003/001/D001/D21 等・全て番号のみクリーン）を検証投入。bom_items=5 / po_items=5 / skus=0。
-- 本番(shuttle:16099)は #83 検証時の ProductColorway を前セッションで物理削除済み記録＝クリーンのはず。次セッション開始時に本番カラー展開が0件か念のため確認。本番 BomItemColorway は0件。
+- colors=51件（00 カラー未定 ＋ 奇数 01〜99 の50色。全 ACTIVE・重複なし）。本番 colors も 51件（一致）。
+- テスト品番 AOI-26AW-CUT_SEWN-001（id 7671eb90-4bc8-46e0-996b-2e119550be80）：product_colorways=2（記号 A/B・※確認時に A/C/B 等いじった名残あり）、bom_item_colorways=8、bom_items=5、po_items=5、skus=0。
+- 本番 product_colorways=0 / bom_item_colorways=0（クリーン）。
 
 ## ⑤ 次セッション優先順
-1. B-063 色名供給（β の次・色名解決トラック）。実体: ①Color データ投入（50色・seed未投入・dev/本番件数未確認→着手前に colors テーブル件数を dev/本番で確認） ②Color.colorNameEn 追加 migration ③Material.availableColors 改訂1（{colorNumber, supplierColorCode, supplierColorName}へ・JSON ゆえ migration不要） ④ProductColorway.colorId 配線＋Sku 色 FK 化。color-master §6 未確定7点の解決を含む。着手前に shunya-design-reread で color-master spec(2026-06-01) と v0.4 §4 を読み直す。
-2. B-065（新規）= 発注引き当て時の C/# 自動反映。現状「発注から取り込む/引き当て」はコスト・単価のみ反映でカラーウェイ別 C/# は反映しない（β スコープ外で確定）。着手前に PoItem が先方カラー番号フィールドを持つか live grep（持っていなければ設計から）。B-063 と並走で設計検討。
-3. B-027 絵型（北極星5要素の最後・画像アップロード基盤・GCS 既存）。
-4. B-060 SPタイトルは方針①で次の SP 作業に相乗り。
+1. **B-027 絵型**（北極星5要素の最後）。着手前に design-reread で「絵型/スケッチがどこに spec 化されているか」を確認し、続けて Claude Code に read-only 調査：Product への画像フィールド有無 / GCS アップロード用の既存 util・route の有無 / signed URL 生成経路。GCS は B-053 で PDF アーカイブ用に稼働しているが「品番カルテへ画像アップロード→表示する経路」が実装済みかは別物。記憶で「基盤あり」と断定しない。
+2. **柄・特色マスター（新規・要起票 B-066 等）**＝下記⑥に詳述。腰を据えた1マスター構築（Color と同規模・migration 入り）。
+3. B-065（発注引き当て時の C/# 自動反映）・B-060(B=SPタイトル方針①相乗り)・継続項目は据え置き。
 
-## ⑥ 1ページ傘下 backlog
-- B-064 数量マトリクス表示=完了(#82) / B-062 β=完了(#83先行+#84次PR) / B-063 色名解決=次 / B-027 絵型。
-- B-061(C)=不要クローズ / B-060(B=SPタイトル)=方針①で相乗り。
-- B-065（新規）= 発注引き当て時 C/# 自動反映（⑤-2）。
-- 継続: B-048 / WorkOrder編集UI / B-037(docs整理) / SKU 生成導線（希望数の出どころ確定後・別タスク）。
-- 【UI将来要望】資材表の列順をドラッグで並び替え＋ユーザーごと列順保存。今回は固定順で対応。別タスク化（列順の永続化が要る）。
-- 【B-037 メモ】git status に未追跡ファイル大量散乱（docs/CLAUDE.md・docs/files 9〜12/・各種zip・skill/・files.zip 等）。後日まとめて整理。3群仕分け: (a)gitignore行き=zip/skill/files系 (b)中身照合してから add/破棄=docs直下の spec 群 (c)削除候補=docs/CLAUDE.md。read-only調査から。物理削除は不可逆ゆえ慎重に。
-- QE-1 は北極星完了後（Excel2点を参照資料化・再添付依頼。QE-1仕様書は Specification 経由BOM前提で古い=決定2に合わせ見直し）。B-057 は QE-1後。逆転記(A)不要確定。
+## ⑥ 柄・特色の次テーマ（本セッションで方針整理・実装は別フェーズ）
+- **受け皿の設計図は存在**：docs に柄マスター spec（textile-pattern-master-spec-confirmation-2026-06-01）あり。Color の兄弟として `TextilePattern`（仮称・型紙 PatternVersion と衝突回避で要確定）。層1=種別(BD/ST/CK/DT/PR/AO=総柄/ML/OT)＋層2=構成色(Color番号参照)＋parameters(Json)。**テーブル/UI は未実装（§7 丸ごと未着手）・§6 に未確定論点10個**。
+- **慎太郎さんの3例の行き先**：ボーダー/チェック/ドット/プリント=柄マスター種別に有り。迷彩=総柄(AO)かその他(OT)。蛍光・メタリック=「柄」ではなく「特殊単色」で柄マスター対象外＝別問題。
+- **UI 方針（重要・確定）**：カラー展開と数量マトリクスの間に新ボックスは挟まない。柄は「カラーウェイの正体の一種」（A=ネイビー無地 / B=マリンボーダー のように1カラーウェイが単色か柄か）。→ **ProductColorway に色(colorId)と並べて柄(patternId/patternNumber)参照を1本足す**形。PR #85 の colorId 配線の隣に増設。柄選択時はスウォッチの代わりに簡易プレビュー（縞/格子）。数量マトリクスは不変（各カラーウェイ×サイズで数量を持つ構造は変えない）。
+- **特殊単色（蛍光/メタリック）**：当面は使う時に Color マスターへ近似 hex で1色追加 or 保留。本格運用（Pantone TPX 参照等）が要るなら別途検討。
+- 着手時は design-reread で textile-pattern spec §6（10論点）と color-master を読み直してから（記憶で組み立てない・色マスターの轍）。
 
 ## ⑦ 本日マージされた PR / push
-- PR #83: B-062 β 先行（squash f654ce5）※前セッション末にマージ・本番migration適用済み。
-- PR #84: B-062 β 次PR（squash 41f8096）BomItemColorway インライン編集＋正規化ガード＋B案2段ヘッダ＋列順。migration なし。本番反映確認済み（列順で確認）。
-- docs: 本メモ更新（main 直push）。
-- main 先頭: 41f8096（#84）→ ... → f654ce5（#83）。
-- 後始末: ローカル feat/b062-beta-bom-item-colorway 削除済み。
+- PR #85: B-063(B-2)（squash fc9c883）ProductColorway→Color 緩い参照＋カラーピッカー。migration なし。本番反映確認済み。
+  - 経過：初コミット 8d1913a((イ)緩い参照) → 追加コミット b4ddcea((ホ)@relation削除でdrift解消・UIスクロール修正・00でhexクリア・hex手入力不可・index-browser解消) → squash マージ。
+- 後始末：GitHub 側マージ＋リモートブランチ削除済み。ローカルは main 復帰＋feat/b063-colorway-color-link 削除（本セッション末に実施）。
+- main 先頭: fc9c883（#85）→ 566e0b9 → 41f8096(#84)。
 
 ## ⑧ 次セッション冒頭の手順
 1. このメモを貼り付け→状態復元
-2. git log origin/main --oneline -5 で先頭が 41f8096 か確認
-3. ④の本番カラー展開が0件か念のため確認（前セッションで物理削除済みのはず）
-4. shunya-design-reread スキルで B-063 の spec（color-master 2026-06-01 §5/§6・v0.4 §4）を読み直してから設計（記憶で組み立てない・色マスターの轍）
-5. ⑤-1（B-063 色名供給）着手。着手前 live grep: colors テーブル件数(dev/本番)・Color.colorNameEn・Material.availableColors の現形・Sku 色列の FK 状況
+2. git log origin/main --oneline -5 で先頭が fc9c883 か確認
+3. 念のため drift 確認（migrate diff で No difference detected. のままか）
+4. B-027 着手なら shunya-design-reread で絵型/スケッチの spec を読み直してから（記憶で組み立てない）→ Claude Code に画像アップロード基盤の read-only 調査
+5. B-027 着手。柄・特色（⑥）は B-027 後 or 並行で起票してから設計
+
+## ⑥-2 1ページ傘下 backlog（更新）
+- B-064 数量マトリクス=完了(#82) / B-062 β=完了(#83+#84) / B-063(B-2)=完了(#85) / B-027 絵型=次。
+- B-063 残（colorNameEn/availableColors改訂/Sku FK化/colorId FK正規化）=帳票フェーズ。
+- 柄・特色マスター（B-066 等・要起票）=⑥。B-065（発注引き当て時C/#自動反映）。
+- B-061(C)=不要クローズ / B-060(B=SPタイトル)=方針①相乗り。
+- 継続: B-048 / WorkOrder編集UI / B-037(docs整理：git status 未追跡散乱・3群仕分け) / SKU 生成導線（希望数の出どころ確定後）。
+- 【UI将来要望】資材表の列順ドラッグ並び替え＋ユーザーごと列順保存（列順の永続化が要る・別タスク）。
+- QE-1 は北極星完了後（Excel2点を参照資料化・再添付依頼。QE-1仕様書は Specification 経由BOM前提で古い=決定2に合わせ見直し）。B-057 は QE-1後。逆転記(A)不要確定。
