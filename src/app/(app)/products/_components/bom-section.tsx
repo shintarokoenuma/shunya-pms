@@ -144,6 +144,7 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
   const [editing, setEditing] = useState<BomItemView | null>(null)
   const [deleting, setDeleting] = useState<BomItemView | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const hasColorways = colorwayColumns.length > 0
 
   const handleCreateBom = () => {
     startCreate(async () => {
@@ -206,28 +207,38 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[110px]">区分</TableHead>
-                <TableHead>品目</TableHead>
-                {colorwayColumns.map((cw, i) => (
-                  <TableHead key={cw.id} className="w-[90px] text-center">
-                    {i === 0 && (
-                      <span className="block text-[10px] font-normal text-muted-foreground">
-                        先方カラー No.（C/#）
-                      </span>
-                    )}
-                    <span className="font-mono">{cw.colorwayCode}</span>
-                    <span className="block text-[10px] font-normal text-muted-foreground">
-                      {cw.colorwayName}
-                    </span>
+                <TableHead className="w-[110px]" rowSpan={hasColorways ? 2 : undefined}>区分</TableHead>
+                <TableHead rowSpan={hasColorways ? 2 : undefined}>品目</TableHead>
+                {hasColorways && (
+                  <TableHead
+                    colSpan={colorwayColumns.length}
+                    className="border-l text-center text-[11px]"
+                  >
+                    先方カラー No.（C/#）
                   </TableHead>
-                ))}
-                <TableHead className="w-[120px]">用尺</TableHead>
-                <TableHead className="w-[80px]">ロス率</TableHead>
-                <TableHead className="w-[110px]">調達</TableHead>
-                <TableHead className="w-[110px] text-right">単価</TableHead>
-                <TableHead className="w-[130px] text-right">1着概算</TableHead>
-                <TableHead className="w-[90px]" />
+                )}
+                <TableHead className="w-[120px]" rowSpan={hasColorways ? 2 : undefined}>用尺</TableHead>
+                <TableHead className="w-[110px] text-right" rowSpan={hasColorways ? 2 : undefined}>単価</TableHead>
+                <TableHead className="w-[130px] text-right" rowSpan={hasColorways ? 2 : undefined}>1着概算</TableHead>
+                <TableHead className="w-[80px]" rowSpan={hasColorways ? 2 : undefined}>ロス率</TableHead>
+                <TableHead className="w-[110px]" rowSpan={hasColorways ? 2 : undefined}>調達</TableHead>
+                <TableHead className="w-[90px]" rowSpan={hasColorways ? 2 : undefined} />
               </TableRow>
+              {hasColorways && (
+                <TableRow>
+                  {colorwayColumns.map((cw, i) => (
+                    <TableHead
+                      key={cw.id}
+                      className={`w-[90px] text-center${i === 0 ? " border-l" : ""}`}
+                    >
+                      <span className="font-mono">{cw.colorwayCode}</span>
+                      <span className="block text-[10px] font-normal text-muted-foreground">
+                        {cw.colorwayName}
+                      </span>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              )}
             </TableHeader>
             <TableBody>
               {items.map((it) => {
@@ -293,12 +304,6 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm">{it.lossRate}%</TableCell>
-                    <TableCell className="text-sm">
-                      {it.procurementMode
-                        ? PROCUREMENT_MODE_LABELS[it.procurementMode]
-                        : "—"}
-                    </TableCell>
                     <TableCell className="text-right text-sm">
                       {it.unitPrice === null ? "未定" : `¥${num(it.unitPrice)}`}
                       {it.costSource === "PURCHASE_ORDER" && (
@@ -311,6 +316,12 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                     </TableCell>
                     <TableCell className="text-right text-sm">
                       {estimate === null ? "—" : `¥${estimate.toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`}
+                    </TableCell>
+                    <TableCell className="text-sm">{it.lossRate}%</TableCell>
+                    <TableCell className="text-sm">
+                      {it.procurementMode
+                        ? PROCUREMENT_MODE_LABELS[it.procurementMode]
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
