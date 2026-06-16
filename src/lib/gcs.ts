@@ -141,6 +141,51 @@ export async function uploadMarkingPdf(
 }
 
 /**
+ * B-027: 品番カルテ 絵型（服のスケッチ）の画像を GCS に保存する。
+ * 原本とサムネ（WebP）の2オブジェクトを同一 stamp で対にして保存する。
+ * パス規約:
+ *   原本:   sketch/{productId}/{yyyyMMdd-HHmmss}.{ext}（contentType=引数）
+ *   サムネ: sketch/{productId}/{yyyyMMdd-HHmmss}.thumb.webp（contentType="image/webp"）
+ * 履歴保持・上書きなし。失敗/未設定は null（graceful degradation・例外は投げない）。
+ */
+export async function uploadProductSketch(
+  productId: string,
+  originalBuffer: Buffer,
+  thumbBuffer: Buffer | null, // null=サムネ生成失敗時。原本のみ保存し thumbGcsPath=gcsPath
+  contentType: string,
+  ext: string,
+): Promise<{ gcsPath: string; thumbGcsPath: string } | null> {
+  const ctx = getStorageContext()
+  if (!ctx) return null
+
+  const stamp = timestampJst(new Date())
+  const base = `sketch/${productId}/${stamp}`
+  const originalPath = `${base}.${ext}`
+  const thumbPath = `${base}.thumb.webp`
+  try {
+    const bucket = ctx.storage.bucket(ctx.bucketName)
+    await bucket
+      .file(originalPath)
+      .save(originalBuffer, { contentType, resumable: false })
+    const gcsPath = `gs://${ctx.bucketName}/${originalPath}`
+    if (!thumbBuffer) {
+      // サムネ無し: 原本を表示にも使う
+      return { gcsPath, thumbGcsPath: gcsPath }
+    }
+    await bucket
+      .file(thumbPath)
+      .save(thumbBuffer, { contentType: "image/webp", resumable: false })
+    return { gcsPath, thumbGcsPath: `gs://${ctx.bucketName}/${thumbPath}` }
+  } catch (e) {
+    console.error(
+      `[gcs] 絵型画像のアップロードに失敗しました (${originalPath}):`,
+      e instanceof Error ? e.message : "unknown error",
+    )
+    return null
+  }
+}
+
+/**
  * gs://bucket/object 形式のパスから署名付き読み取りURL（有効期限15分）を生成する。
  * バケットは非公開のためダウンロード/プレビューはこれ経由。失敗/未設定は null。
  */
