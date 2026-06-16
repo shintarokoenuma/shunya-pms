@@ -57,13 +57,17 @@ import {
   PRODUCT_COLORWAY_STATUS_BADGE_VARIANT,
 } from "./colorway-labels"
 import type { ProductColorwayStatusValue } from "@/lib/validators/product-colorway"
+import { ColorPicker } from "@/components/color/color-picker"
+import type { ColorPickerOption } from "@/lib/actions/colors"
 
 export function ColorwaySection({
   productId,
   colorways,
+  colorOptions,
 }: {
   productId: string
   colorways: ColorwayRow[]
+  colorOptions: ColorPickerOption[]
 }) {
   const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -189,6 +193,7 @@ export function ColorwaySection({
         <ColorwayDialog
           productId={productId}
           editing={editing}
+          colorOptions={colorOptions}
           onClose={() => setDialogOpen(false)}
           onSaved={() => {
             setDialogOpen(false)
@@ -207,17 +212,20 @@ function emptyValues(): ProductColorwayFormValues {
     colorHex: "",
     sortOrder: 0,
     status: "ACTIVE",
+    colorId: null,
   }
 }
 
 function ColorwayDialog({
   productId,
   editing,
+  colorOptions,
   onClose,
   onSaved,
 }: {
   productId: string
   editing: ColorwayRow | null
+  colorOptions: ColorPickerOption[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -230,6 +238,7 @@ function ColorwayDialog({
         colorHex: editing.colorHex ?? "",
         sortOrder: editing.sortOrder,
         status: editing.status as ProductColorwayStatusValue,
+        colorId: editing.colorId ?? null,
       }
     : emptyValues()
 
@@ -316,6 +325,30 @@ function ColorwayDialog({
               )}
             />
 
+            {/* B-063: 色マスターから選択（任意・緩い参照）。選ぶと colorId と colorHex をセット。 */}
+            <FormField
+              control={form.control}
+              name="colorId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>色マスター（任意）</FormLabel>
+                  <ColorPicker
+                    value={field.value ?? null}
+                    colors={colorOptions}
+                    onChange={(colorId, hex) => {
+                      field.onChange(colorId)
+                      // 選択色の hex で表示色を上書き（未定選択=hex null のときは触らない）
+                      if (hex) form.setValue("colorHex", hex)
+                    }}
+                  />
+                  <FormDescription>
+                    自社カラー番号から選ぶと表示色も自動セット。未選択でも下の HEX 手入力だけで保存できます。
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="colorHex"
@@ -326,7 +359,7 @@ function ColorwayDialog({
                     <Input placeholder="例：#001799（任意）" {...field} />
                   </FormControl>
                   <FormDescription>
-                    画面表示用のスウォッチ色。色マスター連携は後続（B-063）。
+                    画面表示用のスウォッチ色。色マスター未選択でも手入力だけで従来通り保存できます。
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

@@ -24,6 +24,7 @@ export type ColorwayRow = {
   id: string
   colorwayCode: string
   colorwayName: string
+  colorId: string | null
   colorHex: string | null
   sortOrder: number
   status: string
@@ -48,6 +49,7 @@ export async function listColorways(
         id: true,
         colorwayCode: true,
         colorwayName: true,
+        colorId: true,
         colorHex: true,
         sortOrder: true,
         status: true,
@@ -81,6 +83,7 @@ export async function getColorway(
         productId: true,
         colorwayCode: true,
         colorwayName: true,
+        colorId: true,
         colorHex: true,
         sortOrder: true,
         status: true,
@@ -145,6 +148,7 @@ export async function createColorway(
           productId,
           colorwayCode: data.colorwayCode,
           colorwayName: data.colorwayName,
+          colorId: data.colorId,
           colorHex: data.colorHex || null,
           sortOrder: data.sortOrder,
           status: data.status,
@@ -232,6 +236,7 @@ export async function updateColorway(
         data: {
           colorwayCode: data.colorwayCode,
           colorwayName: data.colorwayName,
+          colorId: data.colorId,
           colorHex: data.colorHex || null,
           sortOrder: data.sortOrder,
           status: data.status,

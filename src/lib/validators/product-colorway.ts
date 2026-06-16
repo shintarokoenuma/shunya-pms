@@ -5,8 +5,8 @@ import { z } from "zod"
  * 仕様: docs/specs/product-overview-one-page-spec-confirmation-v0_4-2026-06-15.md §2
  * - color.ts / colors.ts の流儀に合わせる（status は VarChar(20) 文字列・enum 化しない）。
  * - colorwayCode は品番内ユニーク（@@unique([productId, colorwayCode]) は actions 層で重複チェック）。
- * - colorId は本 PR ではフォーム入力させない（B-063 で Color マスター配線時に追加）。
- * - colorHex は任意・空 or #RRGGBB。
+ * - colorId は B-063 で追加（Color マスターへの緩い参照・任意・null 可。00 カラー未定 含め未選択でも保存可）。
+ * - colorHex は任意・空 or #RRGGBB（colorId 未選択でも手入力だけで従来通り保存できる経路は維持）。
  */
 
 const HEX_PATTERN = /^#[0-9A-Fa-f]{6}$/
@@ -36,6 +36,12 @@ export const productColorwayInputSchema = z.object({
     }),
   sortOrder: z.coerce.number().int().min(0).default(0),
   status: z.enum(PRODUCT_COLORWAY_STATUS_VALUES).default("ACTIVE"),
+  // Color マスターへの緩い参照（任意・空/未選択は null 正規化）
+  colorId: z
+    .string()
+    .nullable()
+    .default(null)
+    .transform((v) => (v && v.trim() !== "" ? v.trim() : null)),
 })
 
 export type ProductColorwayFormValues = z.input<typeof productColorwayInputSchema>

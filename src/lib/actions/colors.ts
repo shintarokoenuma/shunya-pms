@@ -512,3 +512,37 @@ export async function deleteColorPermanently(
     }
   }
 }
+
+// =============================================================================
+// B-063: カラーピッカー用の軽量取得（read のみ）。
+//   戻り列は id / colorNumber / colorName / hueGroup / toneStep / hex のみ。
+//   auth + companyId スコープ + deletedAt:null + status="ACTIVE"・sortOrder 昇順。
+// =============================================================================
+export type ColorPickerOption = {
+  id: string
+  colorNumber: string
+  colorName: string
+  hueGroup: number
+  toneStep: number
+  hex: string
+}
+
+export async function listActiveColorsForPicker(): Promise<ColorPickerOption[]> {
+  const session = await auth()
+  if (!session?.user) return []
+  const companyId = session.user.companyId
+  if (!companyId) return []
+
+  return prisma.color.findMany({
+    where: { companyId, deletedAt: null, status: "ACTIVE" },
+    orderBy: [{ sortOrder: "asc" }],
+    select: {
+      id: true,
+      colorNumber: true,
+      colorName: true,
+      hueGroup: true,
+      toneStep: true,
+      hex: true,
+    },
+  })
+}

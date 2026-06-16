@@ -1527,6 +1527,9 @@ model Color {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
+  // B-063: ProductColorway からの緩い参照（DB FK 制約なし＝DDL 不変。Prisma Client 型のためだけ）
+  colorways ProductColorway[]
+
   @@unique([companyId, colorNumber])
   @@index([companyId, hueGroup])
   @@map("colors")
@@ -2739,6 +2742,8 @@ model ProductColorway {
   deletedAt DateTime? @map("deleted_at")
 
   product       Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // B-063: Color マスターへの緩い参照（DB FK 制約は張らない＝DDL 不変。colorId は String? のまま）
+  color         Color?            @relation(fields: [colorId], references: [id])
   bomItemColors BomItemColorway[]
 
   @@unique([productId, colorwayCode])
