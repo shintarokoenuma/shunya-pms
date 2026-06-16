@@ -10,6 +10,7 @@ import {
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { runWithoutTenantContext } from "@/lib/tenant-context"
+import { getSignedReadUrl } from "@/lib/gcs"
 import { productBaseSchema, type ProductInput } from "@/lib/validators/product"
 
 /**
@@ -278,11 +279,13 @@ type ProductBaseRow = Pick<
   | "status"
   | "createdAt"
   | "updatedAt"
+  | "sketchThumbPath" // B-027: 一覧サムネ用（非正規化・先頭サムネの gs://パス）
 >
 
 export type ProductListItem = ProductBaseRow & {
   brand: BrandSummary | null
   category: CategorySummary | null
+  sketchThumbUrl?: string // B-027: 一覧サムネの署名URL（listProducts でまとめて生成）
 }
 
 export async function listProducts(
@@ -338,6 +341,7 @@ export async function listProducts(
           status: true,
           createdAt: true,
           updatedAt: true,
+          sketchThumbPath: true, // B-027
         },
         orderBy: [{ season: "desc" }, { productCode: "asc" }],
         skip,
@@ -355,10 +359,18 @@ export async function listProducts(
       [...new Set(rows.map((r) => r.categoryId).filter((v): v is string => !!v))],
     )
 
-    const items: ProductListItem[] = rows.map((r) => ({
+    // B-027: 一覧サムネは行数ぶん署名URLをまとめて発行（client で N 回 action を呼ばせない）
+    const thumbUrls = await Promise.all(
+      rows.map((r) =>
+        r.sketchThumbPath ? getSignedReadUrl(r.sketchThumbPath) : Promise.resolve(null),
+      ),
+    )
+
+    const items: ProductListItem[] = rows.map((r, idx) => ({
       ...r,
       brand: brandMap.get(r.brandId) ?? null,
       category: r.categoryId ? categoryMap.get(r.categoryId) ?? null : null,
+      sketchThumbUrl: thumbUrls[idx] ?? undefined,
     }))
 
     return {
@@ -732,7 +744,15 @@ export async function updateProduct(
     // この型に組み込まれ、未追加でビルド失敗 = 監査スナップショット漏れの保険。
     type ProductAuditField = Exclude<
       keyof typeof Prisma.ProductScalarFieldEnum,
-      "id" | "companyId" | "createdAt" | "updatedAt" | "deletedAt"
+      // B-027: 絵型(sketchImages/sketchThumbPath) は product-sketches.ts が専用 AuditLog で
+      //   管理し updateProduct は触らないため、基本情報の監査スナップショットからは除外する。
+      | "id"
+      | "companyId"
+      | "createdAt"
+      | "updatedAt"
+      | "deletedAt"
+      | "sketchImages"
+      | "sketchThumbPath"
     >
 
     const beforeData = {

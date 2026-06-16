@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, ImageOff } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,
@@ -37,6 +37,7 @@ export function ProductsTable({ items }: Props) {
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-[64px]">絵型</TableHead>
             <TableHead>品名</TableHead>
             <TableHead className="w-[200px]">品番</TableHead>
             <TableHead className="w-[160px]">ブランド</TableHead>
@@ -52,6 +53,20 @@ export function ProductsTable({ items }: Props) {
             const secondary = secondaryProductCode(item)
             return (
               <TableRow key={item.id}>
+                <TableCell>
+                  {item.sketchThumbUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={item.sketchThumbUrl}
+                      alt=""
+                      className="h-10 w-10 rounded border object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded border border-dashed text-muted-foreground">
+                      <ImageOff className="h-4 w-4" />
+                    </div>
+                  )}
+                </TableCell>
                 <TableCell>
                   <div className="font-medium">{item.productName}</div>
                   {item.productNameEn && (

@@ -2002,6 +2002,12 @@ model Product {
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
+  // B-027: 絵型（服のスケッチ）。詳細用・全枚数。各要素 {gcsPath, thumbGcsPath, caption?, sortOrder}。
+  // GCS パス保持・表示時に署名URL化。DesignVersion.flatSketch とは別レイヤー（仕様 §2-1）。
+  sketchImages    Json?   @map("sketch_images")
+  // B-027: 一覧/進行表用に先頭サムネ（sortOrder 最小）のパスを非正規化保持。0枚なら null。
+  sketchThumbPath String? @map("sketch_thumb_path") @db.VarChar(500)
+
   // リレーション
   inquiry         Inquiry?               @relation(fields: [inquiryId], references: [id])
   modelCode       ModelCode              @relation(fields: [modelCodeId], references: [id])
