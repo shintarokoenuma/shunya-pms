@@ -29,6 +29,9 @@ import {
   type BomMarkingOption,
   type PoImportGroup,
 } from "@/lib/actions/boms"
+import { type ColorwayRow } from "@/lib/actions/product-colorways"
+import { upsertBomItemColorway } from "@/lib/actions/bom-item-colorways"
+import { normalizeSupplierColorCode } from "@/lib/validators/bom-item-colorway"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -105,6 +108,12 @@ export type BomItemView = {
   colorCode: string | null
   colorName: string | null
   notes: string | null
+  // B-062 β 次PR: 資材×カラーウェイの調達カラー（C/#）
+  colorways: {
+    productColorwayId: string
+    supplierColorCode: string
+    supplierColorName: string | null
+  }[]
 }
 
 type Props = {
@@ -114,6 +123,8 @@ type Props = {
   materials: BomMaterialOption[]
   suppliers: BomSupplierOption[]
   markings: BomMarkingOption[]
+  /** B-062 β 次PR: ACTIVE カラーウェイ列（0件なら列を出さない＝二段構えのフォールバック） */
+  colorwayColumns: ColorwayRow[]
 }
 
 function num(n: number | null): string {
@@ -126,13 +137,14 @@ function withLoss(usage: number | null, lossRate: number): number | null {
   return usage * (1 + lossRate / 100)
 }
 
-export function BomSection({ productId, bomId, items, materials, suppliers, markings }: Props) {
+export function BomSection({ productId, bomId, items, materials, suppliers, markings, colorwayColumns }: Props) {
   const router = useRouter()
   const [creating, startCreate] = useTransition()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<BomItemView | null>(null)
   const [deleting, setDeleting] = useState<BomItemView | null>(null)
   const [importOpen, setImportOpen] = useState(false)
+  const hasColorways = colorwayColumns.length > 0
 
   const handleCreateBom = () => {
     startCreate(async () => {
@@ -195,15 +207,38 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[110px]">区分</TableHead>
-                <TableHead>品目</TableHead>
-                <TableHead className="w-[120px]">用尺</TableHead>
-                <TableHead className="w-[80px]">ロス率</TableHead>
-                <TableHead className="w-[110px]">調達</TableHead>
-                <TableHead className="w-[110px] text-right">単価</TableHead>
-                <TableHead className="w-[130px] text-right">1着概算</TableHead>
-                <TableHead className="w-[90px]" />
+                <TableHead className="w-[110px]" rowSpan={hasColorways ? 2 : undefined}>区分</TableHead>
+                <TableHead rowSpan={hasColorways ? 2 : undefined}>品目</TableHead>
+                {hasColorways && (
+                  <TableHead
+                    colSpan={colorwayColumns.length}
+                    className="border-l text-center text-[11px]"
+                  >
+                    先方カラー No.（C/#）
+                  </TableHead>
+                )}
+                <TableHead className="w-[120px]" rowSpan={hasColorways ? 2 : undefined}>用尺</TableHead>
+                <TableHead className="w-[110px] text-right" rowSpan={hasColorways ? 2 : undefined}>単価</TableHead>
+                <TableHead className="w-[130px] text-right" rowSpan={hasColorways ? 2 : undefined}>1着概算</TableHead>
+                <TableHead className="w-[80px]" rowSpan={hasColorways ? 2 : undefined}>ロス率</TableHead>
+                <TableHead className="w-[110px]" rowSpan={hasColorways ? 2 : undefined}>調達</TableHead>
+                <TableHead className="w-[90px]" rowSpan={hasColorways ? 2 : undefined} />
               </TableRow>
+              {hasColorways && (
+                <TableRow>
+                  {colorwayColumns.map((cw, i) => (
+                    <TableHead
+                      key={cw.id}
+                      className={`w-[90px] text-center${i === 0 ? " border-l" : ""}`}
+                    >
+                      <span className="font-mono">{cw.colorwayCode}</span>
+                      <span className="block text-[10px] font-normal text-muted-foreground">
+                        {cw.colorwayName}
+                      </span>
+                    </TableHead>
+                  ))}
+                </TableRow>
+              )}
             </TableHeader>
             <TableBody>
               {items.map((it) => {
@@ -243,6 +278,19 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                         </div>
                       )}
                     </TableCell>
+                    {colorwayColumns.map((cw) => (
+                      <TableCell key={cw.id} className="text-center">
+                        <ColorwayCell
+                          bomItemId={it.id}
+                          productColorwayId={cw.id}
+                          initial={
+                            it.colorways.find(
+                              (c) => c.productColorwayId === cw.id,
+                            )?.supplierColorCode ?? ""
+                          }
+                        />
+                      </TableCell>
+                    ))}
                     <TableCell className="text-sm">
                       {it.usagePerUnit === null ? "—" : `${num(it.usagePerUnit)} ${it.unit}`}
                       {it.usageSource === "MARKING_SHEET" && (
@@ -256,12 +304,6 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm">{it.lossRate}%</TableCell>
-                    <TableCell className="text-sm">
-                      {it.procurementMode
-                        ? PROCUREMENT_MODE_LABELS[it.procurementMode]
-                        : "—"}
-                    </TableCell>
                     <TableCell className="text-right text-sm">
                       {it.unitPrice === null ? "未定" : `¥${num(it.unitPrice)}`}
                       {it.costSource === "PURCHASE_ORDER" && (
@@ -274,6 +316,12 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                     </TableCell>
                     <TableCell className="text-right text-sm">
                       {estimate === null ? "—" : `¥${estimate.toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`}
+                    </TableCell>
+                    <TableCell className="text-sm">{it.lossRate}%</TableCell>
+                    <TableCell className="text-sm">
+                      {it.procurementMode
+                        ? PROCUREMENT_MODE_LABELS[it.procurementMode]
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
@@ -1181,5 +1229,57 @@ function PoImportDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// =============================================================================
+// B-062 β 次PR: 資材×カラーウェイの調達カラー(C/#) インライン編集セル。
+//   onBlur / Enter で upsert（空文字なら delete）→ router.refresh()。
+// =============================================================================
+function ColorwayCell({
+  bomItemId,
+  productColorwayId,
+  initial,
+}: {
+  bomItemId: string
+  productColorwayId: string
+  initial: string
+}) {
+  const router = useRouter()
+  const [value, setValue] = useState(initial)
+  const [saving, startTransition] = useTransition()
+
+  const save = () => {
+    // C/# 接頭辞を剥がして番号だけ保存（validator と二重でも冪等）
+    const normalized = normalizeSupplierColorCode(value)
+    if (normalized === normalizeSupplierColorCode(initial)) return // 変化なしは何もしない
+    startTransition(async () => {
+      const r = await upsertBomItemColorway({
+        bomItemId,
+        productColorwayId,
+        supplierColorCode: normalized,
+        supplierColorName: "",
+      })
+      if (!r.ok) {
+        toast.error(r.error)
+        setValue(initial) // 失敗時は元に戻す
+        return
+      }
+      router.refresh()
+    })
+  }
+
+  return (
+    <Input
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={save}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur()
+      }}
+      disabled={saving}
+      placeholder="—"
+      className="h-7 w-[72px] text-center font-mono text-xs"
+    />
   )
 }
