@@ -58,7 +58,7 @@ import {
 } from "./colorway-labels"
 import type { ProductColorwayStatusValue } from "@/lib/validators/product-colorway"
 import { ColorPicker } from "@/components/color/color-picker"
-import type { ColorPickerOption } from "@/lib/actions/colors"
+import type { ColorPickerOption } from "@/lib/types/color"
 
 export function ColorwaySection({
   productId,
@@ -264,7 +264,7 @@ function ColorwayDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="flex max-h-[90vh] max-w-lg flex-col overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? "カラー展開を編集" : "カラー展開を追加"}</DialogTitle>
         </DialogHeader>
@@ -337,12 +337,12 @@ function ColorwayDialog({
                     colors={colorOptions}
                     onChange={(colorId, hex) => {
                       field.onChange(colorId)
-                      // 選択色の hex で表示色を上書き（未定選択=hex null のときは触らない）
-                      if (hex) form.setValue("colorHex", hex)
+                      // 表示色は選択でのみ更新。色選択=その hex / 「00 カラー未定」=hex null → 空にクリア
+                      form.setValue("colorHex", hex ?? "")
                     }}
                   />
                   <FormDescription>
-                    自社カラー番号から選ぶと表示色も自動セット。未選択でも下の HEX 手入力だけで保存できます。
+                    表示色は色マスター選択で自動セットされます（00 カラー未定で空）。
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -356,10 +356,15 @@ function ColorwayDialog({
                 <FormItem>
                   <FormLabel>表示色（HEX）</FormLabel>
                   <FormControl>
-                    <Input placeholder="例：#001799（任意）" {...field} />
+                    <Input
+                      placeholder="（色マスター選択で自動）"
+                      readOnly
+                      className="bg-muted"
+                      {...field}
+                    />
                   </FormControl>
                   <FormDescription>
-                    画面表示用のスウォッチ色。色マスター未選択でも手入力だけで従来通り保存できます。
+                    表示色は色マスター選択で自動セットされます（手入力不可）。
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -392,7 +397,7 @@ function ColorwayDialog({
               )}
             />
 
-            <DialogFooter>
+            <DialogFooter className="sticky bottom-0 -mx-6 -mb-6 mt-2 border-t bg-background px-6 py-3">
               <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
                 キャンセル
               </Button>

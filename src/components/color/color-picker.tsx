@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react"
 import { Input } from "@/components/ui/input"
-import type { ColorPickerOption } from "@/lib/actions/colors"
+import type { ColorPickerOption } from "@/lib/types/color"
 
 /**
  * B-063: ハイブリッド カラーピッカー（検索 + スウォッチグリッド）。
