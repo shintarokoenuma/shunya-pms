@@ -21,6 +21,7 @@ import {
 import { getMarkingRecordsByProductId } from "@/lib/actions/markings"
 import { listSkusForProduct } from "@/lib/actions/skus"
 import { listColorways } from "@/lib/actions/product-colorways"
+import { listActiveColorsForPicker } from "@/lib/actions/colors"
 import { listColorwaysByBomItems } from "@/lib/actions/bom-item-colorways"
 import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
 import { QuantityMatrixSection } from "../_components/quantity-matrix-section"
@@ -74,6 +75,8 @@ export default async function ProductDetailPage({
   // B-062 β: カラー展開（ProductColorway）。カラー軸の親。
   const colorwaysResult = await listColorways(id)
   const colorways = colorwaysResult.ok ? colorwaysResult.data : []
+  // B-063: カラーピッカー用の ACTIVE 色マスター（read のみ）。
+  const colorOptions = await listActiveColorsForPicker()
 
   // QE-0b/0c: 資材表（BOM）。Decimal はクライアントへ渡すため number に正規化。
   const [bomResult, bomMaterials, bomSuppliers, bomMarkings] = await Promise.all([
@@ -375,7 +378,11 @@ export default async function ProductDetailPage({
           <CardTitle className="text-base">カラー展開</CardTitle>
         </CardHeader>
         <CardContent>
-          <ColorwaySection productId={item.id} colorways={colorways} />
+          <ColorwaySection
+            productId={item.id}
+            colorways={colorways}
+            colorOptions={colorOptions}
+          />
         </CardContent>
       </Card>
 

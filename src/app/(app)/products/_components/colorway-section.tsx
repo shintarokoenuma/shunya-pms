@@ -57,13 +57,17 @@ import {
   PRODUCT_COLORWAY_STATUS_BADGE_VARIANT,
 } from "./colorway-labels"
 import type { ProductColorwayStatusValue } from "@/lib/validators/product-colorway"
+import { ColorPicker } from "@/components/color/color-picker"
+import type { ColorPickerOption } from "@/lib/types/color"
 
 export function ColorwaySection({
   productId,
   colorways,
+  colorOptions,
 }: {
   productId: string
   colorways: ColorwayRow[]
+  colorOptions: ColorPickerOption[]
 }) {
   const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -189,6 +193,7 @@ export function ColorwaySection({
         <ColorwayDialog
           productId={productId}
           editing={editing}
+          colorOptions={colorOptions}
           onClose={() => setDialogOpen(false)}
           onSaved={() => {
             setDialogOpen(false)
@@ -207,17 +212,20 @@ function emptyValues(): ProductColorwayFormValues {
     colorHex: "",
     sortOrder: 0,
     status: "ACTIVE",
+    colorId: null,
   }
 }
 
 function ColorwayDialog({
   productId,
   editing,
+  colorOptions,
   onClose,
   onSaved,
 }: {
   productId: string
   editing: ColorwayRow | null
+  colorOptions: ColorPickerOption[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -230,6 +238,7 @@ function ColorwayDialog({
         colorHex: editing.colorHex ?? "",
         sortOrder: editing.sortOrder,
         status: editing.status as ProductColorwayStatusValue,
+        colorId: editing.colorId ?? null,
       }
     : emptyValues()
 
@@ -255,7 +264,7 @@ function ColorwayDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="flex max-h-[90vh] max-w-lg flex-col overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? "カラー展開を編集" : "カラー展開を追加"}</DialogTitle>
         </DialogHeader>
@@ -316,6 +325,30 @@ function ColorwayDialog({
               )}
             />
 
+            {/* B-063: 色マスターから選択（任意・緩い参照）。選ぶと colorId と colorHex をセット。 */}
+            <FormField
+              control={form.control}
+              name="colorId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>色マスター（任意）</FormLabel>
+                  <ColorPicker
+                    value={field.value ?? null}
+                    colors={colorOptions}
+                    onChange={(colorId, hex) => {
+                      field.onChange(colorId)
+                      // 表示色は選択でのみ更新。色選択=その hex / 「00 カラー未定」=hex null → 空にクリア
+                      form.setValue("colorHex", hex ?? "")
+                    }}
+                  />
+                  <FormDescription>
+                    表示色は色マスター選択で自動セットされます（00 カラー未定で空）。
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             <FormField
               control={form.control}
               name="colorHex"
@@ -323,10 +356,15 @@ function ColorwayDialog({
                 <FormItem>
                   <FormLabel>表示色（HEX）</FormLabel>
                   <FormControl>
-                    <Input placeholder="例：#001799（任意）" {...field} />
+                    <Input
+                      placeholder="（色マスター選択で自動）"
+                      readOnly
+                      className="bg-muted"
+                      {...field}
+                    />
                   </FormControl>
                   <FormDescription>
-                    画面表示用のスウォッチ色。色マスター連携は後続（B-063）。
+                    表示色は色マスター選択で自動セットされます（手入力不可）。
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -359,7 +397,7 @@ function ColorwayDialog({
               )}
             />
 
-            <DialogFooter>
+            <DialogFooter className="sticky bottom-0 -mx-6 -mb-6 mt-2 border-t bg-background px-6 py-3">
               <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
                 キャンセル
               </Button>

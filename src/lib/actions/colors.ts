@@ -11,6 +11,7 @@ import {
   type ColorInput,
   type ColorStatusValue,
 } from "@/lib/validators/color"
+import type { ColorPickerOption } from "@/lib/types/color"
 
 /**
  * Phase 1A-13c: 色マスター（Color）Server Actions
@@ -511,4 +512,31 @@ export async function deleteColorPermanently(
       error: e instanceof Error ? e.message : "物理削除に失敗しました",
     }
   }
+}
+
+// =============================================================================
+// B-063: カラーピッカー用の軽量取得（read のみ）。
+//   戻り列は id / colorNumber / colorName / hueGroup / toneStep / hex のみ。
+//   auth + companyId スコープ + deletedAt:null + status="ACTIVE"・sortOrder 昇順。
+// =============================================================================
+// 型は中立モジュール（@/lib/types/color）に置く（client が "use server" から型を引くと
+// ブラウザバンドルに @prisma/client が漏れるため）。ここでは値を再 export しない。
+export async function listActiveColorsForPicker(): Promise<ColorPickerOption[]> {
+  const session = await auth()
+  if (!session?.user) return []
+  const companyId = session.user.companyId
+  if (!companyId) return []
+
+  return prisma.color.findMany({
+    where: { companyId, deletedAt: null, status: "ACTIVE" },
+    orderBy: [{ sortOrder: "asc" }],
+    select: {
+      id: true,
+      colorNumber: true,
+      colorName: true,
+      hueGroup: true,
+      toneStep: true,
+      hex: true,
+    },
+  })
 }
