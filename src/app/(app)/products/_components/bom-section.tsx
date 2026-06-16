@@ -208,17 +208,22 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
               <TableRow>
                 <TableHead className="w-[110px]">区分</TableHead>
                 <TableHead>品目</TableHead>
-                <TableHead className="w-[120px]">用尺</TableHead>
-                <TableHead className="w-[80px]">ロス率</TableHead>
-                <TableHead className="w-[110px]">調達</TableHead>
-                {colorwayColumns.map((cw) => (
+                {colorwayColumns.map((cw, i) => (
                   <TableHead key={cw.id} className="w-[90px] text-center">
+                    {i === 0 && (
+                      <span className="block text-[10px] font-normal text-muted-foreground">
+                        先方カラー No.（C/#）
+                      </span>
+                    )}
                     <span className="font-mono">{cw.colorwayCode}</span>
                     <span className="block text-[10px] font-normal text-muted-foreground">
                       {cw.colorwayName}
                     </span>
                   </TableHead>
                 ))}
+                <TableHead className="w-[120px]">用尺</TableHead>
+                <TableHead className="w-[80px]">ロス率</TableHead>
+                <TableHead className="w-[110px]">調達</TableHead>
                 <TableHead className="w-[110px] text-right">単価</TableHead>
                 <TableHead className="w-[130px] text-right">1着概算</TableHead>
                 <TableHead className="w-[90px]" />
@@ -262,6 +267,19 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                         </div>
                       )}
                     </TableCell>
+                    {colorwayColumns.map((cw) => (
+                      <TableCell key={cw.id} className="text-center">
+                        <ColorwayCell
+                          bomItemId={it.id}
+                          productColorwayId={cw.id}
+                          initial={
+                            it.colorways.find(
+                              (c) => c.productColorwayId === cw.id,
+                            )?.supplierColorCode ?? ""
+                          }
+                        />
+                      </TableCell>
+                    ))}
                     <TableCell className="text-sm">
                       {it.usagePerUnit === null ? "—" : `${num(it.usagePerUnit)} ${it.unit}`}
                       {it.usageSource === "MARKING_SHEET" && (
@@ -281,19 +299,6 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                         ? PROCUREMENT_MODE_LABELS[it.procurementMode]
                         : "—"}
                     </TableCell>
-                    {colorwayColumns.map((cw) => (
-                      <TableCell key={cw.id} className="text-center">
-                        <ColorwayCell
-                          bomItemId={it.id}
-                          productColorwayId={cw.id}
-                          initial={
-                            it.colorways.find(
-                              (c) => c.productColorwayId === cw.id,
-                            )?.supplierColorCode ?? ""
-                          }
-                        />
-                      </TableCell>
-                    ))}
                     <TableCell className="text-right text-sm">
                       {it.unitPrice === null ? "未定" : `¥${num(it.unitPrice)}`}
                       {it.costSource === "PURCHASE_ORDER" && (
