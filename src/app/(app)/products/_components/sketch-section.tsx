@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, ImagePlus, Trash2, ArrowLeft, ArrowRight } from "lucide-react"
@@ -24,19 +24,40 @@ export function SketchSection({
   const router = useRouter()
   const inputRef = useRef<HTMLInputElement>(null)
   const [isPending, startTransition] = useTransition()
+  const [isDragging, setIsDragging] = useState(false)
   const atMax = sketches.length >= MAX_COUNT
 
-  const handleFile = (file: File | null) => {
-    if (!file) return
-    const fd = new FormData()
-    fd.set("file", file)
+  // 複数枚を直列（for...of await）で追加する。並列にしない＝サーバの「最新読み直し→追記」が
+  //   last-write-wins のため、並列だと取りこぼす。サーバ(addProductSketch)は無改修。
+  const handleFiles = (files: File[]) => {
+    if (files.length === 0) return
+    // client 側 UX ガード: 残り枚数を超える分は弾く（サーバが最終防衛線だが往復を減らす）
+    const remaining = MAX_COUNT - sketches.length
+    if (remaining <= 0) {
+      toast.error(`絵型は${MAX_COUNT}枚までです`)
+      return
+    }
+    const targets = files.slice(0, remaining)
+    const skippedByLimit = files.length - targets.length
     startTransition(async () => {
-      const r = await addProductSketch(productId, fd)
-      if (!r.ok) {
-        toast.error(r.error)
-        return
+      let ok = 0
+      const failed: string[] = []
+      for (const file of targets) {
+        const fd = new FormData()
+        fd.set("file", file)
+        const r = await addProductSketch(productId, fd)
+        if (r.ok) ok++
+        else failed.push(`${file.name}: ${r.error}`)
       }
-      toast.success("絵型を追加しました")
+      if (ok > 0) toast.success(`絵型を${ok}枚追加しました`)
+      if (failed.length > 0)
+        toast.error(
+          `${failed.length}枚を追加できませんでした\n${failed
+            .slice(0, 3)
+            .join("\n")}${failed.length > 3 ? "\n…" : ""}`,
+        )
+      if (skippedByLimit > 0)
+        toast.error(`上限(${MAX_COUNT}枚)を超える${skippedByLimit}枚はスキップしました`)
       router.refresh()
     })
   }
@@ -74,9 +95,10 @@ export function SketchSection({
         ref={inputRef}
         type="file"
         accept="image/png,image/jpeg,image/webp"
+        multiple
         className="hidden"
         onChange={(e) => {
-          handleFile(e.target.files?.[0] ?? null)
+          handleFiles(Array.from(e.target.files ?? []))
           e.target.value = ""
         }}
       />
@@ -101,9 +123,31 @@ export function SketchSection({
         </Button>
       </div>
 
+      <div
+        onDragOver={(e) => {
+          e.preventDefault()
+          if (!atMax) setIsDragging(true)
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault()
+          setIsDragging(false)
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          setIsDragging(false)
+          handleFiles(Array.from(e.dataTransfer.files))
+        }}
+        className={
+          isDragging ? "rounded-md ring-2 ring-primary ring-offset-2" : undefined
+        }
+      >
       {sketches.length === 0 ? (
-        <div className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">
-          絵型がまだ登録されていません。「絵型を追加」から画像をアップロードしてください。
+        <div
+          className={`rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground ${
+            isDragging ? "border-primary bg-muted/40" : ""
+          }`}
+        >
+          画像をここにドラッグ&ドロップ、または「絵型を追加」からアップロードしてください。
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
@@ -158,6 +202,7 @@ export function SketchSection({
           ))}
         </div>
       )}
+      </div>
     </div>
   )
 }
