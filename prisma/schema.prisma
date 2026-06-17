@@ -1556,6 +1556,27 @@ model TextilePatternType {
   @@map("textile_pattern_types")
 }
 
+/// B-066: 自社柄マスター（社内の柄共通言語・層2）。Color マスターの兄弟。
+/// 注: 型紙 PatternVersion とは別物。typeId は TextilePatternType への緩い参照（純 scalar・@relation なし）。
+model TextilePattern {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+
+  patternNumber String  @map("pattern_number") @db.VarChar(10) // "BD-A"（種別typeCode + "-" + 英字枝番・手振り）
+  patternName   String  @map("pattern_name") @db.VarChar(100) // 手入力呼称
+  typeId        String? @map("type_id") // TextilePatternType.id 緩い参照（FK制約なし・@relation なし）
+
+  sortOrder Int       @map("sort_order")
+  status    String    @default("ACTIVE") @db.VarChar(20)
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@unique([companyId, patternNumber])
+  @@index([companyId, typeId])
+  @@map("textile_patterns")
+}
+
 // =====================================================
 // 為替レート履歴
 // =====================================================

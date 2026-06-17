@@ -20,18 +20,18 @@ type PatternTypeRow = {
   description: string
 }
 
-// ─────────────────────────────────────────────────── 初期 9 種別
+// ─────────────────────────────────────────────────── 種別 7 種
+// B-066(2026-06-17): DT(ドット)→PR内包・SOLID(無地)→カラー対応 として種別から除外。
+//   既存 dev/本番の DT/SOLID 行は UI から ARCHIVED 化済み（再 seed で復活させないため定義からも削除）。
 // sortOrder は配列順で 10 刻み採番 (将来の挿入余地を残す)
 export const PATTERN_TYPES: readonly PatternTypeRow[] = [
-  { typeCode: "SOLID", typeName: "無地",       description: "単色・柄なし" },
-  { typeCode: "BD",    typeName: "ボーダー",   description: "横縞" },
-  { typeCode: "ST",    typeName: "ストライプ", description: "縦縞" },
-  { typeCode: "CK",    typeName: "チェック",   description: "格子（ギンガム/タータン等を内包）" },
-  { typeCode: "DT",    typeName: "ドット",     description: "水玉" },
-  { typeCode: "PR",    typeName: "プリント",   description: "図案・グラフィックプリント" },
-  { typeCode: "AO",    typeName: "総柄",       description: "オールオーバー（全面反復柄）" },
-  { typeCode: "ML",    typeName: "マルチ",     description: "多色・配色指定なしの混在" },
-  { typeCode: "OT",    typeName: "その他",     description: "上記に当てはまらない柄" },
+  { typeCode: "BD", typeName: "ボーダー",   description: "横縞" },
+  { typeCode: "ST", typeName: "ストライプ", description: "縦縞" },
+  { typeCode: "CK", typeName: "チェック",   description: "格子（ギンガム/タータン等を内包）" },
+  { typeCode: "PR", typeName: "プリント",   description: "図案・グラフィックプリント（ドット内包）" },
+  { typeCode: "AO", typeName: "総柄",       description: "オールオーバー（全面反復柄）" },
+  { typeCode: "ML", typeName: "マルチ",     description: "多色・配色指定なしの混在" },
+  { typeCode: "OT", typeName: "その他",     description: "上記に当てはまらない柄" },
 ] as const
 
 /**
