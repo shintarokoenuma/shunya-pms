@@ -1,4 +1,4 @@
-# 引き継ぎメモ (2026-06-17 セッション7 / B-027 絵型 完了 PR #86・#87 本番反映・北極星5要素 完成)
+# 引き継ぎメモ (2026-06-17 セッション8 / B-066 柄マスター層2 完了 PR #88 本番反映済み・層1 7種整理済み)
 
 ## ⓪ プロジェクト棲み分け（毎回必須）
 - shunya-pms（shintarokoenuma/shunya-pms・~/shunya-production-system・shunya-pms-web-production.up.railway.app）と saagara-v2 は完全に別物。実装指示書は冒頭に【対象プロジェクト】ヘッダ固定。貼る前に ~/shunya-production-system を開いているか目視。
@@ -7,67 +7,77 @@
 ## ⓪-2 PR URL 3点セット
 - ① マージ前UI確認=ローカル(npm run dev→localhost:3000 / dev hopper:12921)。型/lintクリーンなら commit→push→PR open まで Claude Code 自走可。人が握るのは①ローカル目視と②マージ。
 - ② マージ=GitHub PR→Railway自動デプロイ=本番反映(不可逆)。
-- ③ マージ後=本番URL + デプロイログ目視。migration入りPRは「Applying migration ...」行が③の本体。migration なしPRは「No pending migrations to apply.」が正常（エラーではない）。
-- 【dev起動の罠】schema/migration変更後に dev が古いプロセスを掴むと prisma.<新model> が undefined → findFirst / Internal Server Error。対処: lsof -ti:3000,3001 | xargs kill -9 → npx prisma generate → rm -rf .next → npm run dev。起動ポートが3001にズレてないか必ず確認。
-- 【index-browser 罠】"use client" のコンポーネントが "use server"（prisma 同梱）の actions ファイルから型を import すると、ブラウザバンドルに @prisma/client が漏れ `.prisma/client/index-browser` 解決エラーになる（import type でも漏れる）。対処=型を中立モジュール（src/lib/types/*.ts・prisma非依存）に逃がす。B-027 でも product-sketch.ts を types/ に置いた。
-- 【本番確認の罠】「データ0件なら出さない/データ依存」系UIは本番にデータが無いと変更が見えない＝バグではない。本番反映の確認はデータ非依存の変更点で見る（B-027 は「絵型カードが空でも表示・追加ボタンが出る」で確認）。本番に検証データを入れない。
-- 【監査網羅型の罠】Product にスカラ列を足すと products.ts の `ProductAuditField`（ProductScalarFieldEnum から Exclude）が新列を要求しビルド失敗する保険。updateProduct が触らない列（B-027 の sketchImages/sketchThumbPath 等）は Exclude に追加する。
+- ③ マージ後=本番URL + デプロイログ目視。migration入りPRは「Applying migration ...」行が③の本体。migration なしPRは「No pending migrations to apply.」が正常。
+- 【dev起動の罠】schema/migration変更後に dev が古いプロセスを掴むと prisma.<新model> が undefined → Internal Server Error。対処: lsof -ti:3000,3001 | xargs kill -9 → npx prisma generate → rm -rf .next → npm run dev。
+- 【index-browser罠】"use client" が "use server"（prisma同梱）から型 import すると @prisma/client がブラウザに漏れ index-browser 解決エラー。対処=型を中立モジュール（src/lib/types/*.ts・prisma非依存）に逃がす。今回 src/lib/types/textile-pattern.ts で踏襲。
+- 【監査網羅型の罠】Product に scalar を足すと products.ts の ProductAuditField がそのフィールドを要求しビルド失敗。※ProductColorway/TextilePattern は手書き afterData 方式なので非該当（colorId #85 で実証済み）。③で ProductColorway に patternId を足す時も非該当。
+- 【set-state-in-effect罠】delete-button で useEffect 内の同期 setState は eslint error（cascading renders）。対処=本削除メニュー click 時に usage 取得。B-064・今回 #88 で踏襲。
+- 【本番確認の罠】「データ0件なら出さない/データ依存」系UIは本番にデータが無いと変更が見えない＝バグではない。本番に検証データを入れない。今回③本番確認は「柄マスター一覧が全0件で正常表示＝テーブル存在＝migration適用済み」で確認した。
 
-## ① 本セッションの成果（B-027 絵型 完了＝北極星5要素 完成）
-- PR #86（squash d9a891a）= 品番カルテ「絵型（服のスケッチ）」(B案 Product直持ち・複数枚 Json 配列)。migration 33本目（products に sketch_images JSONB / sketch_thumb_path VARCHAR(500) ADD COLUMN×2・非破壊）。sharp で長辺400px WebP サムネ生成。GCS アップロード（原本＋サムネ）。詳細カード＋一覧サムネ列。本番反映済み。
-- PR #87（squash fa9121f）= 絵型の複数枚アップロード＋ドラッグ&ドロップ（client 直列ループ・サーバ無改修・migration なし）。本番反映済み。
-- これで北極星5要素（製品コード / 数量マトリクス / カラー展開 / 付属マトリクス(BOM+カラーウェイ C/#) / 絵型）が**全て品番カルテに揃った**。
+## ① 本セッションの成果（B-066-② 柄マスター層2 完了・層1 7種整理 完了）
+- PR #88（squash df5de6f）= B-066-②：柄マスター 層2 TextilePattern 新設（schema＋migration34本目 CREATE TABLE 1本・非破壊・CRUD8関数・UI一式・サイドバー導線）＋ seed定義から DT/SOLID 削除（種別7種化）。tsc0/eslint0/build成功。本番反映確認済み（本番 /textile-patterns が全0件で正常表示・テーブル存在確認）。
+- 層1 柄種別の本番整理：本番 /textile-pattern-types 画面で DT(ドット)・SOLID(無地) を UI アーカイブ。本番は ACTIVE 7種(BD/ST/CK/PR/AO/ML/OT)＋ARCHIVED 2件。dev も同様に7種。
+- docs: b-066-textile-pattern-master-spec-confirmation-v1_1-2026-06-17.md（0c4cd58・main直push）。
 
-## ② B-027 設計の確定事項（実装で確定）
-- Product 直持ち：`sketchImages Json?`（全枚数 [{gcsPath, thumbGcsPath, caption?, sortOrder}]）＋ `sketchThumbPath String?`（一覧/進行表用に先頭サムネを非正規化）。DesignVersion.flatSketch とは別レイヤー（スナップ層）。
-- sharp 依存追加＋next.config の serverExternalPackages に "sharp"。サムネ長辺400px・WebP。生成失敗時は原本のみ保存し thumbGcsPath=gcsPath にフォールバック（表示を壊さない）。
-- gcs.ts `uploadProductSketch`（原本＋サムネ2オブジェクト・パス sketch/{productId}/{JST}・graceful degradation）。`getSignedReadUrl` 流用（15分署名）。
-- actions/product-sketches.ts：add/delete/reorder/getUrls。5MB・png/jpeg/webp・20枚上限・companyId スコープ・AuditLog（add_sketch/delete_sketch）。GCS は残置（既存方針＝孤児許容・delete 関数なし）。
-- 複数枚は client 直列ループ（for...of await）でサーバ無改修。並列にしない＝サーバの「最新読み直し→追記」が last-write-wins のため。
-- 絵型カードは「ステータス履歴」と「カラー展開」の間に配置。
+## ② B-066 設計の確定事項（今日のセッションで確定・記憶で再構築しない）
+- 柄の分類：織り柄(生地の組織)=BD/ST/CK。プリント(PR)=図案・ドット内包。無地=カラーで対応(柄マスター対象外)。迷彩=当面AO総柄に寄せる(独立CF種別は要れば層1に1件seed追加・別対応)。蛍光/メタリック=特殊単色で柄でない=対象外。
+- 二層構造：層1 TextilePatternType(種別・既存#52・本番7種)／層2 TextilePattern(具体的な1柄・今回#88新設)。
+- 層2 TextilePattern が持つもの（軽量・確定）：patternNumber(D#・"BD-A"形式=種別プレフィックス＋英字枝番A/B/C・手振り・VarChar10) / patternName(手入力呼称・VarChar100) / typeId(層1への緩い参照・純scalar・@relationなし) / sortOrder / status(VarChar20)。
+- 持たない（確定）：構成色(Color番号) / parameters(ピッチ・格子サイズ)。理由=マルチボーダー/マルチストライプは色番号で割り切れない・色の実指定は発注書側(先方デザイン番号)に乗る。
+- 柄プレビュー作らない（確定）：構成色を持たないため縞色を描けない。D#＋種別バッジ表示のみ。
+- 採番思想：Colorの「十の位=色相系統＋一の位=個体」と同じ2層思想。ただし表記は色=数字／柄=英字BD-A(種別が読める・枝番は単なる識別子)。見た目で役割が区別でき混同しない。
+- C/#との対称（重要）：自社Color=57/自社柄=BD-A は社内共通言語。先方C/#=001/先方デザイン番号=D001 は取引先指定・マスター化しない・発注書/BOM側に文字列で乗る。柄も色と完全対称。
+- ProductColorway 配線（③で実装）：patternId String?(colorId の隣・純scalar・緩い参照・null=従来単色)。無地は patternId=null(colorIdのみ)。BomItemColorway・C/#マトリクスは変更不要。
+- 付属マトリクス列見出し：上段 colorwayCode(BD-A が入る・90px収まる)/下段 colorwayName(手入力)。呼称が長いと90pxはみ出す既存挙動→truncate＋ツールチップは別課題。
 
 ## ③ Railway環境（唯一の正）
-- 本番DB postgres-production/postgres-ab6d/shuttle:16099（migrate deploy・_prisma_migrations あり）。
+- 本番DB postgres-production/postgres-ab6d/shuttle:16099（migrate deploy・_prisma_migrations あり）。本番アプリ内部接続は postgres-ab6d.railway.internal:5432（ローカル不可・公開プロキシ shuttle:16099 / DATABASE_PUBLIC_URL）。本番アプリのポートは8080（正常）。
 - dev DB postgres-development/hopper:12921（db push・_prisma_migrations 無し・migrate系打たない）。
-- migration 33本（本セッションで +1: 20260617000000_b027_product_sketch）。GCS dev=...-dev / prod=...-prod。
-- ⚠️ sharp はネイティブ依存。ローカル(mac)ビルドは通過。本番 Railway(linux-x64) ビルドが #86 デプロイで通ったことをデプロイログで確認（マージ済み＝通った前提だが、次セッション冒頭で本番の絵型アップロードが実際に動くか smoke 推奨）。
-- Prisma 6.19.3→7.8.0 メジャーアップ案内はデプロイログに出るが未対応・今は無視。
+- migration 34本（#88 が +1＝34本目 20260617010000_b066_textile_pattern）。GCS dev=...-dev / prod=...-prod。
+- Prisma 6.19.3。7.x メジャーアップ案内は未対応・今は無視。
 
 ## ④ dev DB（hopper:12921）
-- テスト品番 AOI-26AW-CUT_SEWN-001（id 7671eb90-4bc8-46e0-996b-2e119550be80）：colorways/bom_item_colorways は B-062/063 検証分、bom_items=5 / po_items=5 / skus=0。sketch_images は検証で投入していれば残存（掃除任意）。colors=51（dev/本番一致）。
-- 本番 product_colorways=0 / bom_item_colorways=0（クリーン）。
+- colors=51件。柄種別 textile_pattern_types=9件(ACTIVE7/ARCHIVED2=DT,SOLID)。柄 textile_patterns=ローカル目視で BD-A を1件作成した可能性あり(dev のみ・本番は0件)。
+- 本番 textile_patterns=0件（クリーン・検証データ未投入）。
 
 ## ⑤ 次セッション優先順
-1. **柄・特色マスター（新規・要起票 B-066 等）**＝下記⑥。Color の兄弟 TextilePattern（仮称）。受け皿 spec は docs/textile-pattern-master-spec-confirmation-2026-06-01 にあり（§7 未実装・§6 未確定論点10個）。UI 方針確定済み: ProductColorway に色(colorId)と並べて柄(patternId)参照を1本足す（カラーウェイの正体の一種）。着手前に design-reread で textile-pattern spec §6 と color-master を読み直す。
-2. **B-063 残（帳票フェーズ）**：colorNameEn 追加 migration / Material.availableColors 改訂1 / Sku 色 FK 化 / ProductColorway.colorId の FK 正規化。
-3. **B-065**（発注引き当て時の C/# 自動反映）。PoItem は color/colorCode を持つ（確認済み）。
-4. B-060(B=SPタイトル方針①相乗り)・継続項目は据え置き。
-5. QE-1（量産見積・取り切り）は北極星完成済みなので着手可能になった。再開時に Excel2点を参照資料化・再添付依頼。QE-1仕様書は Specification 経由BOM前提で古い＝決定2(Product直結正系)に合わせ見直し。
+1. B-066-③（ProductColorway に patternId 増設＋pattern-picker）＝柄マスターをカルテで実際に使う仕上げ。migration1本(ADD COLUMN・非破壊)。着手時 read-only調査(ProductColorway現況・colorway-section の color-picker隣接構造)から。checkTextilePatternUsage の参照0固定を productColorway.count({where:{patternId:id}}) に置換(②コード冒頭コメントに申し送り済み)。pattern-picker は color-picker の隣・柄選択時プレビューなし(D#＋バッジ)。
+2. SKU 設計（重要・腰を据えて）＝下記⑥。柄③の後にやると今日決定。
+3. B-065（発注引き当て時 C/# 自動反映）。柄版は別タスク。
+4. QE-1（量産見積もり）：北極星完成で着手可能。Excel2点(縫製仕様書・原価シート)を参照資料化・再添付依頼。QE-1仕様書は Specification経由BOM前提で古い＝決定2(カラーウェイ軸)に合わせ見直しが要る。B-057はQE-1後。
 
-## ⑥ 柄・特色の次テーマ（前セッション方針整理を継承）
-- TextilePattern（仮称・型紙 PatternVersion と衝突回避で命名要確定）。層1=種別(BD/ST/CK/DT/PR/AO=総柄/ML/OT)＋層2=構成色(Color番号参照)＋parameters(Json)。テーブル/UI 未実装。
-- 3例の行き先：ボーダー/チェック/ドット/プリント=種別に有り。迷彩=総柄(AO)かその他(OT)。蛍光・メタリック=「柄」でなく「特殊単色」で柄マスター対象外＝別問題（当面 Color に近似hex追加 or 保留）。
-- UI 方針（確定）：カラー展開と数量マトリクスの間に新ボックスは挟まない。柄は「カラーウェイの正体の一種」。ProductColorway に patternId 参照を colorId の隣に増設。柄選択時はスウォッチ代わりに簡易プレビュー（縞/格子）。数量マトリクスは不変。
+## ⑥ SKU 設計の次テーマ（今日の調査で判明・実装は柄③の後）
+- 現状：Sku モデルは設計スキーマに存在(カラー×サイズ・colorCode文字列直持ち=古い設計)。だが prisma.sku の使用は2箇所だけ(products.ts のcount=削除ガード / skus.ts のfindMany=一覧取得)。create/upsert/update が皆無＝SKU生成導線が未実装＝dev/本番とも0件・作る手段がアプリに無い。
+- 噛み合わない点：B-064「SKU数量マトリクス表示」(#82)は完了だが、quantity-matrix-section.tsx は SkuRow[] を props で受け取って描画するだけの read-only=「箱だけ」。北極星5要素の数量マトリクスは現状ずっと空。実データを載せるには SKU生成導線が必須。
+- 着手前に確定が要る2点（決め打ち厳禁・作り直しリスク）：
+  1. 数量(希望数/受注数)の出どころ＝saagara-v2連携 / CSV取り込み / 先方入力 / カルテ手入力 のどれか。
+  2. 色軸を ProductColorway に合わせるか＝B-063④(Sku色FK化)と直結。今 Sku は色を文字列直持ちでカラーウェイ軸(決定2)と未合流。
+- これらは上流の意思決定。コードを書く前に固める。
 
 ## ⑦ 本日マージされた PR / push
-- PR #86: B-027 絵型本体（squash d9a891a・migration 33本目・本番反映）。
-- PR #87: B-027 複数枚＋D&D（squash fa9121f・migration なし・本番反映）。
-- docs: 本メモ更新（main 直push）。
-- main 先頭: fa9121f(#87) → d9a891a(#86) → 8fc4a73(docs) → afa676e。
-- 後始末: ローカル feat/b027-product-sketch・feat/b027-multi-upload-dnd 削除済み。
+- 0c4cd58: docs B-066 仕様確認書 v1.1（main直push・docs-only）
+- PR #88（squash df5de6f）: B-066-② 柄マスター層2 TextilePattern 新設＋seed 7種化。migration 34本目。本番反映確認済み。
+- 本番 UI操作：層1 柄種別の DT/SOLID を本番画面でアーカイブ(本番7種化)。
+- main 先頭: df5de6f(#88) → 0c4cd58(docs) → 2b33724 → fa9121f(#87)。
+- 後始末：#88 リモートブランチ削除済み。ローカル feat/b066-textile-pattern-master も削除済み(was 80e1b18)。現在ローカル main のみ・クリーン。
 
-## ⑧ 1ページ傘下 backlog（更新）
-- B-064 数量マトリクス=完了(#82) / B-062 β=完了(#83+#84) / B-063(B-2)=完了(#85) / B-027 絵型=完了(#86+#87)。**北極星5要素 完成**。
-- B-063 残（colorNameEn/availableColors改訂/Sku FK化/colorId FK正規化）=帳票フェーズ。
-- 柄・特色マスター（B-066 等・要起票）=⑥。B-065（発注引き当て時C/#自動反映）。
-- B-061(C)=不要クローズ / B-060(B=SPタイトル)=方針①相乗り。
-- 継続: B-048 / WorkOrder編集UI / B-037(docs整理：git status 未追跡散乱・3群仕分け) / SKU 生成導線（希望数の出どころ確定後）。
-- 【UI将来要望】資材表の列順ドラッグ並び替え＋ユーザーごと列順保存（列順の永続化が要る・別タスク）。
-- QE-1 は北極星完成済みで着手可（⑤-5）。B-057 は QE-1後。逆転記(A)不要確定。
-
-## ⑨ 次セッション冒頭の手順
+## ⑧ 次セッション冒頭の手順
 1. このメモを貼り付け→状態復元
-2. git log origin/main --oneline -5 で先頭が fa9121f か確認
-3. 本番 smoke: 品番カルテで絵型が表示され、画像アップロード（sharp サムネ生成）が本番で実際に動くか確認（sharp の linux ビルド最終確認を兼ねる）
-4. 着手タスクの spec を shunya-design-reread で読み直してから設計（記憶で組み立てない・色マスターの轍）
-5. ⑤の優先順から着手（柄・特色マスター起票 or B-063残/QE-1）。schema 変更を伴うものは dev=hopper 確認→手書きmigration→migrate diff 空差分→本番 migrate deploy の三重ガード
+2. git checkout main && git pull → git log origin/main --oneline -5 で先頭が df5de6f か確認
+3. 念のため drift 確認（migrate diff で No difference detected.）
+4. B-066-③ 着手なら read-only調査(ProductColorway現況・product-colorways.ts CRUD・colorway-section の color-picker配線)から。design-reread で b-066 spec v1.1 を読み直してから(記憶で組まない)。
+5. SKU 設計に入るなら⑥の2点(数量の出どころ／色軸合流)を先に慎太郎さんと確定してからコード。
+
+## ⑥-2 1ページ傘下 backlog（更新）
+- B-064 数量マトリクス=完了(#82・ただし箱だけ=SKU生成導線未実装で常に空・⑥参照) / B-062 β=完了(#83+#84) / B-063(B-2)=完了(#85) / B-027 絵型=完了(#86+#87) / B-066-② 柄マスター層2=完了(#88)＋層1 7種整理=完了 → 北極星5要素 完成済み。
+- B-066-③（ProductColorway patternId増設＋pattern-picker）=次の最優先。
+- SKU 生成導線（⑥）=柄③の後・要・数量の出どころ＋色軸合流の確定。
+- B-063 残（colorNameEn/availableColors改訂/Sku色FK化/colorId FK正規化）=帳票フェーズ。
+- B-065（発注引き当て時C/#自動反映）＋柄版。
+- 継続: B-048 / WorkOrder編集UI / B-037(docs整理)。
+- 宿題・未消化：本番の絵型アップロード smoke（sharp linux ビルド実動作確認）。
+- UI将来要望：資材表の列順ドラッグ並び替え＋ユーザーごと列順保存。絵型サムネ複数サイズ/圧縮/HEIC/GCS孤児掃除/DesignVersion三位一体統合。付属マトリクス列見出しの truncate＋ツールチップ。
+- QE-1 着手可能(Excel2点 参照資料化・再添付依頼。仕様見直し要)。B-057 はQE-1後。
+
+## ⑨ スキル化候補（次セッションで skill-packager で起こす）
+- 「過去の類似フェーズの実装ブリーフから罠を先回りで拾う」スキル（仮 shunya-prior-phase-pitfall-review）：design-reread が「設計意図」を spec から戻すのに対し、これは「実装の罠」を最も近い既存フェーズの実装/seed ブリーフから grep して移植する。今回 Color の prod-seed ブリーフから「不可視文字 tr -d」「internal/public URL」「Phase 1A-15 本番事故」を先回りで拾えた動きを定着させる。新マスター/新配線の着手前に発動。
