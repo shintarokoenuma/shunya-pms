@@ -42,6 +42,12 @@ export const productColorwayInputSchema = z.object({
     .nullable()
     .default(null)
     .transform((v) => (v && v.trim() !== "" ? v.trim() : null)),
+  // B-066-③: TextilePattern への緩い参照（任意・null=従来単色。色との排他はしない）
+  patternId: z
+    .string()
+    .nullable()
+    .default(null)
+    .transform((v) => (v && v.trim() !== "" ? v.trim() : null)),
 })
 
 export type ProductColorwayFormValues = z.input<typeof productColorwayInputSchema>

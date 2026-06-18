@@ -26,3 +26,12 @@ export type PatternTypeOption = {
   typeCode: string
   typeName: string
 }
+
+/** B-066-③: pattern-picker 用（ACTIVE な TextilePattern・種別名付き）。 */
+export type TextilePatternOption = {
+  id: string
+  patternNumber: string
+  patternName: string
+  typeCode: string | null
+  typeName: string | null
+}

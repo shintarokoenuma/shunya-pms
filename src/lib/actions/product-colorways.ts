@@ -26,6 +26,7 @@ export type ColorwayRow = {
   colorwayName: string
   colorId: string | null
   colorHex: string | null
+  patternId: string | null
   sortOrder: number
   status: string
 }
@@ -51,6 +52,7 @@ export async function listColorways(
         colorwayName: true,
         colorId: true,
         colorHex: true,
+        patternId: true,
         sortOrder: true,
         status: true,
       },
@@ -85,6 +87,7 @@ export async function getColorway(
         colorwayName: true,
         colorId: true,
         colorHex: true,
+        patternId: true,
         sortOrder: true,
         status: true,
       },
@@ -150,6 +153,7 @@ export async function createColorway(
           colorwayName: data.colorwayName,
           colorId: data.colorId,
           colorHex: data.colorHex || null,
+          patternId: data.patternId,
           sortOrder: data.sortOrder,
           status: data.status,
         },
@@ -238,6 +242,7 @@ export async function updateColorway(
           colorwayName: data.colorwayName,
           colorId: data.colorId,
           colorHex: data.colorHex || null,
+          patternId: data.patternId,
           sortOrder: data.sortOrder,
           status: data.status,
         },

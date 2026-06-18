@@ -2755,8 +2755,9 @@ model ProductColorway {
   colorwayCode String @map("colorway_code") @db.VarChar(50)
   colorwayName String @map("colorway_name") @db.VarChar(100)
 
-  colorId  String? @map("color_id") // B-063: Color マスターの id を緩く保持（FK 制約なし・@relation なし＝純 scalar。markingRecordId/purchaseOrderId と同方式）
-  colorHex String? @map("color_hex") @db.VarChar(7)
+  colorId   String? @map("color_id") // B-063: Color マスターの id を緩く保持（FK 制約なし・@relation なし＝純 scalar。markingRecordId/purchaseOrderId と同方式）
+  colorHex  String? @map("color_hex") @db.VarChar(7)
+  patternId String? @map("pattern_id") // B-066-③: TextilePattern.id 緩い参照・純 scalar・@relation なし・null=従来単色
 
   sortOrder Int    @default(0) @map("sort_order")
   status    String @default("ACTIVE") @db.VarChar(20)

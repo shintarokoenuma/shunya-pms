@@ -13,6 +13,7 @@ import type {
   TextilePatternRow,
   TextilePatternStatusValue,
   PatternTypeOption,
+  TextilePatternOption,
 } from "@/lib/types/textile-pattern"
 
 /**
@@ -73,6 +74,36 @@ export async function listActivePatternTypes(): Promise<PatternTypeOption[]> {
     select: { id: true, typeCode: true, typeName: true },
   })
   return rows
+}
+
+// =============================================================================
+// B-066-③: pattern-picker 用の軽量取得（ACTIVE な柄・種別名付き・read のみ）。
+//   listActiveColorsForPicker と同型。companyId スコープ・sortOrder 昇順。
+// =============================================================================
+export async function listActiveTextilePatterns(): Promise<
+  TextilePatternOption[]
+> {
+  const session = await auth()
+  if (!session?.user) return []
+  const companyId = session.user.companyId
+  if (!companyId) return []
+
+  const rows = await prisma.textilePattern.findMany({
+    where: { companyId, deletedAt: null, status: "ACTIVE" },
+    orderBy: [{ sortOrder: "asc" }],
+    select: { id: true, patternNumber: true, patternName: true, typeId: true },
+  })
+  const typeMap = await buildTypeMap(companyId, rows.map((r) => r.typeId))
+  return rows.map((r) => {
+    const t = r.typeId ? typeMap.get(r.typeId) ?? null : null
+    return {
+      id: r.id,
+      patternNumber: r.patternNumber,
+      patternName: r.patternName,
+      typeCode: t?.typeCode ?? null,
+      typeName: t?.typeName ?? null,
+    }
+  })
 }
 
 // =============================================================================
@@ -456,8 +487,10 @@ export async function checkTextilePatternUsage(
   })
   if (!pattern) throw new Error("柄が見つかりません")
 
-  // ③で ProductColorway.patternId 増設後に実装する
-  const colorwayCount = 0
+  // B-066-③: ProductColorway.patternId からの参照件数（緩い参照のため count で確認）
+  const colorwayCount = await prisma.productColorway.count({
+    where: { companyId, patternId: id, deletedAt: null },
+  })
 
   return { colorwayCount, totalRefs: colorwayCount }
 }
