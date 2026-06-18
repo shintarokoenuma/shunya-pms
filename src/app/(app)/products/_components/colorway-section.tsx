@@ -59,15 +59,19 @@ import {
 import type { ProductColorwayStatusValue } from "@/lib/validators/product-colorway"
 import { ColorPicker } from "@/components/color/color-picker"
 import type { ColorPickerOption } from "@/lib/types/color"
+import { PatternPicker } from "@/components/textile-pattern/pattern-picker"
+import type { TextilePatternOption } from "@/lib/types/textile-pattern"
 
 export function ColorwaySection({
   productId,
   colorways,
   colorOptions,
+  patternOptions,
 }: {
   productId: string
   colorways: ColorwayRow[]
   colorOptions: ColorPickerOption[]
+  patternOptions: TextilePatternOption[]
 }) {
   const router = useRouter()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -125,7 +129,18 @@ export function ColorwaySection({
               {colorways.map((cw) => (
                 <TableRow key={cw.id}>
                   <TableCell className="font-mono text-sm">{cw.colorwayCode}</TableCell>
-                  <TableCell className="text-sm">{cw.colorwayName}</TableCell>
+                  <TableCell className="text-sm">
+                    {cw.colorwayName}
+                    {cw.patternId &&
+                      (() => {
+                        const p = patternOptions.find((o) => o.id === cw.patternId)
+                        return (
+                          <Badge variant="outline" className="ml-2 text-[10px]">
+                            柄 {p ? p.patternNumber : ""}
+                          </Badge>
+                        )
+                      })()}
+                  </TableCell>
                   <TableCell>
                     {cw.colorHex ? (
                       <span className="flex items-center gap-1">
@@ -194,6 +209,7 @@ export function ColorwaySection({
           productId={productId}
           editing={editing}
           colorOptions={colorOptions}
+          patternOptions={patternOptions}
           onClose={() => setDialogOpen(false)}
           onSaved={() => {
             setDialogOpen(false)
@@ -213,6 +229,7 @@ function emptyValues(): ProductColorwayFormValues {
     sortOrder: 0,
     status: "ACTIVE",
     colorId: null,
+    patternId: null,
   }
 }
 
@@ -220,12 +237,14 @@ function ColorwayDialog({
   productId,
   editing,
   colorOptions,
+  patternOptions,
   onClose,
   onSaved,
 }: {
   productId: string
   editing: ColorwayRow | null
   colorOptions: ColorPickerOption[]
+  patternOptions: TextilePatternOption[]
   onClose: () => void
   onSaved: () => void
 }) {
@@ -239,6 +258,7 @@ function ColorwayDialog({
         sortOrder: editing.sortOrder,
         status: editing.status as ProductColorwayStatusValue,
         colorId: editing.colorId ?? null,
+        patternId: editing.patternId ?? null,
       }
     : emptyValues()
 
@@ -343,6 +363,26 @@ function ColorwayDialog({
                   />
                   <FormDescription>
                     表示色は色マスター選択で自動セットされます（00 カラー未定で空）。
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* B-066-③: 柄マスターから選択（任意・緩い参照）。柄なし=単色。 */}
+            <FormField
+              control={form.control}
+              name="patternId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>柄マスター（任意）</FormLabel>
+                  <PatternPicker
+                    value={field.value ?? null}
+                    patterns={patternOptions}
+                    onChange={(patternId) => field.onChange(patternId)}
+                  />
+                  <FormDescription>
+                    柄を選ぶとカラーウェイが「柄」になります。無地は「柄なし（単色）」のまま。
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

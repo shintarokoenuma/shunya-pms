@@ -22,6 +22,7 @@ import { getMarkingRecordsByProductId } from "@/lib/actions/markings"
 import { listSkusForProduct } from "@/lib/actions/skus"
 import { listColorways } from "@/lib/actions/product-colorways"
 import { listActiveColorsForPicker } from "@/lib/actions/colors"
+import { listActiveTextilePatterns } from "@/lib/actions/textile-patterns"
 import { getProductSketchUrls } from "@/lib/actions/product-sketches"
 import { SketchSection } from "../_components/sketch-section"
 import { listColorwaysByBomItems } from "@/lib/actions/bom-item-colorways"
@@ -79,6 +80,8 @@ export default async function ProductDetailPage({
   const colorways = colorwaysResult.ok ? colorwaysResult.data : []
   // B-063: カラーピッカー用の ACTIVE 色マスター（read のみ）。
   const colorOptions = await listActiveColorsForPicker()
+  // B-066-③: 柄ピッカー用の ACTIVE 柄マスター（read のみ）。
+  const patternOptions = await listActiveTextilePatterns()
 
   // B-027: 絵型（服のスケッチ）。各画像を署名URL化して取得。
   const sketchResult = await getProductSketchUrls(id)
@@ -398,6 +401,7 @@ export default async function ProductDetailPage({
             productId={item.id}
             colorways={colorways}
             colorOptions={colorOptions}
+            patternOptions={patternOptions}
           />
         </CardContent>
       </Card>
