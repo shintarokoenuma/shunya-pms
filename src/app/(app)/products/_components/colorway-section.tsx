@@ -74,7 +74,9 @@ export function ColorwaySection({
   patternOptions: TextilePatternOption[]
 }) {
   const router = useRouter()
-  const [dialogOpen, setDialogOpen] = useState(false)
+  // B-066-③b: 色展開 / 柄展開で別ダイアログ（案A）。editing は共用。
+  const [colorDialogOpen, setColorDialogOpen] = useState(false)
+  const [patternDialogOpen, setPatternDialogOpen] = useState(false)
   const [editing, setEditing] = useState<ColorwayRow | null>(null)
   const [pendingId, startTransition] = useTransition()
 
@@ -95,23 +97,34 @@ export function ColorwaySection({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
         <Button
           size="sm"
           variant="outline"
           onClick={() => {
             setEditing(null)
-            setDialogOpen(true)
+            setColorDialogOpen(true)
           }}
         >
           <Plus className="mr-1 h-4 w-4" />
           カラー展開を追加
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setEditing(null)
+            setPatternDialogOpen(true)
+          }}
+        >
+          <Plus className="mr-1 h-4 w-4" />
+          柄展開を追加
+        </Button>
       </div>
 
       {colorways.length === 0 ? (
         <div className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">
-          カラー展開が未登録です。「カラー展開を追加」から登録してください。
+          カラー展開が未登録です。「カラー展開を追加」「柄展開を追加」から登録してください。
         </div>
       ) : (
         <div className="rounded-md border">
@@ -177,7 +190,8 @@ export function ColorwaySection({
                         className="h-7 w-7"
                         onClick={() => {
                           setEditing(cw)
-                          setDialogOpen(true)
+                          if (cw.patternId) setPatternDialogOpen(true)
+                          else setColorDialogOpen(true)
                         }}
                       >
                         <Pencil className="h-4 w-4" />
@@ -204,15 +218,27 @@ export function ColorwaySection({
         </div>
       )}
 
-      {dialogOpen && (
-        <ColorwayDialog
+      {colorDialogOpen && (
+        <ColorColorwayDialog
           productId={productId}
           editing={editing}
           colorOptions={colorOptions}
-          patternOptions={patternOptions}
-          onClose={() => setDialogOpen(false)}
+          onClose={() => setColorDialogOpen(false)}
           onSaved={() => {
-            setDialogOpen(false)
+            setColorDialogOpen(false)
+            router.refresh()
+          }}
+        />
+      )}
+
+      {patternDialogOpen && (
+        <PatternColorwayDialog
+          productId={productId}
+          editing={editing}
+          patternOptions={patternOptions}
+          onClose={() => setPatternDialogOpen(false)}
+          onSaved={() => {
+            setPatternDialogOpen(false)
             router.refresh()
           }}
         />
@@ -233,21 +259,14 @@ function emptyValues(): ProductColorwayFormValues {
   }
 }
 
-function ColorwayDialog({
-  productId,
-  editing,
-  colorOptions,
-  patternOptions,
-  onClose,
-  onSaved,
-}: {
-  productId: string
-  editing: ColorwayRow | null
-  colorOptions: ColorPickerOption[]
-  patternOptions: TextilePatternOption[]
-  onClose: () => void
-  onSaved: () => void
-}) {
+// B-066-③b: 色/柄 両ダイアログ共通の form ロジック。editing の値は両ダイアログで温存
+//   （柄ダイアログで開いても colorId/colorHex は form に保持・画面に出さないだけ。逆も同様）。
+function useColorwayForm(
+  productId: string,
+  editing: ColorwayRow | null,
+  kindLabel: string, // "カラー展開" | "柄展開"（toast 用）
+  onSaved: () => void,
+) {
   const [isPending, startTransition] = useTransition()
 
   const defaultValues: ProductColorwayFormValues = editing
@@ -277,166 +296,133 @@ function ColorwayDialog({
         toast.error(r.error)
         return
       }
-      toast.success(editing ? "カラー展開を更新しました" : "カラー展開を追加しました")
+      toast.success(editing ? `${kindLabel}を更新しました` : `${kindLabel}を追加しました`)
       onSaved()
     })
   }
 
+  return { form, isPending, onSubmit }
+}
+
+// 共通フィールド（記号・表示順・カラー名・状態）。色/柄 両ダイアログが描画。
+function ColorwayCommonFields({
+  form,
+}: {
+  form: ReturnType<typeof useColorwayForm>["form"]
+}) {
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-3">
+        <FormField
+          control={form.control}
+          name="colorwayCode"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>記号 *</FormLabel>
+              <FormControl>
+                <Input placeholder="例：A / BLK" {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="sortOrder"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>表示順</FormLabel>
+              <FormControl>
+                <Input
+                  type="number"
+                  step="1"
+                  value={
+                    field.value === null || field.value === undefined
+                      ? ""
+                      : String(field.value)
+                  }
+                  onChange={(e) => field.onChange(e.target.value)}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  ref={field.ref}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      </div>
+
+      <FormField
+        control={form.control}
+        name="colorwayName"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>カラー名 *</FormLabel>
+            <FormControl>
+              <Input placeholder="例：ブラック / マリンボーダー" {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="status"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>状態</FormLabel>
+            <Select value={field.value} onValueChange={field.onChange}>
+              <FormControl>
+                <SelectTrigger className="md:w-[200px]">
+                  <SelectValue />
+                </SelectTrigger>
+              </FormControl>
+              <SelectContent>
+                <SelectItem value="ACTIVE">
+                  {PRODUCT_COLORWAY_STATUS_LABELS.ACTIVE}
+                </SelectItem>
+                <SelectItem value="ARCHIVED">
+                  {PRODUCT_COLORWAY_STATUS_LABELS.ARCHIVED}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </>
+  )
+}
+
+function ColorwayDialogShell({
+  title,
+  isPending,
+  editing,
+  onClose,
+  onSubmit,
+  form,
+  children,
+}: {
+  title: string
+  isPending: boolean
+  editing: ColorwayRow | null
+  onClose: () => void
+  onSubmit: SubmitHandler<ProductColorwayFormValues>
+  form: ReturnType<typeof useColorwayForm>["form"]
+  children: React.ReactNode
+}) {
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="flex max-h-[90vh] max-w-lg flex-col overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{editing ? "カラー展開を編集" : "カラー展開を追加"}</DialogTitle>
+          <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <FormField
-                control={form.control}
-                name="colorwayCode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>記号 *</FormLabel>
-                    <FormControl>
-                      <Input placeholder="例：A / BLK" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="sortOrder"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>表示順</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        step="1"
-                        value={
-                          field.value === null || field.value === undefined
-                            ? ""
-                            : String(field.value)
-                        }
-                        onChange={(e) => field.onChange(e.target.value)}
-                        onBlur={field.onBlur}
-                        name={field.name}
-                        ref={field.ref}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-
-            <FormField
-              control={form.control}
-              name="colorwayName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>カラー名 *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例：ブラック" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* B-063: 色マスターから選択（任意・緩い参照）。選ぶと colorId と colorHex をセット。 */}
-            <FormField
-              control={form.control}
-              name="colorId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>色マスター（任意）</FormLabel>
-                  <ColorPicker
-                    value={field.value ?? null}
-                    colors={colorOptions}
-                    onChange={(colorId, hex) => {
-                      field.onChange(colorId)
-                      // 表示色は選択でのみ更新。色選択=その hex / 「00 カラー未定」=hex null → 空にクリア
-                      form.setValue("colorHex", hex ?? "")
-                    }}
-                  />
-                  <FormDescription>
-                    表示色は色マスター選択で自動セットされます（00 カラー未定で空）。
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* B-066-③: 柄マスターから選択（任意・緩い参照）。柄なし=単色。 */}
-            <FormField
-              control={form.control}
-              name="patternId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>柄マスター（任意）</FormLabel>
-                  <PatternPicker
-                    value={field.value ?? null}
-                    patterns={patternOptions}
-                    onChange={(patternId) => field.onChange(patternId)}
-                  />
-                  <FormDescription>
-                    柄を選ぶとカラーウェイが「柄」になります。無地は「柄なし（単色）」のまま。
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="colorHex"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>表示色（HEX）</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="（色マスター選択で自動）"
-                      readOnly
-                      className="bg-muted"
-                      {...field}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    表示色は色マスター選択で自動セットされます（手入力不可）。
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>状態</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="md:w-[200px]">
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="ACTIVE">
-                        {PRODUCT_COLORWAY_STATUS_LABELS.ACTIVE}
-                      </SelectItem>
-                      <SelectItem value="ARCHIVED">
-                        {PRODUCT_COLORWAY_STATUS_LABELS.ARCHIVED}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
+            <ColorwayCommonFields form={form} />
+            {children}
             <DialogFooter className="sticky bottom-0 -mx-6 -mb-6 mt-2 border-t bg-background px-6 py-3">
               <Button type="button" variant="outline" onClick={onClose} disabled={isPending}>
                 キャンセル
@@ -450,5 +436,134 @@ function ColorwayDialog({
         </Form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+// 色展開ダイアログ（色のみ・柄欄なし）
+function ColorColorwayDialog({
+  productId,
+  editing,
+  colorOptions,
+  onClose,
+  onSaved,
+}: {
+  productId: string
+  editing: ColorwayRow | null
+  colorOptions: ColorPickerOption[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { form, isPending, onSubmit } = useColorwayForm(
+    productId,
+    editing,
+    "カラー展開",
+    onSaved,
+  )
+  return (
+    <ColorwayDialogShell
+      title={editing ? "カラー展開を編集" : "カラー展開を追加"}
+      isPending={isPending}
+      editing={editing}
+      onClose={onClose}
+      onSubmit={onSubmit}
+      form={form}
+    >
+      {/* B-063: 色マスターから選択。選ぶと colorId と colorHex をセット。 */}
+      <FormField
+        control={form.control}
+        name="colorId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>色マスター（任意）</FormLabel>
+            <ColorPicker
+              value={field.value ?? null}
+              colors={colorOptions}
+              onChange={(colorId, hex) => {
+                field.onChange(colorId)
+                form.setValue("colorHex", hex ?? "")
+              }}
+            />
+            <FormDescription>
+              表示色は色マスター選択で自動セットされます（00 カラー未定で空）。
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      <FormField
+        control={form.control}
+        name="colorHex"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>表示色（HEX）</FormLabel>
+            <FormControl>
+              <Input
+                placeholder="（色マスター選択で自動）"
+                readOnly
+                className="bg-muted"
+                {...field}
+              />
+            </FormControl>
+            <FormDescription>
+              表示色は色マスター選択で自動セットされます（手入力不可）。
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </ColorwayDialogShell>
+  )
+}
+
+// 柄展開ダイアログ（柄のみ・色グリッド/HEX なし）
+function PatternColorwayDialog({
+  productId,
+  editing,
+  patternOptions,
+  onClose,
+  onSaved,
+}: {
+  productId: string
+  editing: ColorwayRow | null
+  patternOptions: TextilePatternOption[]
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { form, isPending, onSubmit } = useColorwayForm(
+    productId,
+    editing,
+    "柄展開",
+    onSaved,
+  )
+  return (
+    <ColorwayDialogShell
+      title={editing ? "柄展開を編集" : "柄展開を追加"}
+      isPending={isPending}
+      editing={editing}
+      onClose={onClose}
+      onSubmit={onSubmit}
+      form={form}
+    >
+      {/* B-066-③: 柄マスターから選択。柄なし=単色。 */}
+      <FormField
+        control={form.control}
+        name="patternId"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>柄マスター（任意）</FormLabel>
+            <PatternPicker
+              value={field.value ?? null}
+              patterns={patternOptions}
+              onChange={(patternId) => field.onChange(patternId)}
+            />
+            <FormDescription>
+              柄を選ぶとカラーウェイが「柄」になります。無地は「柄なし（単色）」のまま。
+            </FormDescription>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+    </ColorwayDialogShell>
   )
 }
