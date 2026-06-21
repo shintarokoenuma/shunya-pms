@@ -200,7 +200,7 @@ export async function createSkusForProduct(
           },
         },
       })
-    })
+    }, { timeout: 15000, maxWait: 10000 }) // cw×size 分の逐次 upsert がデフォルト5sを超えるため（PO/WO と同方式）
 
     revalidatePath(`/products/${productId}`)
     return { ok: true, data: { count } }

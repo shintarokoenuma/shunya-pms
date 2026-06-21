@@ -4,10 +4,9 @@ import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Loader2, Plus, X } from "lucide-react"
+import { Loader2, X } from "lucide-react"
 import { createSkusForProduct, type SkuSizeInput } from "@/lib/actions/skus"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -47,15 +46,15 @@ export function SkuGenerateDialog({
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
-  // 候補: カテゴリ順を先頭に維持し、カテゴリ候補に無い既存サイズ（過去の手入力等）を末尾に温存。
-  const [options, setOptions] = useState<string[]>(() =>
+  // 候補: カテゴリ順を先頭に維持し、カテゴリ候補に無い既存サイズ（過去分）を末尾に温存。
+  // 手入力での追加は廃止（サイズの権威はカテゴリ defaultSizeOptions。足したい時はカテゴリ編集へ誘導）。
+  const [options] = useState<string[]>(() =>
     dedupe([...defaultSizeOptions, ...existingSizes]),
   )
   // 初期チェックは既存サイズのみ（SKU0件なら空＝全 OFF）。
   const [selected, setSelected] = useState<Set<string>>(
     () => new Set(existingSizes),
   )
-  const [customInput, setCustomInput] = useState("")
 
   function toggle(size: string) {
     setSelected((prev) => {
@@ -66,24 +65,8 @@ export function SkuGenerateDialog({
     })
   }
 
-  function addCustom() {
-    // カンマ／空白区切りで複数まとめて追加可。
-    const tokens = customInput
-      .split(/[,\s、，]+/)
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0)
-    if (tokens.length === 0) return
-    setOptions((prev) => dedupe([...prev, ...tokens]))
-    setSelected((prev) => {
-      const next = new Set(prev)
-      tokens.forEach((t) => next.add(t))
-      return next
-    })
-    setCustomInput("")
-  }
-
   function handleGenerate() {
-    // options の並び（既定→追加順）を尊重して、選択済みのみ sizeOrder を連番付与。
+    // options の並び（カテゴリ順→候補外既存）を尊重して、選択済みのみ sizeOrder を連番付与。
     const sizes: SkuSizeInput[] = options
       .filter((s) => selected.has(s))
       .map((size, i) => ({ size, sizeOrder: (i + 1) * 10 }))
@@ -131,7 +114,10 @@ export function SkuGenerateDialog({
             </div>
             {options.length === 0 ? (
               <p className="text-xs text-muted-foreground">
-                候補がありません。下の入力からサイズを追加してください。
+                サイズ候補がありません。
+                {categoryId
+                  ? "上の「サイズ候補を編集（商品カテゴリ）」からサイズを登録してください。"
+                  : "この品番には商品カテゴリが未設定です。先にカテゴリを設定してください。"}
               </p>
             ) : (
               <div className="flex flex-wrap gap-3">
@@ -149,34 +135,6 @@ export function SkuGenerateDialog({
                 ))}
               </div>
             )}
-          </div>
-
-          <div className="space-y-1.5">
-            <p className="text-xs text-muted-foreground">
-              候補にないサイズを追加（カンマ・空白区切りで複数可）
-            </p>
-            <div className="flex gap-2">
-              <Input
-                value={customInput}
-                onChange={(e) => setCustomInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault()
-                    addCustom()
-                  }
-                }}
-                placeholder="例: 3L, F"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                onClick={addCustom}
-                aria-label="サイズを追加"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
           </div>
 
           {selected.size > 0 && (
