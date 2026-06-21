@@ -2130,16 +2130,21 @@ model Sku {
   // ステータス
   status String @default("ACTIVE") @db.VarChar(20)
 
+  // カラーウェイ参照（SKU 設計: ProductColorway × サイズ。BomItemColorway と同方式 @relation Cascade）
+  colorwayId String @map("colorway_id")
+
   // タイムスタンプ
   createdAt DateTime  @default(now()) @map("created_at")
   updatedAt DateTime  @updatedAt @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
   // リレーション
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product  Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  colorway ProductColorway @relation(fields: [colorwayId], references: [id], onDelete: Cascade)
 
   @@unique([companyId, skuCode])
   @@index([productId])
+  @@index([colorwayId])
   @@index([companyId, janCode])
   @@index([companyId, colorCode])
   @@map("skus")
@@ -2768,6 +2773,7 @@ model ProductColorway {
 
   product       Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
   bomItemColors BomItemColorway[]
+  skus          Sku[]
 
   @@unique([productId, colorwayCode])
   @@index([companyId, productId])

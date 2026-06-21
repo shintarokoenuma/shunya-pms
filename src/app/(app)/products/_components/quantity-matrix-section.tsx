@@ -14,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { SkuRow } from "@/lib/actions/skus"
+import type { SkuRow } from "@/lib/types/sku"
 
 export function QuantityMatrixSection({ skus }: { skus: SkuRow[] }) {
   // サイズ列: ユニーク集合を sizeOrder 昇順（同値は size 文字列）で
@@ -22,13 +22,19 @@ export function QuantityMatrixSection({ skus }: { skus: SkuRow[] }) {
     new Map(skus.map((s) => [s.size, { size: s.size, sizeOrder: s.sizeOrder }])).values(),
   ).sort((a, b) => a.sizeOrder - b.sizeOrder || a.size.localeCompare(b.size))
 
-  // 色グループ: colorCode 単位（colorName を表示ラベルに）。出現順は skus が既に colorCode 昇順。
+  // カラーウェイ行: colorwayId 単位（colorwayName/Code を表示ラベルに）。出現順は skus が既に
+  //   colorway.sortOrder 昇順（listSkusForProduct の orderBy）。柄カラーウェイも行として出る。
   const colorGroups = Array.from(
-    new Map(skus.map((s) => [s.colorCode, { colorCode: s.colorCode, colorName: s.colorName }])).values(),
+    new Map(
+      skus.map((s) => [
+        s.colorwayId,
+        { colorwayId: s.colorwayId, colorwayCode: s.colorwayCode, colorwayName: s.colorwayName },
+      ]),
+    ).values(),
   )
 
-  // セル参照用: colorCode|size -> SkuRow
-  const cellMap = new Map(skus.map((s) => [`${s.colorCode}|${s.size}`, s]))
+  // セル参照用: colorwayId|size -> SkuRow
+  const cellMap = new Map(skus.map((s) => [`${s.colorwayId}|${s.size}`, s]))
 
   return (
     <Card>
@@ -54,14 +60,14 @@ export function QuantityMatrixSection({ skus }: { skus: SkuRow[] }) {
               </TableHeader>
               <TableBody>
                 {colorGroups.map((g) => {
-                  const rowCells = sizeCols.map((c) => cellMap.get(`${g.colorCode}|${c.size}`) ?? null)
+                  const rowCells = sizeCols.map((c) => cellMap.get(`${g.colorwayId}|${c.size}`) ?? null)
                   const orderedTotal = rowCells.reduce((sum, r) => sum + (r?.orderedQuantity ?? 0), 0)
                   const productionTotal = rowCells.reduce((sum, r) => sum + (r?.productionQuantity ?? 0), 0)
                   return (
-                    <TableRow key={g.colorCode}>
+                    <TableRow key={g.colorwayId}>
                       <TableCell className="whitespace-nowrap font-medium">
-                        {g.colorName}
-                        <span className="ml-1 text-xs text-muted-foreground">({g.colorCode})</span>
+                        {g.colorwayName}
+                        <span className="ml-1 text-xs text-muted-foreground">({g.colorwayCode})</span>
                       </TableCell>
                       {rowCells.map((r, i) => (
                         <TableCell key={sizeCols[i].size} className="text-right tabular-nums">
