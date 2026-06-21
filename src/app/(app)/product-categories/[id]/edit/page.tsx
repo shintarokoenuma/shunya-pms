@@ -47,6 +47,11 @@ export default async function EditProductCategoryPage({
     standardFabricUsage: decimalToNumber(category.standardFabricUsage),
     standardLossRate: decimalToNumber(category.standardLossRate),
     standardSewingFee: decimalToNumber(category.standardSewingFee),
+    defaultSizeOptions: Array.isArray(category.defaultSizeOptions)
+      ? category.defaultSizeOptions.filter(
+          (v): v is string => typeof v === "string",
+        )
+      : [],
     status: category.status,
   }
 

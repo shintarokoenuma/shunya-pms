@@ -34,10 +34,16 @@ export function QuantityMatrixSection({
 }) {
   const [dialogOpen, setDialogOpen] = useState(false)
 
-  // サイズ列: ユニーク集合を sizeOrder 昇順（同値は size 文字列）で
-  const sizeCols = Array.from(
-    new Map(skus.map((s) => [s.size, { size: s.size, sizeOrder: s.sizeOrder }])).values(),
-  ).sort((a, b) => a.sizeOrder - b.sizeOrder || a.size.localeCompare(b.size))
+  // サイズ列順: カテゴリ defaultSizeOptions の並び順を権威にする（(B) 即追従＝SKU.sizeOrder の
+  //   生成時値には依存しない）。候補に無いサイズ（手入力 3L 等）は末尾に size 文字列昇順で。
+  const sizeIndex = new Map(defaultSizeOptions.map((s, i) => [s, i]))
+  const sizeCols = Array.from(new Set(skus.map((s) => s.size)))
+    .map((size) => ({ size }))
+    .sort((a, b) => {
+      const ia = sizeIndex.has(a.size) ? (sizeIndex.get(a.size) as number) : Infinity
+      const ib = sizeIndex.has(b.size) ? (sizeIndex.get(b.size) as number) : Infinity
+      return ia - ib || a.size.localeCompare(b.size)
+    })
 
   // カラーウェイ行: colorwayId 単位（colorwayName/Code を表示ラベルに）。出現順は skus が既に
   //   colorway.sortOrder 昇順（listSkusForProduct の orderBy）。柄カラーウェイも行として出る。
@@ -86,9 +92,9 @@ export function QuantityMatrixSection({
                   const productionTotal = rowCells.reduce((sum, r) => sum + (r?.productionQuantity ?? 0), 0)
                   return (
                     <TableRow key={g.colorwayId}>
-                      <TableCell className="whitespace-nowrap font-medium">
-                        {g.colorwayName}
-                        <span className="ml-1 text-xs text-muted-foreground">({g.colorwayCode})</span>
+                      <TableCell className="whitespace-nowrap">
+                        <span className="font-mono font-medium">{g.colorwayCode}</span>
+                        <span className="ml-2 text-muted-foreground">{g.colorwayName}</span>
                       </TableCell>
                       {rowCells.map((r, i) => (
                         <TableCell key={sizeCols[i].size} className="text-right tabular-nums">

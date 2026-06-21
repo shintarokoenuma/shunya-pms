@@ -410,6 +410,7 @@ export async function createProductCategory(
           standardFabricUsage: toDecimalOrNull(data.standardFabricUsage),
           standardLossRate: toDecimalOrNull(data.standardLossRate),
           standardSewingFee: toDecimalOrNull(data.standardSewingFee),
+          defaultSizeOptions: data.defaultSizeOptions as Prisma.InputJsonValue,
           status: data.status,
         },
       })
@@ -425,6 +426,7 @@ export async function createProductCategory(
             categoryCode: c.categoryCode,
             categoryName: c.categoryName,
             level: c.level,
+            defaultSizeOptions: data.defaultSizeOptions,
           },
         },
       })
@@ -556,6 +558,7 @@ export async function updateProductCategory(
           standardFabricUsage: toDecimalOrNull(data.standardFabricUsage),
           standardLossRate: toDecimalOrNull(data.standardLossRate),
           standardSewingFee: toDecimalOrNull(data.standardSewingFee),
+          defaultSizeOptions: data.defaultSizeOptions as Prisma.InputJsonValue,
           status: data.status,
         },
       })
@@ -572,12 +575,14 @@ export async function updateProductCategory(
             categoryName: existing.categoryName,
             level: existing.level,
             status: existing.status,
+            defaultSizeOptions: existing.defaultSizeOptions,
           },
           afterData: {
             categoryCode: updated.categoryCode,
             categoryName: updated.categoryName,
             level: updated.level,
             status: updated.status,
+            defaultSizeOptions: updated.defaultSizeOptions,
           },
         },
       })

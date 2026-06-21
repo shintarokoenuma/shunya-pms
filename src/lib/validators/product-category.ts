@@ -10,8 +10,9 @@ import { ProductCategoryStatus } from "@prisma/client"
  * - ステータスは 2 段階（ACTIVE / ARCHIVED）。PAUSED なし
  * - 連絡先・住所・担当者なし（抽象的な分類のため）
  * - 標準値（用尺・ロス率・縫製工賃）は任意の数値、Decimal フィールドへ
- * - JSON フィールド（defaultMoqTiers / defaultSizeOptions）は Phase 1A-7 では UI を作らない
- *   → validator も Phase 2 まで持ち越し（ここではスキーマから除外）
+ * - JSON フィールド: defaultMoqTiers は引き続き UI なし（Phase 2 持ち越し）。
+ *   defaultSizeOptions は SKU 設計で実装（工員・検品所が見るサイズ展開順の権威。
+ *   品番マトリクスのサイズ列順もこれを参照＝カテゴリ編集で即追従する）。
  * - 階層整合性: parentCategoryId が指す親の level + 1 が自分の level であること
  *   （これは actions 層で DB を引いて検証する）
  * - 自己参照防止: 自分自身を parent にできない（DB 制約 + actions 層で検証）
@@ -67,6 +68,12 @@ export const productCategoryInputSchema = z
     standardFabricUsage: optionalPositiveDecimal,
     standardLossRate: optionalPositiveDecimal,
     standardSewingFee: optionalPositiveDecimal,
+
+    // サイズ展開（SKU 生成のサイズ候補・マトリクスのサイズ列順の権威）。順序は維持・重複のみ除去。
+    defaultSizeOptions: z
+      .array(z.string().trim().min(1, "サイズを入力してください"))
+      .default([])
+      .transform((arr) => Array.from(new Set(arr))),
 
     // ステータス
     status: z
