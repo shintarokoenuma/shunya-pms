@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { toast } from "sonner"
 import { Loader2, Plus, X } from "lucide-react"
 import { createSkusForProduct, type SkuSizeInput } from "@/lib/actions/skus"
@@ -21,19 +22,24 @@ import {
 /**
  * SKU 生成ダイアログ（B-064 / SKU 生成 UI PR2）。
  * - サイズを複数選択 → ACTIVE カラーウェイ × サイズ の直積を createSkusForProduct で upsert（冪等）。
- * - サイズ候補はカテゴリ defaultSizeOptions を初期表示。無ければ／不足分は手入力で追加。
+ * - 候補はカテゴリ defaultSizeOptions（カテゴリ順）＋ 既存 SKU の非定型サイズ（末尾に温存）。手入力でも追加可。
+ * - 初期チェックは「この品番に既にあるサイズ（existingSizes）」のみ。SKU0件（初回・サンプル時）は全 OFF。
  * - shadcn に multi-select プリミティブが無いため、チェックボックス＋追加入力（チップ）で複数選択を実現。
  * - sizeOrder は最終選択順（表示順）に連番を振る。受注数は触らない（生成時 0）。
  */
 export function SkuGenerateDialog({
   productId,
   defaultSizeOptions,
+  existingSizes,
+  categoryId,
   open,
   onClose,
   onGenerated,
 }: {
   productId: string
   defaultSizeOptions: string[]
+  existingSizes: string[]
+  categoryId: string | null
   open: boolean
   onClose: () => void
   onGenerated: () => void
@@ -41,12 +47,13 @@ export function SkuGenerateDialog({
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
-  // 候補（カテゴリ既定 ＋ 手入力で追加した分）。選択状態は selected で管理。
+  // 候補: カテゴリ順を先頭に維持し、カテゴリ候補に無い既存サイズ（過去の手入力等）を末尾に温存。
   const [options, setOptions] = useState<string[]>(() =>
-    dedupe(defaultSizeOptions),
+    dedupe([...defaultSizeOptions, ...existingSizes]),
   )
+  // 初期チェックは既存サイズのみ（SKU0件なら空＝全 OFF）。
   const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(defaultSizeOptions),
+    () => new Set(existingSizes),
   )
   const [customInput, setCustomInput] = useState("")
 
@@ -110,7 +117,18 @@ export function SkuGenerateDialog({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <p className="text-sm font-medium">サイズ</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium">サイズ</p>
+              {categoryId && (
+                <Link
+                  href={`/product-categories/${categoryId}/edit`}
+                  target="_blank"
+                  className="text-xs text-muted-foreground underline"
+                >
+                  サイズ候補を編集（商品カテゴリ）
+                </Link>
+              )}
+            </div>
             {options.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 候補がありません。下の入力からサイズを追加してください。

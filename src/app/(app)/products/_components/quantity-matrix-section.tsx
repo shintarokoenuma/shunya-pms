@@ -27,12 +27,17 @@ export function QuantityMatrixSection({
   skus,
   productId,
   defaultSizeOptions,
+  categoryId,
 }: {
   skus: SkuRow[]
   productId: string
   defaultSizeOptions: string[]
+  categoryId: string | null
 }) {
   const [dialogOpen, setDialogOpen] = useState(false)
+
+  // 生成ダイアログの初期チェック用: この品番に既にあるサイズ集合。
+  const existingSizes = Array.from(new Set(skus.map((s) => s.size)))
 
   // サイズ列順: カテゴリ defaultSizeOptions の並び順を権威にする（(B) 即追従＝SKU.sizeOrder の
   //   生成時値には依存しない）。候補に無いサイズ（手入力 3L 等）は末尾に size 文字列昇順で。
@@ -133,6 +138,8 @@ export function QuantityMatrixSection({
         <SkuGenerateDialog
           productId={productId}
           defaultSizeOptions={defaultSizeOptions}
+          existingSizes={existingSizes}
+          categoryId={categoryId}
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
           onGenerated={() => setDialogOpen(false)}

@@ -414,6 +414,7 @@ export default async function ProductDetailPage({
         skus={skus}
         productId={id}
         defaultSizeOptions={defaultSizeOptions}
+        categoryId={item.category?.id ?? null}
       />
 
       {/* サンプル製作セット（S-2） */}
