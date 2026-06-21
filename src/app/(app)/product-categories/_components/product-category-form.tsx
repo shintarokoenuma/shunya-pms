@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { Loader2, ArrowUp, ArrowDown, Plus, X } from "lucide-react"
 import { ProductCategoryStatus } from "@prisma/client"
 import {
   productCategoryInputSchema,
@@ -64,6 +64,7 @@ const emptyDefaults: ProductCategoryFormValues = {
   standardFabricUsage: null,
   standardLossRate: null,
   standardSewingFee: null,
+  defaultSizeOptions: [],
   status: ProductCategoryStatus.ACTIVE,
 }
 
@@ -104,6 +105,23 @@ export function ProductCategoryForm({ mode, initialId, initialValues }: Props) {
     // 依存配列に form を入れないこと（無限ループ防止）
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentLevel])
+
+  // サイズ展開（defaultSizeOptions）は string[] のため useFieldArray（object 配列前提）を使わず
+  // watch + setValue で自前管理する（既存フォームの register 直＋watch 作法に合わせる）。
+  const sizes = form.watch("defaultSizeOptions") ?? []
+  const setSizes = (next: string[]) =>
+    form.setValue("defaultSizeOptions", next, { shouldDirty: true })
+  const addSize = () => setSizes([...sizes, ""])
+  const updateSizeAt = (i: number, v: string) =>
+    setSizes(sizes.map((s, idx) => (idx === i ? v : s)))
+  const removeSizeAt = (i: number) => setSizes(sizes.filter((_, idx) => idx !== i))
+  const moveSize = (i: number, dir: -1 | 1) => {
+    const j = i + dir
+    if (j < 0 || j >= sizes.length) return
+    const next = [...sizes]
+    ;[next[i], next[j]] = [next[j], next[i]]
+    setSizes(next)
+  }
 
   const onSubmit = (values: ProductCategoryFormValues) => {
     startTransition(async () => {
@@ -355,6 +373,79 @@ export function ProductCategoryForm({ mode, initialId, initialValues }: Props) {
               )}
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* ───────────────────────── サイズ展開 ───────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>サイズ展開</CardTitle>
+          <CardDescription>
+            SKU 生成時のサイズ候補です。ここで並べた順が、品番カルテのマトリクスや
+            工員・検品所が見るサイズ列の並び順になります（上から順に表示）。
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {sizes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              サイズが未登録です。「サイズを追加」から S / M / L などを登録してください。
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {sizes.map((size, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <span className="w-6 text-right text-xs text-muted-foreground tabular-nums">
+                    {i + 1}
+                  </span>
+                  <Input
+                    value={size}
+                    onChange={(e) => updateSizeAt(i, e.target.value)}
+                    placeholder="例: M"
+                    className="max-w-[12rem]"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => moveSize(i, -1)}
+                    disabled={i === 0}
+                    aria-label="上へ"
+                  >
+                    <ArrowUp className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => moveSize(i, 1)}
+                    disabled={i === sizes.length - 1}
+                    aria-label="下へ"
+                  >
+                    <ArrowDown className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeSizeAt(i)}
+                    aria-label="削除"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+          <Button type="button" variant="outline" size="sm" onClick={addSize}>
+            <Plus className="mr-1 h-4 w-4" />
+            サイズを追加
+          </Button>
+          {form.formState.errors.defaultSizeOptions && (
+            <p className="text-xs text-destructive">
+              {form.formState.errors.defaultSizeOptions.message ??
+                "サイズを入力してください（空欄は不可）"}
+            </p>
+          )}
         </CardContent>
       </Card>
 

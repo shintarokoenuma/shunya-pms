@@ -19,7 +19,7 @@ import {
   listMarkingsForBomSelect,
 } from "@/lib/actions/boms"
 import { getMarkingRecordsByProductId } from "@/lib/actions/markings"
-import { listSkusForProduct } from "@/lib/actions/skus"
+import { listSkusForProduct, getDefaultSizesForProduct } from "@/lib/actions/skus"
 import { listColorways } from "@/lib/actions/product-colorways"
 import { listActiveColorsForPicker } from "@/lib/actions/colors"
 import { listActiveTextilePatterns } from "@/lib/actions/textile-patterns"
@@ -71,9 +71,12 @@ export default async function ProductDetailPage({
   })
   const samples = samplesResult.ok ? samplesResult.data.items : []
 
-  // B-064: 数量マトリクス（色×サイズ＋数量群）。read-only・量産ライフサイクルの値。
+  // B-064: 数量マトリクス（色×サイズ＋数量群）。量産発注数のみインライン編集可。
   const skusResult = await listSkusForProduct(id)
   const skus = skusResult.ok ? skusResult.data : []
+  // SKU 生成ダイアログのサイズ初期候補（カテゴリ defaultSizeOptions・無ければ手入力）。
+  const defaultSizesResult = await getDefaultSizesForProduct(id)
+  const defaultSizeOptions = defaultSizesResult.ok ? defaultSizesResult.data.sizes : []
 
   // B-062 β: カラー展開（ProductColorway）。カラー軸の親。
   const colorwaysResult = await listColorways(id)
@@ -407,7 +410,12 @@ export default async function ProductDetailPage({
       </Card>
 
       {/* 数量マトリクス（B-064・量産 色×サイズ） */}
-      <QuantityMatrixSection skus={skus} />
+      <QuantityMatrixSection
+        skus={skus}
+        productId={id}
+        defaultSizeOptions={defaultSizeOptions}
+        categoryId={item.category?.id ?? null}
+      />
 
       {/* サンプル製作セット（S-2） */}
       <Card>

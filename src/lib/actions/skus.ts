@@ -87,6 +87,42 @@ export async function listSkusForProduct(
 }
 
 // =============================================================================
+// 1b. サイズ候補の取得（品番のカテゴリ defaultSizeOptions・生成ダイアログのプルダウン用）
+//     サイズは品種(カテゴリ)依存なので Color のような独立マスターは持たず、
+//     ProductCategory.defaultSizeOptions を初期候補に使う（無ければ空＝手入力フォールバック）。
+// =============================================================================
+export async function getDefaultSizesForProduct(
+  productId: string,
+): Promise<ActionResult<{ sizes: string[] }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const product = await prisma.product.findFirst({
+      where: { id: productId, companyId: sess.companyId, deletedAt: null },
+      select: { categoryId: true },
+    })
+    if (!product) return { ok: false, error: "品番が見つかりません" }
+    if (!product.categoryId) return { ok: true, data: { sizes: [] } }
+
+    const category = await prisma.productCategory.findFirst({
+      where: { id: product.categoryId, companyId: sess.companyId, deletedAt: null },
+      select: { defaultSizeOptions: true },
+    })
+    const raw = category?.defaultSizeOptions
+    const sizes = Array.isArray(raw)
+      ? raw.filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+      : []
+    return { ok: true, data: { sizes } }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "サイズ候補の取得に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
 // 2. SKU 生成（ACTIVE カラーウェイ × サイズ の直積を upsert・冪等）
 //    数量は引数 quantities（colorwayId|size → 受注数）or 0。skuCode で冪等。
 // =============================================================================
@@ -164,7 +200,7 @@ export async function createSkusForProduct(
           },
         },
       })
-    })
+    }, { timeout: 15000, maxWait: 10000 }) // cw×size 分の逐次 upsert がデフォルト5sを超えるため（PO/WO と同方式）
 
     revalidatePath(`/products/${productId}`)
     return { ok: true, data: { count } }
@@ -172,6 +208,61 @@ export async function createSkusForProduct(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "SKU の生成に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
+// 3. 量産発注数の更新（productionQuantity のみ・インライン編集用）
+//    受注数(orderedQuantity)は受注側の値なのでここでは触らない（read-only）。
+// =============================================================================
+export async function updateSkuQuantity(
+  skuId: string,
+  input: { productionQuantity: number },
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const qty = Math.trunc(input.productionQuantity)
+    if (!Number.isFinite(qty) || qty < 0)
+      return { ok: false, error: "量産発注数は 0 以上の整数で指定してください" }
+
+    // 所有確認（companyId スコープ）＋ 監査用の before 値
+    const before = await prisma.sku.findFirst({
+      where: { id: skuId, companyId: sess.companyId, deletedAt: null },
+      select: { id: true, productId: true, productionQuantity: true },
+    })
+    if (!before) return { ok: false, error: "SKU が見つかりません" }
+
+    if (before.productionQuantity === qty) {
+      return { ok: true, data: { id: before.id } }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.sku.update({
+        where: { id: skuId },
+        data: { productionQuantity: qty },
+      })
+      await tx.auditLog.create({
+        data: {
+          companyId: sess.companyId,
+          userId: sess.userId,
+          action: "UPDATE",
+          entityType: "Sku",
+          entityId: skuId,
+          beforeData: { productionQuantity: before.productionQuantity },
+          afterData: { productionQuantity: qty },
+        },
+      })
+    })
+
+    revalidatePath(`/products/${before.productId}`)
+    return { ok: true, data: { id: before.id } }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "量産発注数の更新に失敗しました",
     }
   }
 }
