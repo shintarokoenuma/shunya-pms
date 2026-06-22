@@ -1961,8 +1961,9 @@ model Product {
   description   String? @db.Text
 
   // シーズン・年度
-  season String @db.VarChar(20) // 26SS / 26FW
-  year   Int    @db.SmallInt // 2026
+  season     String      @db.VarChar(20) // 26SS / 26FW（seasonType×year の合成キャッシュ・採番/検索の正）
+  seasonType SeasonType? @map("season_type") // 入力の正規化用。既存行があるため nullable で追加（§6 案1）
+  year       Int         @db.SmallInt // 2026
 
   // 商品特性
   silhouette String? @db.VarChar(100)
@@ -2065,6 +2066,18 @@ enum ProductStatus {
   CANCELLED // キャンセル
   ON_HOLD // 保留中
   ARCHIVED // アーカイブ
+}
+
+// シーズン区分（Product.seasonType）。year と合成して season 文字列（例 26SS）を作る。
+// 採番・検索・表示は合成済み season 文字列を使うため、この enum は入力の正規化用。
+enum SeasonType {
+  SS // 春夏
+  AW // 秋冬
+  SP // 春
+  SU // 夏
+  FA // 秋
+  WI // 冬
+  SPOT // スポット
 }
 
 /// 品番ステータス遷移履歴
