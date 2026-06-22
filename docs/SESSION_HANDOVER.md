@@ -1,4 +1,4 @@
-# 引き継ぎメモ (2026-06-21 セッション10 / SKU設計 PR1(#90)＋PR2(#91) 本番反映完了・北極星マトリクス開通・品番カテゴリコード長の宿題起票)
+# 引き継ぎメモ (2026-06-23 セッション11 / 宿題③カテゴリコード体系確定・dev カテゴリ整備・シーズンのプルダウン化 PR#92 本番反映＋データ移行完了)
 
 ## ⓪ プロジェクト棲み分け（毎回必須）
 - shunya-pms（shintarokoenuma/shunya-pms・~/shunya-production-system・shunya-pms-web-production.up.railway.app）と saagara-v2 は完全に別物。実装指示書は冒頭に【対象プロジェクト】ヘッダ固定。貼る前に ~/shunya-production-system を開いているか目視。
@@ -10,82 +10,83 @@
 - ② マージ=GitHub PR→Railway自動デプロイ=本番反映(不可逆)。
 - ③ マージ後=本番URL + デプロイログ目視。migration入りPRは「Applying migration ...」行が③の本体。migrationなしPRは「No pending migrations to apply.」が正常。
 - 【dev起動の罠】schema/migration変更後に dev が古いプロセスを掴むと prisma.<新model> が undefined → Internal Server Error。対処: lsof -ti:3000,3001 | xargs kill -9 → npx prisma generate → rm -rf .next → npm run dev。
-- 【index-browser罠】"use client" が "use server"（prisma同梱）から型 import すると @prisma/client がブラウザに漏れる。対処=型を中立モジュール（src/lib/types/*.ts・prisma非依存）に逃がす。SKU系は src/lib/types/sku.ts（SkuRow）。
-- 【監査網羅型の罠】Product に scalar を足すと products.ts の ProductAuditField が要求しビルド失敗。※ProductColorway/TextilePattern/Sku/ProductCategory は手書き afterData 方式なので非該当。
-- 【★新・transaction timeout 罠（P2028）】ループ内で tx.* を逐次 await する $transaction はデフォルト5sで期限切れ→実行中クエリが P2028（Transaction already closed/expired）。dev は hopper public proxy 経由でラウンドトリップが重く特に出やすい。対処=第2引数に { timeout: 15000, maxWait: 10000 }（purchase-orders.ts:523,693 / work-orders.ts:747,933 / skus.ts createSkusForProduct が同方式）。
-- 【★新・set-state-in-effect 罠】useEffect 内で同期 setState は eslint エラー。サーバ値で再同期したいときは useEffect ではなく key に値を含めて remount（matrix の EditableProductionQty は key=`${id}:${productionQuantity}` で router.refresh 後に初期値同期）。
+- 【index-browser罠】"use client" が "use server"（prisma同梱）から型 import すると @prisma/client がブラウザに漏れる。対処=中立モジュールに逃がす。型は src/lib/types/*.ts、enum ラベル/ヘルパは src/lib/constants/*.ts（enum を @prisma/client から import するが "use server" 非依存でクライアント可・work-order-types.ts / season-types.ts が手本）。
+- 【監査網羅型の罠】Product にスカラを足すと products.ts の `ProductAuditField = Exclude<keyof ProductScalarFieldEnum, ...>` が要求し、updateProduct の beforeData/afterData（satisfies Record<ProductAuditField,unknown>）に未追加だとビルド失敗。※今回 seasonType 追加で実際に踏み、before/after 両方に seasonType を足して解消。ProductColorway/TextilePattern/Sku/ProductCategory は手書き afterData 方式なので非該当。
+- 【transaction timeout 罠（P2028）】ループ内 tx.* 逐次 await の $transaction はデフォルト5sで期限切れ。対処=第2引数 { timeout: 15000, maxWait: 10000 }（PO/WO/skus createSkusForProduct）。
+- 【set-state-in-effect 罠】useEffect 内同期 setState は eslint エラー。サーバ値同期は key remount（matrix の EditableProductionQty）。
+- 【必須 enum select の初期未選択】z.nativeEnum を必須にしたフォームで「未選択開始」を作るには、CREATE_DEFAULTS で `undefined as unknown as <Enum>`、編集初期値は `(... ?? undefined) as ProductFormValues["<field>"]`。Select は value={field.value ?? ""}＋placeholder。未選択のまま送信すると resolver が必須エラーで弾く（season-dropdown で実証）。
 - 【本番確認の罠】「データ0件なら出さない/データ依存」系UIは本番にデータが無いと変更が見えない＝バグではない。本番に検証データを入れない。
+- 【DB操作の三重ガード】本番書き込みは ①host 目視照合（dev=hopper:12921 / 本番=shuttle:16099・実行直前に毎回）②慎太郎さんの明示 GO ③dry-run（BEGIN→操作→件数/値 SELECT→ROLLBACK）→ 同一文を別トランザクションで COMMIT。本番 public URL は `railway variables --service postgres-production --environment production --kv` の DATABASE_PUBLIC_URL。
 
-## ① 本セッションの成果（SKU 設計 PR1＋PR2＝SKU 生成導線 開通）
-- **PR #90（squash fb14760）= SKU 設計 PR1**：Sku を ProductColorway×サイズ軸へ。
-  - Sku に colorwayId String 増設（@relation ProductColorway・onDelete:Cascade・@@index）。既存 colorCode/colorName/colorHex/pantone は後方互換で温存。
-  - migration 36本目 20260621000000_sku_colorway_id（ADD COLUMN colorway_id NOT NULL ＋ index ＋ FK・**skus 0件で安全**＝dev/本番とも事前に0件確認）。**本番 migrate deploy 適用済み**。
-  - 中立型 src/lib/types/sku.ts（SkuRow）。skus.ts に listSkusForProduct（colorway join・colorway.sortOrder→sizeOrder→size 順）＋ createSkusForProduct（ACTIVE カラーウェイ×サイズ直積を skuCode 冪等 upsert）。
-  - quantity-matrix-section.tsx を colorwayId 軸に改修（cellMap key=`${colorwayId}|${size}`）。
-- **PR #91（squash 7cfd1ce）= SKU 生成 UI PR2（＋拡張＋マージ前修正・全部入り）**：
-  - 生成ダイアログ sku-generate-dialog.tsx（サイズ複数選択→createSkusForProduct）＋ 量産発注数の下段インライン編集（updateSkuQuantity・受注数は read-only・AuditLog 手書き）。
-  - サイズの権威化：ProductCategory.defaultSizeOptions を validator/create/update に配線（UIなし方針を撤回）。カテゴリ編集フォームに「サイズ展開」並べ替えUI（Input＋↑↓＋削除＋追加・string[] は useFieldArray を使わず watch+setValue 自前管理）。
-  - **マトリクスのサイズ列順を defaultSizeOptions の index 参照に＝(B) 即追従**（SKU.sizeOrder の生成時値に依存しない。カテゴリの並びを変えて保存→品番マトリクス再読込で再生成せず列順が追従）。
-  - カラー行ラベルを「C ブラック」（colorwayCode 先頭強調・展開表と統一）。
-  - ダイアログ UX：初期チェック=既存サイズのみ（SKU0件=全OFF）／候補=カテゴリ順＋候補外の既存サイズを末尾温存／**手入力追加は廃止**（権威一本化）／「サイズ候補を編集（商品カテゴリ）」リンク（別タブ・categoryId 無し品番は非表示）。
-  - **timeout 修正**：createSkusForProduct の $transaction に { timeout: 15000, maxWait: 10000 }（cw×size 逐次 upsert が P2028 で落ちていた根因を解消）。
-  - UIのみ＝**migration なし**（③は「No pending migrations to apply.」が正常）。
-- 全コミットで tsc0 / build成功 / lint 変更分の新規指摘なし。dev 目視（生成→マトリクス→インライン編集→カテゴリ即追従）用に dev skus を temp script で都度クリア（非コミット）。
-- 後始末：#90・#91 ともローカル/リモート feat 削除・fetch --prune 済み。現在ローカル main のみ・クリーン。
+## ① 本セッションの成果（宿題③＝カテゴリコード体系＋シーズン軸）
+セッション10 起票「品番カテゴリコード長の dev/本番ズレ疑い」を調査→確定→実装まで通した。
+
+- **調査（read-only 突き合わせ）**：採番式 `productCodePrefix = {brandCode}-{season}-{categoryCode}-{連番3}`、カテゴリ部は ProductCategory.categoryCode そのもの（略号専用列なし・@db.VarChar(50)）。dev は CUT_SEWN/WOVEN（製法フラット・異端）、本番は階層方式（level1 K/L/M/U＋level2 X-YY＝内部ハイフン有→品番5段）。
+- **確認書**：`docs/specs/category-code-spec-confirmation-v1_0-2026-06-22.md`（コミット済み d1c362b）＝5段許容確定・categoryCode は階層コード可。**v1.1（docs/category-code-spec-confirmation-v1_1-2026-06-22.md）は docs ルートに未コミットで存在**（§4 dev カテゴリ整備・§6 シーズン軸の確定版。specs/ への移動は未実施＝B-037 or 次回）。本体仕様書 `02_仕様書_Part2_ID体系` は repo 外（Notion 等）でポインタ追記は未実施。
+- **実装①（dev カテゴリ整備・DB のみ・本番は SELECT のみ）**：本番27件カテゴリを dev に複製（id/parent もそのまま＝分岐ア）。旧 dev テスト品番3件（AOI-26AW-CUT_SEWN-001/002・NMB-26SS-WOVEN-001）と配下を物理削除（全 FK CASCADE 確認済み）→ dev カテゴリを本番と一致（27件）に。dry-run ROLLBACK→COMMIT の2段で実施。
+- **実装②（シーズンのプルダウン化・PR #92・squash ef17bb7・migration 37本目）**：
+  - schema：`enum SeasonType { SS/AW/SP/SU/FA/WI/SPOT }` ＋ `Product.seasonType SeasonType? @map("season_type")`（nullable）。season String / year Int は無変更。
+  - migration 37本目 `20260623000000_add_season_type`（CREATE TYPE ＋ ADD COLUMN・非破壊）。**本番 migrate deploy 適用済み**。
+  - `src/lib/constants/season-types.ts`（新規・中立）：SEASON_TYPE_LABELS / _OPTIONS / `composeSeason(year, seasonType)` / `parseSeasonType(season)`。
+  - validator：season 必須を廃し seasonType: nativeEnum 必須を追加。**season はサーバ側で composeSeason して保存**（year 下2桁＋区分。例 26SS）。
+  - product-form：season 手打ち Input → seasonType プルダウン7択＋year プルダウン（当年-1〜+3）。採番プレビューは year+seasonType を合成して取得。
+  - products.ts create/update：composeSeason→season 保存＋seasonType 保存。監査網羅型に seasonType 追加。normalizeSeason 除去。
+  - edit/page：seasonType 初期値（NULL 旧行は season 末尾から parseSeasonType 逆引き）。
+  - **P3 データ移行完了**：dev 1行（AOI-26SS→SS）／本番2行（IP-26AW→AW）の season_type 後埋め。`UPDATE … SET season_type = RIGHT(season,2)::"SeasonType" WHERE season_type IS NULL …` を dry-run→COMMIT。全環境 NULL 行ゼロ。
+- tsc0/build成功/lint 新規指摘なし（form.watch の既存 incompatible-library warning のみ）。
+- 後始末：feat/season-dropdown ローカル/リモート削除・prune 済み。現在ローカル main のみ・クリーン。
 
 ## ② 本セッションで確定/再確認した設計（記憶で再構築しない）
-- **SKU 軸＝ProductColorway × サイズ で確定**（旧 handover ⑥の「色軸合流」決定）。Sku.colorwayId を正とし、色文字列直持ち（colorCode等）は後方互換キャッシュとして温存。
-- **サイズの権威＝ProductCategory.defaultSizeOptions で確定**。独立サイズマスターは作らない（サイズは品種=カテゴリ依存で Color のように汎用化できない）。defaultMoqTiers は引き続き UI なし（Phase 2）。
-- **(A) 量産発注数のみ画面編集／(B) サイズ列順はカテゴリ即追従**で確定。受注数(orderedQuantity)は受注側の値＝マトリクスでは read-only。
-- 生成ダイアログのサイズ追加は**カテゴリ編集に一本化**（ダイアログ内手入力は廃止）。shadcn に multi-select プリミティブ無し→チェックボックス＋チップで複数選択。
-- skuCode 採番＝`${productCode}-${colorwayCode}-${size}`・@@unique([companyId, skuCode]) で冪等。
+- **品番は5段運用を正式採用**。カテゴリ部が階層コード（例 M-TS）なら品番は `IP-26AW-M-TS-001`（5段に見える）。これを正とする。
+- **カテゴリ体系の標準＝本番の階層方式**（level1 性別 K/L/M/U＋level2 部位略号）。dev の製法フラット（CUT_SEWN/WOVEN）は異端で、直したのは dev 側（本番不変）。dev=本番でカテゴリ一致（27件・同一 id）。
+- **シーズン軸＝year + seasonType の構造化入力 → season 文字列を合成**（§6 案1）。seasonType を正規列で持つ（検索/集計/将来連携で効く）。season は合成キャッシュ（採番・検索 where.season 完全一致・一覧/詳細/PDF は無改修で従来通り）。
+- seasonType 7値（SS春夏/AW秋冬/SP春/SU夏/FA秋/WI冬/SPOT スポット）。AW と FA+WI の併存は許容。SPOT は4字で `26SPOT`＝6字（VarChar20 内・品番が伸びるのは5段同様許容）。
+- year プルダウン範囲＝現在年-1〜+3（動的・new Date().getFullYear() 基準）。
 
 ## ③ Railway環境（唯一の正）
-- 本番DB postgres-production/postgres-ab6d/shuttle:16099（migrate deploy・_prisma_migrations あり）。本番アプリ内部接続は postgres-ab6d.railway.internal:5432（ローカル不可・公開プロキシ shuttle:16099 / DATABASE_PUBLIC_URL を使う）。本番アプリのポートは8080。
+- 本番DB postgres-production/postgres-ab6d/shuttle:16099（migrate deploy・_prisma_migrations あり）。本番アプリ内部接続 postgres-ab6d.railway.internal:5432（ローカル不可・公開プロキシ shuttle:16099 / DATABASE_PUBLIC_URL）。本番アプリのポート8080。
 - dev DB postgres-development/hopper:12921（db push・_prisma_migrations 無し・migrate系打たない）。
-- migration 36本（#90 が 36本目 20260621000000_sku_colorway_id・本番適用済み）。GCS dev=...-dev / prod=...-prod。
+- migration **37本**（37本目 20260623000000_add_season_type・本番適用済み）。GCS dev=...-dev / prod=...-prod。
 - Prisma 6.19.3（7.x 案内は無視）。Next.js 16.2.6。
-- drift 確認（動く形）：`npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --exit-code`（0=No difference）。※ `--to-database --shadow-database-url "$DATABASE_URL"` は $DATABASE_URL がシェルに無く失敗するので使わない（prisma.config が env を読まない）。DBURL は .env から `grep -E '^DATABASE_URL=' .env | sed ...` で取り出す。
+- drift 確認（動く形）：`npx prisma migrate diff --from-schema-datasource prisma/schema.prisma --to-schema-datamodel prisma/schema.prisma --exit-code`（0=No difference）。`--to-database --shadow-database-url "$DATABASE_URL"` は使わない（env 未ロードで失敗）。DBURL は .env から grep/sed で取り出す。
 
-## ④ dev DB（hopper:12921）
-- colors=51件 / 柄種別 textile_pattern_types=9件 / 柄 textile_patterns=4件。本番 textile_patterns=0件・本番 skus=0件（PR1 マージ前確認）。
-- テスト品番 7671eb90-4bc8-46e0-996b-2e119550be80（ACTIVE カラーウェイ4本／ARCHIVED1本）を SKU 生成・インライン編集・カテゴリ即追従の目視に使用。dev skus は目視のたび temp script でクリア（最終件数は不定・データ消失ではない）。
+## ④ DB データ現状（メモ突き合わせ用）
+- **dev product_categories=27件**（本番と同一・level1 K/L/M/U＋level2 23件・同一 id）。CUT_SEWN/WOVEN は削除済み。
+- **dev products=2件**：AOI-26SS-M-TS-001（season_type=SS）／AOI-26AW-M-TP-001（season_type=AW）。※目視で慎太郎さんが新カテゴリ＋プルダウンで作成。
+- **本番 products=2件**：IP-26AW-M-BT-001／IP-26AW-M-TS-001（ともに season_type=AW）。NULL 行ゼロ。
+- colors=51件 / 柄種別 textile_pattern_types=9件 / 柄 textile_patterns=4件（dev）。本番 textile_patterns=0件。
 
 ## ⑤ 次セッション優先順
-1. **B-063残（colorNameEn/availableColors改訂/Sku色FK化/colorId FK正規化）＝帳票フェーズ**。SKU 軸が ProductColorway に揃ったので Sku色FK化は自然な次手（colorCode等の後方互換キャッシュを colorwayId 正規化に寄せる）。
-2. **B-065（発注引き当て時 C/# 自動反映）＋柄版**（先方デザイン番号の自動反映）。
-3. **QE-1（量産見積もり）**：北極星マトリクスに実データが載る土台が出来たので着手余地拡大。Excel2点(縫製仕様書・原価シート)を参照資料化・再添付依頼。QE-1仕様書は Specification経由BOM前提で古い＝カラーウェイ軸に合わせ見直し要。B-057(BOM→PO下書き)はQE-1後。
-4. **【新・宿題】品番カテゴリコード長 × skuCode 桁あふれ**（⑥-3）。
+1. **B-063残（colorNameEn/availableColors改訂/Sku色FK化/colorId FK正規化）＝帳票フェーズ**。SKU 軸が ProductColorway に揃ったので Sku色FK化が自然な次手。
+2. **B-065（発注引き当て時 C/# 自動反映）＋柄版**。
+3. **QE-1（量産見積もり）**：北極星マトリクスに実データ土台あり。Excel2点(縫製仕様書・原価シート)を参照資料化・再添付依頼。QE-1仕様書はカラーウェイ軸に合わせ見直し要。B-057(BOM→PO下書き)はQE-1後。
+4. **B-026（シーズン関連 UI 残）**：プルダウン化は実装②で完了。検索フィルタの season は手打ち Input のまま（seasonType でも絞るかは未定・現状文字列完全一致で機能）。Collection.season（別モデル・optional）は今回対象外＝必要時に同様化を検討。
+5. **宿題③ 残務（軽微）**：v1.1 spec を docs/specs/ へ移動・本体仕様書（Notion）へのポインタ追記。
 
-## ⑥ SKU 設計の到達点（旧 handover ⑥を更新＝開通済み）
-- **SKU 生成導線 開通**：skus.ts に listSkusForProduct / createSkusForProduct / updateSkuQuantity / getDefaultSizesForProduct が揃い、UI（生成ダイアログ＋インライン編集）から SKU を作成・編集できる。旧 handover の「create/upsert/update 皆無＝作る手段がアプリに無い」は解消。
-- **北極星マトリクス開通**：B-064 の「箱だけ」だった数量マトリクスに、生成導線で実データが載るようになった。サイズ列順はカテゴリ defaultSizeOptions に即追従、量産発注数はインライン編集可。
-- 残課題は色の正規化（⑤1・Sku色FK化）と数量の出どころ（受注数の自動流入＝saagara-v2連携/CSV/先方入力のどれか・将来テーマ。今は手入力＝orderedQuantity 生成時0・productionQuantity をマトリクスで手編集）。
+## ⑥ SKU 設計の到達点（セッション10 で開通・参考）
+- skus.ts に listSkusForProduct / createSkusForProduct / updateSkuQuantity / getDefaultSizesForProduct。生成ダイアログ＋インライン編集＋カテゴリ defaultSizeOptions 即追従のサイズ列順。北極星マトリクスに実データが載る土台あり。
+- 残課題：色の正規化（Sku色FK化・⑤1）／数量の出どころ（受注数の自動流入＝saagara-v2連携/CSV/先方入力・将来テーマ）。
 
 ## ⑥-2 1ページ傘下 backlog（更新）
-- 北極星5要素 完成（B-062β/B-063/B-027/B-066柄/B-064マトリクス）＋柄マスター完結＋**SKU 生成導線 開通（#90/#91）**。
-- B-063残（colorNameEn/availableColors改訂/Sku色FK化/colorId FK正規化）=帳票フェーズ。
-- B-065（発注引き当て時C/#自動反映）＋柄版。
-- 継続: B-048 / WorkOrder編集UI / B-037(docs整理＋古いremote branch掃除)。
+- 北極星5要素 完成＋柄マスター完結＋SKU 生成導線 開通＋**シーズン軸構造化（#92）＋カテゴリ体系 dev/本番一致**。
+- B-063残（Sku色FK化 等）=帳票フェーズ。B-065（C/#自動反映）＋柄版。B-026 シーズン UI 残（検索フィルタ）。
+- 継続: B-048 / WorkOrder編集UI / B-037(docs整理＋古いremote branch掃除＋v1.1 spec 移動)。
 - 【宿題・未消化】本番の絵型アップロード smoke（sharp linux ビルド実動作確認・セッション7から継続）。
-- 【UI将来要望】資材表の列順ドラッグ並び替え＋ユーザーごと列順保存。絵型サムネ複数サイズ/圧縮/HEIC/GCS孤児掃除/DesignVersion三位一体統合。付属/数量マトリクス列見出しの truncate＋ツールチップ。柄ダイアログへの代表色 Popover（案B拡張・要 popover.tsx 導入）。defaultMoqTiers 編集UI（Phase 2）。
-
-## ⑥-3 【新・宿題】品番カテゴリコード長 × skuCode 桁あふれ
-- skuCode=`${productCode}-${colorwayCode}-${size}`、productCode=`{brandCode}-{season}-{categoryCode}-{連番3桁}`。Sku.skuCode は @db.VarChar(100)。
-- categoryCode は validator 上限 50字。極端に長い categoryCode だと productCode が伸び、skuCode が 100字を超え得る（通常運用では余裕だが上限ガードが無い）。
-- TODO：実害条件の確認（実カテゴリコードの最大長）と、必要なら (a) categoryCode 実用上限の引き下げ or (b) skuCode 桁拡張 or (c) 生成時の長さバリデーション、のどれかを設計。今は起票のみ・着手は B-063残/帳票フェーズと一緒に判断。
+- 【宿題③ 解消済み】品番カテゴリコード長＝5段許容で確定（セッション10 起票分）。skuCode VarChar(100) 桁あふれは現実用域で余裕（categoryCode 上限50字・必要なら将来ガード）。
+- 【UI将来要望】資材表の列順ドラッグ並び替え＋ユーザーごと列順保存。絵型サムネ複数サイズ/圧縮/HEIC/GCS孤児掃除。数量/付属マトリクス列見出し truncate＋ツールチップ。柄ダイアログ代表色 Popover（案B拡張）。defaultMoqTiers 編集UI（Phase 2）。
 
 ## ⑦ 本日マージされた PR / push
-- PR #90（squash fb14760）: SKU設計 PR1（Sku.colorwayId・migration 36本目・本番適用済み）。
-- PR #91（squash 7cfd1ce）: SKU生成UI PR2（生成ダイアログ＋インライン編集＋defaultSizeOptions権威化＋並べ替えUI＋カテゴリ即追従＋timeout修正・migrationなし）。
-- main 先頭: 7cfd1ce(#91) → fb14760(#90) → 5d60da5(docs セッション9)。
-- 後始末：両 PR とも feat ブランチ ローカル/リモート削除・fetch --prune 済み。現在ローカル main のみ・クリーン。
+- PR #92（squash ef17bb7）: 実装② シーズンのプルダウン化（Product.seasonType・migration 37本目・本番適用済み・P3 データ移行完了）。
+- docs（d1c362b）: カテゴリコード体系確認書 v1.0 追加。
+- main 先頭: ef17bb7(#92) → d1c362b(docs v1.0) → e3d3623(docs セッション10) → 7cfd1ce(#91) → fb14760(#90)。
+- 後始末：#92 feat ブランチ ローカル/リモート削除・prune 済み。dev カテゴリ整備・データ移行は DB 直操作（コミット対象なし）。現在ローカル main のみ・クリーン。
 
 ## ⑧ 次セッション冒頭の手順
 1. このメモを貼り付け→状態復元。
-2. git checkout main && git pull → git log origin/main --oneline -5 で先頭が 7cfd1ce(#91) か確認。
-3. drift 確認（③の動く形コマンドで No difference）。
+2. git checkout main && git pull → git log origin/main --oneline -5 で先頭が ef17bb7(#92) か確認。
+3. drift 確認（③の動く形コマンドで No difference）。migration 37本。
 4. 次テーマ（B-063残/帳票・Sku色FK化 等）に入るなら design-reread で関連 spec/現物を読み直してから（記憶で組まない）。新マスター/新配線の着手前は「色側に倣う」現物確認を先に。
 
 ## ⑨ スキル化候補（継続・skill-packager で起こす）
-- **shunya-prior-phase-pitfall-review（仮）**：design-reread が「設計意図」を spec から戻すのに対し、これは「実装の罠」を最も近い既存フェーズの実装/seed ブリーフから grep して移植する。今回 PR1/PR2 でも「色側に倣う」現物確認（listActiveColorsForPicker/listColorways/PO・WO の transaction timeout 作法）を着手前に回せた動きを定着。新マスター/新配線の着手前に発動。
+- **shunya-prior-phase-pitfall-review（仮）**：design-reread が「設計意図」を spec から戻すのに対し、これは「実装の罠」を最も近い既存フェーズの実装/seed から grep して移植する。今回も実装②で「enum ラベルは constants/work-order-types.ts に倣う」「監査網羅型に新スカラを足す」を着手前/着手中に回せた動きを定着。新マスター/新配線の着手前に発動。
+- **shunya-db-triple-guard（仮）**：本番 DB 操作の三重ガード（host 照合→GO→dry-run ROLLBACK→COMMIT）を手順化。実装①②P3 で安定運用できた型。
