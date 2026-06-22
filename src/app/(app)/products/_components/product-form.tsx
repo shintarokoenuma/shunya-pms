@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2 } from "lucide-react"
-import { ProductStatus } from "@prisma/client"
+import { ProductStatus, SeasonType } from "@prisma/client"
 import {
   productBaseSchema,
   type ProductFormValues,
@@ -17,6 +17,10 @@ import {
   updateProduct,
   generateNextProductCodePreview,
 } from "@/lib/actions/products"
+import {
+  SEASON_TYPE_OPTIONS,
+  composeSeason,
+} from "@/lib/constants/season-types"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -90,8 +94,10 @@ const CREATE_DEFAULTS: ProductFormValues = {
   productNameEn: "",
   description: "",
   silhouette: "",
-  season: "",
-  year: "",
+  // season は year + seasonType から合成（サーバ側）。フォームは year と seasonType を入力。
+  // seasonType は未選択（undefined）開始＝必須なので未選択だと送信時に弾く。year は当年を初期表示。
+  seasonType: undefined as unknown as SeasonType,
+  year: String(new Date().getFullYear()),
   expectedQuantity: "",
   desiredDeliveryDate: "",
   assignedToUserId: null,
@@ -115,25 +121,34 @@ export function ProductForm(props: Props) {
 
   const brandId = form.watch("brandId")
   const categoryId = form.watch("categoryId")
-  const season = form.watch("season")
+  const year = form.watch("year")
+  const seasonType = form.watch("seasonType")
 
-  // create モード時：Brand × season × category 揃ったら社内品番プレビューを取得
+  // year プルダウン選択肢：現在年-1 〜 +3（動的）。
+  const currentYear = new Date().getFullYear()
+  const yearOptions = [currentYear - 1, currentYear, currentYear + 1, currentYear + 2, currentYear + 3]
+
+  // create モード時：Brand × year × seasonType × category 揃ったら社内品番プレビューを取得。
+  // season 文字列は year + seasonType から合成して採番プレビューに渡す（保存時と同じ合成）。
   const [codePreview, setCodePreview] = useState("")
   const [previewLoading, setPreviewLoading] = useState(false)
   const [previewError, setPreviewError] = useState<string | null>(null)
 
   useEffect(() => {
     if (props.mode === "edit") return
-    const s = typeof season === "string" ? season.trim() : ""
-    if (!brandId || !categoryId || s.length === 0) {
+    const yearNum = typeof year === "number" ? year : Number(year)
+    const yearValid = Number.isInteger(yearNum) && yearNum >= 2000 && yearNum <= 2100
+    // year と seasonType の両方が揃わなければプレビューを出さない（旧「season 空ならスキップ」と同等のガード）
+    if (!brandId || !categoryId || !yearValid || !seasonType) {
       setCodePreview("")
       setPreviewError(null)
       return
     }
+    const composed = composeSeason(yearNum, seasonType)
     let cancelled = false
     setPreviewLoading(true)
     setPreviewError(null)
-    generateNextProductCodePreview({ brandId, categoryId, season: s })
+    generateNextProductCodePreview({ brandId, categoryId, season: composed })
       .then((r) => {
         if (cancelled) return
         if (r.ok) {
@@ -149,7 +164,7 @@ export function ProductForm(props: Props) {
     return () => {
       cancelled = true
     }
-  }, [brandId, categoryId, season, props.mode])
+  }, [brandId, categoryId, year, seasonType, props.mode])
 
   const onSubmit: SubmitHandler<ProductFormValues> = (values) => {
     startTransition(async () => {
@@ -382,41 +397,61 @@ export function ProductForm(props: Props) {
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <FormField
               control={form.control}
-              name="season"
+              name="year"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>シーズン *</FormLabel>
-                  <FormControl>
-                    <Input placeholder="例：26SS / 26FW" {...field} />
-                  </FormControl>
-                  <FormDescription>社内品番の採番に使われます</FormDescription>
+                  <FormLabel>年度 *</FormLabel>
+                  <Select
+                    value={
+                      field.value === null || field.value === undefined
+                        ? ""
+                        : String(field.value)
+                    }
+                    onValueChange={(v) => field.onChange(v)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="年度を選択" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {yearOptions.map((y) => (
+                        <SelectItem key={y} value={String(y)}>
+                          {y}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <FormField
               control={form.control}
-              name="year"
+              name="seasonType"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>年度 *</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="例：2026"
-                      min={2000}
-                      max={2100}
-                      value={
-                        field.value === null || field.value === undefined
-                          ? ""
-                          : String(field.value)
-                      }
-                      onChange={(e) => field.onChange(e.target.value)}
-                      onBlur={field.onBlur}
-                      name={field.name}
-                      ref={field.ref}
-                    />
-                  </FormControl>
+                  <FormLabel>シーズン *</FormLabel>
+                  <Select
+                    value={field.value ?? ""}
+                    onValueChange={(v) => field.onChange(v as SeasonType)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="シーズンを選択" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {SEASON_TYPE_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          {o.label}（{o.value}）
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    年度と組み合わせて社内品番の採番に使われます（例 {currentYear % 100}SS）
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

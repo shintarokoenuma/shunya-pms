@@ -9,6 +9,7 @@ import { listAllActiveProductCategoriesForSelect } from "@/lib/actions/product-c
 import { listAssignableUsers } from "@/lib/actions/clients"
 import { ProductForm } from "../../_components/product-form"
 import type { ProductFormValues } from "@/lib/validators/product"
+import { parseSeasonType } from "@/lib/constants/season-types"
 
 type Params = Promise<{ id: string }>
 
@@ -46,7 +47,10 @@ export default async function EditProductPage({
     productNameEn: item.productNameEn ?? "",
     description: item.description ?? "",
     silhouette: item.silhouette ?? "",
-    season: item.season,
+    // seasonType が NULL の旧行（移行前）は season 文字列末尾から逆引きして初期表示。未確定なら未選択。
+    seasonType: (item.seasonType ??
+      parseSeasonType(item.season) ??
+      undefined) as ProductFormValues["seasonType"],
     year: item.year,
     expectedQuantity: item.expectedQuantity ?? "",
     desiredDeliveryDate: toDateInput(item.desiredDeliveryDate),

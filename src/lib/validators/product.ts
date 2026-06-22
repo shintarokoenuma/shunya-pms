@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { ProductStatus } from "@prisma/client"
+import { ProductStatus, SeasonType } from "@prisma/client"
 
 /**
  * S-1: 品番カルテ（Product）バリデータ
@@ -93,8 +93,9 @@ export const productBaseSchema = z.object({
   description: optionalString(10000),
   silhouette: optionalString(100),
 
-  // シーズン・年度
-  season: requiredString(20, "シーズン"),
+  // シーズン・年度（§6 案1）：入力は year + seasonType。season 文字列は server で合成して保存するため
+  // フォームからは受け取らない（validator から season を外す）。
+  seasonType: z.nativeEnum(SeasonType),
   year: requiredYear,
 
   // 数量・納期（任意）

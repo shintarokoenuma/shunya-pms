@@ -12,6 +12,7 @@ import { auth } from "@/lib/auth"
 import { runWithoutTenantContext } from "@/lib/tenant-context"
 import { getSignedReadUrl } from "@/lib/gcs"
 import { productBaseSchema, type ProductInput } from "@/lib/validators/product"
+import { composeSeason } from "@/lib/constants/season-types"
 
 /**
  * S-1: 品番カルテ（Product）Server Actions
@@ -165,10 +166,6 @@ function productCodePrefix(
   return `${brandCode.toUpperCase()}-${season.toUpperCase()}-${categoryCode.toUpperCase()}-`
 }
 
-/** 社内品番・season カラムの正規化（大文字化）に使う */
-function normalizeSeason(season: string): string {
-  return season.toUpperCase()
-}
 
 async function computeNextProductCode(
   finder: ProductCodeFinder,
@@ -500,8 +497,8 @@ export async function createProduct(
       return { ok: false, error: "指定された商品カテゴリが見つかりません" }
     }
 
-    // productCode と Product.season の表記を揃えるため、season を大文字に正規化して使う。
-    const season = normalizeSeason(data.season)
+    // §6 案1：season は year + seasonType から合成（採番もこの合成値を使う）。
+    const season = composeSeason(data.year, data.seasonType)
     const codePrefix = productCodePrefix(
       brand.brandCode,
       season,
@@ -555,6 +552,7 @@ export async function createProduct(
               description: data.description || null,
               silhouette: data.silhouette || null,
               season,
+              seasonType: data.seasonType,
               year: data.year,
               expectedQuantity: data.expectedQuantity,
               desiredDeliveryDate: deliveryDate,
@@ -619,6 +617,7 @@ export async function createProduct(
           categoryId: data.categoryId,
           productName: data.productName,
           season,
+          seasonType: data.seasonType,
           year: data.year,
           status: data.status,
         },
@@ -709,9 +708,9 @@ export async function updateProduct(
           productNameEn: data.productNameEn || null,
           description: data.description || null,
           silhouette: data.silhouette || null,
-          // productCode は immutable だが、season カラムの表記ゆれを残さないよう
-          // 更新時も大文字に正規化して保存する（UI 側の大文字強制は B-026）。
-          season: normalizeSeason(data.season),
+          // §6 案1：productCode は immutable だが、season は year + seasonType から再合成して保存。
+          season: composeSeason(data.year, data.seasonType),
+          seasonType: data.seasonType,
           year: data.year,
           expectedQuantity: data.expectedQuantity,
           desiredDeliveryDate: deliveryDate,
@@ -767,6 +766,7 @@ export async function updateProduct(
       productNameEn: existing.productNameEn,
       description: existing.description,
       season: existing.season,
+      seasonType: existing.seasonType,
       year: existing.year,
       silhouette: existing.silhouette,
       expectedQuantity: existing.expectedQuantity,
@@ -812,6 +812,7 @@ export async function updateProduct(
       productNameEn: updated.productNameEn,
       description: updated.description,
       season: updated.season,
+      seasonType: updated.seasonType,
       year: updated.year,
       silhouette: updated.silhouette,
       expectedQuantity: updated.expectedQuantity,
