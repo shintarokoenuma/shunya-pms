@@ -30,6 +30,8 @@ import { SampleProductionsTable } from "../../samples/_components/sample-product
 import { QuantityMatrixSection } from "../_components/quantity-matrix-section"
 import { ColorwaySection } from "../_components/colorway-section"
 import { BomSection, type BomItemView } from "../_components/bom-section"
+import { MaterialRequirementSection } from "../_components/material-requirement-section"
+import type { MaterialReqBomItem } from "@/lib/calc/material-requirement"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
 import {
   primaryProductCode,
@@ -136,6 +138,23 @@ export default async function ProductDetailPage({
     colorName: it.colorName,
     notes: it.notes,
     colorways: bicByItem[it.id] ?? [],
+  }))
+
+  // B-067 D4(ア): 資材所要量セクション用の薄い入力（追加クエリなし・既存 bomItems/colorways から詰め替え）。
+  // colorways(ColorwayRow[]) で productColorwayId→colorwayCode を引き、調達色行のラベルに使う。
+  const colorwayCodeById = new Map(colorways.map((c) => [c.id, c.colorwayCode]))
+  const materialReqItems: MaterialReqBomItem[] = bomItems.map((it) => ({
+    id: it.id,
+    itemLabel: it.materialLabel ?? it.customMaterialName ?? "（名称未設定）",
+    itemCategory: it.itemCategory,
+    usagePerUnit: it.usagePerUnit,
+    lossRate: it.lossRate,
+    unit: it.unit,
+    colorways: it.colorways.map((cw) => ({
+      productColorwayId: cw.productColorwayId,
+      colorwayCode: colorwayCodeById.get(cw.productColorwayId) ?? null,
+      supplierColorCode: cw.supplierColorCode,
+    })),
   }))
 
   // QE-0c: マーキング実測
@@ -452,6 +471,9 @@ export default async function ProductDetailPage({
           />
         </CardContent>
       </Card>
+
+      {/* 資材所要量（B-067 D4ア・量産数×用尺の計算ビュー・read-only） */}
+      <MaterialRequirementSection skus={skus} items={materialReqItems} />
 
       {/* マーキング実測（QE-0c・用尺入力系統B） */}
       <Card>
