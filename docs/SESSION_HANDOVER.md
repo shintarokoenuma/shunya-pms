@@ -1,95 +1,106 @@
-# 引き継ぎメモ (2026-06-23 セッション11 / 宿題③カテゴリコード体系の確定・dev カテゴリ整備・シーズンのプルダウン化 PR#92 本番反映＋データ移行完了)
+# SESSION_HANDOVER.md — shunya-pms 引き継ぎメモ（Session 12）
 
-## ⓪ プロジェクト棲み分け（毎回必須）
-- shunya-pms（shintarokoenuma/shunya-pms・~/shunya-production-system・shunya-pms-web-production.up.railway.app）と saagara-v2 は完全に別物。実装指示書は冒頭に【対象プロジェクト】ヘッダ固定。貼る前に ~/shunya-production-system を開いているか目視。
-- docs/CLAUDE.md は別プロジェクト混入ファイル。無視。docs 整理は B-037。
+最終更新: 2026-06-24 / 作成: Claude.ai（Session 12 締め）
 
-## ⓪-2 PR URL 3点セット
-- ① マージ前UI確認=ローカル(npm run dev→localhost:3000 / dev hopper:12921)。型/lintクリーンなら commit→push→PR open まで Claude Code 自走可。人が握るのは①ローカル目視と②マージ。
-- ② マージ=GitHub PR→Railway自動デプロイ=本番反映(不可逆)。
-- ③ マージ後=本番デプロイログ目視。migration入りPRは「Applying migration ...」行が③の本体。migrationなしPRは「No pending migrations to apply.」が正常。
-- 【dev起動の罠】schema/migration変更後・新action/型追加後は lsof -ti:3000,3001 | xargs kill -9 → npx prisma generate → rm -rf .next → npm run dev。
-- 【index-browser罠】"use client" が "use server"(prisma同梱)から型 import すると @prisma/client がブラウザに漏れる。対処=型/定数を中立モジュール(src/lib/types/* ・src/lib/constants/*)に逃がす。※今セッションの season-types.ts は constants/ に置き work-order-types.ts 流の中立構成にした。
-- 【監査網羅型の罠】Product に scalar を足すと products.ts の監査 before/after が要求しビルド失敗。※今セッション seasonType 追加時も before/after に手当て済み(漏れると tsc 落ちる)。
-- 【$transaction timeout の罠】ループ内 upsert を $transaction で回す action は { timeout: 15000, maxWait: 10000 } 必須(P2028)。
-- 【本番確認の罠】データ依存UIは本番にデータ無いと変更が見えない＝バグでない。本番に検証データを入れない(本番 /products/new で保存しない＝Phase 1A-15 再発防止)。
+---
 
-## ① 本セッションの成果（宿題③ カテゴリ＋シーズン 完結）
-### 1-1 確認書 v1.0 / v1.1（docs）
-- category-code-spec-confirmation-v1_0（PR #d1c362b・docs/specs/ 保存済み）= カテゴリ軸のみ。
-- category-code-spec-confirmation-v1_1（docs ルートに在席。品番フォーマットの思想統合＝カテゴリ＋シーズン）。最新の確定設計はこれ。本体仕様書 02_仕様書_Part2_ID体系 は repo 外(Notion 等)＝ポインタ追記は Notion 側で慎太郎さんが実施(repo 側不要)。
+## 【プロジェクト棲み分けルール】（最優先・毎回確認）
+- 本プロジェクト = **shunya-pms**
+  - repo: `shintarokoenuma/shunya-pms` / local: `~/shunya-production-system`
+  - 本番: `shunya-pms-web-production.up.railway.app`
+- **saagara-v2 とは完全に別物**（別repo・別本番 `saagara-v2-production.up.railway.app`）。過去に Claude Code ウィンドウで混線事故あり。
+- Claude Code 向け実装ブリーフには必ず `【対象プロジェクト】` ヘッダ（repo/local/本番URL ＋「saagara-v2 とは別物」）を付す。実行前に VS Code が `~/shunya-production-system` を開いているか目視確認。
 
-### 1-2 宿題③ カテゴリコード体系の確定（記憶で断定せず現物突き合わせから判断）
-- 当初認識の訂正：「カテゴリコード長が dev/本番でズレ・本番だけ短い疑い」だったが、実態は「体系そのものが別物・本番が spec に忠実・dev が異端」。長短でなく軸の問題。
-- 採番式 = {brandCode}-{season}-{categoryCode}-{連番3桁}。カテゴリ部 = ProductCategory.categoryCode そのもの(略号専用列なし・products.ts:158 productCodePrefix)。採番済み productCode は categoryId 変更でも不変(products.ts:679)。
-- 本番カテゴリ=27件・階層方式(level1 性別 K/L/M/U＋level2 アイテム部位 M-TS 等・内部ハイフン有り・全件 company_id=shunya-master-tenant-id)。dev=CUT_SEWN/WOVEN の2件(製法フラット＝異端)。
-- 決定 (a) 品番5段運用を正式採用。カテゴリ部が階層コード(M-TS)なら品番5段(IP-26AW-M-TS-001)。採番ロジック本体は無改修(本番運用に既に適合)＝spec(docs)更新のみ。
+---
 
-### 1-3 dev カテゴリ整備（実装①・dev DB のみ・migration なし・本番は SELECT のみ）
-- 旧 dev テスト品番(AOI-26AW-CUT_SEWN-001/002・NMB-26SS-WOVEN-001)＋配下(colorways 6/skus 21/bom_item_colorways 8/status_history 3)を物理削除(全 FK CASCADE・阻害 FK なし・dry-run ROLLBACK→COMMIT)。旧カテゴリ CUT_SEWN/WOVEN も削除(products→product_categories の FK は無し・自己参照 parent のみ SET NULL)。
-- 本番27件を dev に複製(分岐ア＝本番と同じ id・parent_category_id・company_id をそのまま INSERT＝親子張り直し不要)。psql で quote_literal 生成→dry-run→COMMIT。dev/本番カテゴリ体系が一致。
-- ④テスト品番再作成は慎太郎さんが localhost 画面で実施(createProduct が採番＋ModelCode 発番＋status_history を transaction で束ねるため SQL 直 INSERT 不可)。M-TS で AOI-26SS-M-TS-001 を作成→カラーウェイ3本→サイズ展開(カテゴリ編集UIで S/M/L)→SKU生成→数量マトリクス編集まで素振り成功(北極星マトリクスがカテゴリ整備後も正常稼働を確認)。
+## ① アクティブフェーズと到達状態
+- フェーズ: 業務トランザクション期。北極星（品番ワンページ）5要素は実装済み・本番反映済み。
+- Session 12 は「実装（B-067）→ B-065 方向転換 → フロー全体の棚卸し協議 → 元設計との照合」まで。
+- **次セッションの大テーマ = ID体系・番号・紐付けの全体棚卸し**（下記⑤）。
 
-### 1-4 シーズンのプルダウン化（実装②・PR #92・ef17bb7・migration 37本目・本番反映＋データ移行完了）
-- 背景：season も year も手打ち Input(B-026 未着手箇所)。本番 26AW×year2026 / dev 旧 26AW×year2024 の食い違い＝season(年込み)と year(年単独)の二重持ちが破綻していた。
-- 確定設計(案1・v1.1 §6)：
-  - enum SeasonType(SS/AW/SP/SU/FA/WI/SPOT) 新設＋ Product.seasonType SeasonType?(nullable・@map season_type)。season String / year Int は無変更(season は seasonType×year の合成キャッシュとして残す＝論点1(I))。
-  - 入力を year プルダウン(現在年-1〜+3・new Date().getFullYear() で動的・毎年自動更新)＋ seasonType プルダウン7択に。手打ち廃止。
-  - season はサーバ側で composeSeason(year, seasonType)＝{year下2桁}{seasonType} で自動合成保存(例 2026+SS→26SS / 2026+SPOT→26SPOT＝6字・品番が伸びるが許容 §6.3)。
-  - 採番・検索(where.season 完全一致)・一覧/詳細表示・PDF は無改修(season 文字列が従来通り入るため)。検索の seasonType フィルタ化は今回スコープ外＝別 backlog(論点3(あ))。
-  - 7択フラット併存(決定Q)＝メイン SS/AW に加え夏展示会/店舗夏企画/立ち上がりスポット等の単独シーズンが実務に実在(表記揺れでなく意味的区別)。
-- 新規モジュール src/lib/constants/season-types.ts(中立)：SEASON_TYPE_LABELS(Record<SeasonType,string> 7値網羅・春夏/秋冬/春/夏/秋/冬/スポット)・SEASON_TYPE_OPTIONS・composeSeason(year,seasonType)・parseSeasonType(season)＝末尾逆引き。
-- validator：season 必須廃止・seasonType: z.nativeEnum 必須追加(season は server 合成)。products.ts：create/update で合成保存＋seasonType 保存・監査網羅型に seasonType・未使用化した normalizeSeason 除去。product-form：2プルダウン化・採番プレビュー依存配列を [brandId,categoryId,year,seasonType,mode] に。edit/page：seasonType 初期値(NULL 行は parseSeasonType で末尾逆引き)。
-- P1(schema+migration 37本目・本番適用済み)→ P2(コード・PR #92 ef17bb7 マージ・本番デプロイで Applying migration 20260623000000_add_season_type 確認)→ P3(既存3行 seasonType 後埋め＝dev 1行 SS・本番2行 AW・dry-run ROLLBACK→COMMIT・三重ガード)。全環境 NULL 行ゼロ。
-- 環境安全：ゲート①で作ったダミー AOI-26AW-M-TP-001 は dev に入っていた(本番一覧に不在)＝localhost が本番を向く事故(Phase 1A-15)は再発なし。
+## ② 未マージPR・検証状態
+- **PR #93（B-067 D4ア・資材所要量セクション）= マージ済み**（commit 082f5fd・本番反映済み・feature ブランチ削除済み）。
+- **PR #94（B-065・PO→BOM 取り込みカラーウェイ指定）= OPEN のまま保留**。
+  - 破棄せず残す方針（現実装は「全くダメではない」ので作り直しの参考にする）。
+  - branch: `feat/b-065-po-import-colorway`。tsc/lint/build クリーン。
+  - ただし「主従が逆」と判明済みで、作り直し前提。
 
-## ② 次セッション最優先（優先順は次回・慎太郎さん判断）
-- 入口は次セッション冒頭で慎太郎さんが決定。私の memo は ② で B-067(数量→用尺→PO)最優先、Claude Code 版は ⑤ で B-063残(Sku色FK化=帳票)→B-065→QE-1 を優先順としていたが、齟齬ではなく「発注書に反映されればよし」発言の枠の取り方の差(私=大テーマ起票 / Claude Code=帳票フェーズの一連)。両方とも保存済みメモに記録あり・実害なし。
-- B-067(数量→用尺→PO 一気通貫) と 帳票フェーズ(B-063残=Sku色FK化) は同じ「生産発注まわり」で隣接。次回 spec を読み直しながら順序を確定すれば十分(記憶で組まない)。
-- B-067 に入るなら：spec Part3 §5.1(発注3タイプ)/§154(量産発注 自動連動)/§526(BOM連動 素材情報)・PO addendum §76・BomItem/PoItem/Sku の実スキーマを design-reread → 現状(数量マトリクス→PO の連結状況)の棚卸し → 設計確認書から。
-- その他は ⑧ backlog から選択。
+## ③ dev DB 状態
+- dev DB: `hopper.proxy.rlwy.net:12921`（安全・db push 運用）。Session 12 で dev DB スキーマ変更なし（#93 は schema/migration なしの client 計算のみ）。
+- 本番 DB: `shuttle.proxy.rlwy.net:16099`（明示承認＋トリプルゲート必須）。Session 12 で本番DB書き込みなし。
 
-## ③ 新規起票（セッション11）
-- B-067：数量→用尺→PO 連動（生産発注の一気通貫）。数量マトリクス(Sku.productionQuantity)× BomItem.usagePerUnit/totalUsagePerUnit → 資材発注数を自動計算し、工場発注書(WO・縫製仕様書＋数量明細)/仕様書発注(副資材 PO)に反映。spec Part3 §5.1(発注3タイプ)・§154(量産発注への自動連動)・§526(BOM連動 素材情報)、PO addendum §76(サイズ展開は Product/SKU 側が正)に設計意図あり＝材料(usagePerUnit/productionQuantity)は schema に既存だが計算・連動の実装は未着手。QE-1・B-057(BOM→PO draft)・B-047(CAD用尺)・B-039(規格/サイズ構造化)と統合検討。
+## ④ 直近の spec ファイル名
+- `docs/specs/b-067-quantity-usage-po-spec-confirmation-v1_0-2026-06-23.md`（#93 の確定仕様・D1〜D6）
+- `docs/specs/b-065-po-import-colorway-spec-confirmation-v1_0-2026-06-23.md`（B-065 v1.0・E1〜E6。ただし方向転換で作り直し対象）
+- 元設計（project knowledge・2026-05-16 スナップショット、参照用）: Part1〜4 / quotation_engine / invoice_system_and_fta 他
 
-## ④ Railway環境（唯一の正）
-- 本番DB postgres-production/postgres-ab6d/shuttle:16099(migrate deploy・_prisma_migrations あり)。本番内部接続 postgres-ab6d.railway.internal:5432。本番ポート8080。公開プロキシ shuttle:16099 / DATABASE_PUBLIC_URL。
-- dev DB postgres-development/hopper:12921(db push・_prisma_migrations 無し)。1往復≈1.8sと遅い(public proxy 経由)。
-- migration 37本(#92 が 37本目 20260623000000_add_season_type・本番適用済み)。Prisma 6.19.3(7.x 案内は無視＝B-035)。本番 Next.js 16.2.6。GCS dev=...-dev/prod=...-prod。
+## ⑤ 次セッションの優先順位（順序つき）
+着手順は **(い) 棚卸し → (あ) 見積もり** で確定。
 
-## ⑤ dev DB（hopper:12921）
-- product_categories=27件(本番複製済み・level1 K/L/M/U＋level2 23件・parent 正常・全件 company_id=shunya-master-tenant-id)。companies=1社(shunya-master-tenant-id「shunya」)。
-- products=2件：AOI-26SS-M-TS-001(season_type=SS・カラーウェイ3本 A黒/B白/C柄BD-A・SKU 生成済み・数量マトリクス素振り済み)、AOI-26AW-M-TP-001(season_type=AW・④検証で作成)。
-- colors=51件。柄種別=9件。柄=4件。
+1. **【最優先】ID体系・番号・紐付けの全体棚卸し**
+   - 目的: 「発注が品番に確実に紐づかない」「番号体系が脆い」を根本から整理。B-065/B-069 の上流土台。
+   - 段取り（協議済み）:
+     - 範囲 = **(中) 生産フロー全体**（Product/ModelCode/SampleProduction/ProgressTask/PO/WO/PoItem/WoItem ＋ BOM/Sku/ProductColorway/Material/Collection）
+     - 粒度 = **1モデル1ブロック ＋ 論点付箋（問いの形・結論は出さない）**
+     - 提出 = **docs に Markdown 本体（例 `id-map-and-linkage-audit-v0_1`）＋ チャットに論点サマリ**
+     - **動線も含める**（主要導線の searchParams/props で ID がどう渡る/落ちるか）
+   - 入口 = Claude.ai が read-only 抽出ブリーフを出す（schema の ID マップ＋採番箇所＋FK＋脆い紐付け＋主要動線の ID 受け渡し）。慎太郎さんは整理済みを判断するだけ（負荷最小化）。
+   - ⚠ Claude 単独で完結させない（実務事実に依存・慎太郎さんのチェックが安全弁）。半日自走は不可（1ターン応答のため）。
 
-## ⑥ 確定設計（記憶で再構築しない・spec が正）
-- 最新 spec：docs(specs)/category-code-spec-confirmation-v1_1-2026-06-22.md(カテゴリ＋シーズン統合)。v1.0(カテゴリのみ)は履歴。
-- カテゴリコード：本番の階層方式(level1 性別＋level2 部位)が標準。品番5段許容(categoryCode は階層コード可)。採番ロジック本体は無改修。
-- シーズン：year＋seasonType の構造化入力 → season 文字列はシステム合成(composeSeason)。season String は合成キャッシュとして残す。seasonType enum は正規列(検索/集計/将来 SO 連携用)。検索の seasonType フィルタ化は別 backlog。
-- SKU = ProductColorway × サイズ(セッション10 で確定・sku-design-spec-confirmation-v1_1)。サイズの権威は ProductCategory.defaultSizeOptions。受注数(orderedQuantity)の正は将来 SalesOrder(フェーズ2)。フェーズ1は productionQuantity 手入力。
+2. **【次】見積もり（QE-1）**
+   - 元設計 `quotation_engine.md` に詳細設計済み（BOM→原価自動集計 QuotationCostBreakdown・QuotationType SAMPLE/MASS/FINAL・4階層マージン・為替±5%再見積）。今日の「仕入コスト×個数＋工賃＝発注dataから自動算出」とほぼ一致。#93（資材所要量）の自然な続き。
 
-## ⑦ 本日マージされた PR / push
-- d1c362b docs: カテゴリコード体系確認書 v1.0(docs/specs/ 保存・main 直 push)。
-- PR #92(squash ef17bb7) = 実装② シーズンのプルダウン化。migration 37本目・本番適用済み・P3 データ移行済み。
-- main 先頭：ef17bb7(#92) → d1c362b → e3d3623(docs セッション10) → 7cfd1ce(#91) → fb14760(#90)。
-- 後始末済：feat/season-dropdown ブランチ削除・prune 済み。現在ローカル main のみクリーン。drift なし(No difference detected.)。
-- 新規 spec/ブリーフ：category-code-spec-confirmation v1.0/v1.1(2026-06-22)。
-- ※ dev カテゴリ整備・P3 データ移行は DB 操作のみ(コミット対象なし)。
+3. B-065 作り直し（発注側にカラーウェイを持たせる方向。下記⑥参照）→ その後 B-069。
 
-## ⑧ 1ページ傘下 backlog（更新）
-- 宿題③(品番カテゴリコード長)＝完結(カテゴリ体系確定＋シーズンのプルダウン化まで)。品番フォーマット(カテゴリ5段＋シーズン構造化)が整った。
-- B-067(新規)＝数量→用尺→PO 連動(②③参照・次の大テーマ候補)。B-063残(帳票)と隣接・順序は次回 spec 読み直しで確定。
-- フェーズ2(将来)：SalesOrder / SalesOrderItem(受注数=orderedQuantity の正)。入力経路 a/c/d。
-- B-026(Season dropdown 標準化)＝実装②で実質消化(year＋seasonType プルダウン化・表記揺れ構造的解消)。残: 検索の seasonType フィルタ化(別 backlog 化)・Collection.season の同様化(今回スコープ外)。
-- B-063残(colorNameEn/availableColors改訂/Sku色FK化/colorId FK正規化)=帳票フェーズ。
-- B-065(発注引き当て時 C/# 自動反映)＋柄版。
-- QE-1(量産見積もり)：北極星完成で着手可。B-067 と同領域。Excel2点(縫製仕様書・原価シート)を参照資料化・再添付依頼。カラーウェイ軸に合わせ見直し要。
-- 宿題：本番絵型 smoke(sharp linux 実動作・セッション7から継続)。
-- 継続: B-037(docs整理・docs ルートに category-code v1.0/v1.1 等 untracked が溜まっている。v1.0 は specs/ にも複製済み・ルート版は残置)／B-048／B-035(Prisma 7 メジャーアップ)／WorkOrder編集UI。
-- 【UI将来要望】サイズマスター本格化・資材表の列順ドラッグ・絵型サムネ複数サイズ等は従来どおり必要が出たら別起票。
+## ⑥ メモ・残課題
 
-## ⑨ 次セッション冒頭の手順
-1. このメモを貼り付け→状態復元。
-2. git checkout main && git pull → git log origin/main --oneline -5(先頭 ef17bb7 #92・その下 d1c362b)。
-3. drift 確認(migrate diff で No difference detected.)。
-4. B-067(数量→用尺→PO) または B-063残(帳票)に入るなら、design-reread で spec Part3 §5.1/§154/§526・PO addendum・BomItem/PoItem/Sku の実スキーマを読み直してから(記憶で組まない)。現状の連結状況の棚卸し→設計確認書から。入口は冒頭で決定。
+### B-065 方向転換の経緯（重要）
+- 当初 v1.0（#94）は「取り込みダイアログで PO 明細ごとに ITEM/COLORWAY モード選択」。
+- 慎太郎さんレビューで **主従が逆**と判明。正: 資材（品目）を先に立て、その下に各色の C/# がぶら下がる。
+- さらに発展 → 「**発注の際にカラーウェイ（マスターカラー）を入力すれば、取り込みは区分選択だけで済む**」。費目（CostCategory）はコスト体系のマスターなので**触らない**。
+- recon で判明した土台の問題:
+  - **発注フォームは品番（productId）を選んでいない**。`productId` は `sampleProductionId` 経由でサーバ導出のみ（`progressTaskId` 単独だと `primaryProductId` は null）。
+  - カラーウェイ（`listColorways` は productId 必須）を発注フォームで出すには、先に「品番を確定する経路」が要る。
+  - PoItem に `productColorwayId` 列が無い（色は colorCode 文字列のみ）。
+- → これらは **ID体系棚卸し（⑤-1）の後**に B-069（発注にカラーウェイを構造で持たせる）として設計。
+
+### フロー全体マップ（Session 12 で作成・3分割）
+- 前半（引き合い→品番→サンプル）／中盤（カラー/BOM/SKU→発注）／後半（受注[将来]→納品請求＋横断マスター）。
+- マップ上の赤=Claude の記憶ベース推測（番号採番式・FK 任意/必須）。**次段で実スキーマ read-only 裏取りが必要**。
+
+### 元設計との照合結果（6項目・Session 12 で確定）
+- **#1 サンプル/量産の2周構造・都度請求** = ほぼ一致（QT-SAMPLE/QT-MASS で2見積は spec 想定済み。サンプル"請求"独立の明記は薄く要補強）。
+- **#2 見積もりフェーズ（発注data→自動算出）** = 一致（quotation_engine.md に詳細設計済み）。
+- **#3 貿易書類=量産前の素材輸出・免税製造** = **spec の穴（欠落）**。元 spec の貿易は「製品輸出の FTA/原産地証明」のみ。「生地・素材をベトナムに無償支給し免税で製造させる書類（無償支給・賃加工）」は概念ごと無い。慎太郎さん「一番必要・量産前に要る」。
+- **#4 買側の請求×発注照合・不備検出** = **spec に無い新規**。
+- **#5 パターン/仕様書=用尺・付属規格の源泉** = 部分的。DesignVersion（パタンナー受領）構造はあるが「仕様書から用尺・ボタン数等を読み取って発注欄へ自動投入」は spec を超える。まず「仕様書・パターンから用尺を読み込む設定」を検討。入力経路2案=(あ)メール添付の自動読込/(い)パタンナーがログインして登録。
+- **#6 議事録→タスク化・メール読取（AI入力層）** = 部分的。Part3 に「文字起こしツール（Claude製）iframe統合」あり。議事録→タスク自動起票・メール→カレンダー/タスク一元管理は今日の拡張。
+
+### サンプル製作=ハブという認識（Session 12 で言語化）
+- サンプルで手配する資材は全て**その品番のコストに紐づく**。
+- サンプル段は **BOM × コスト × 用尺が交差する複雑なハブ**。サンプル SKU は議事録/手入力で進行。
+- 工場発注は**仕様書（パタンナー由来・絵型含む）ベース**。
+- 「サンプル作成から**帳票**が紐づく」（※「長表」は誤り→「帳票」が正）。
+
+### AI連動（やりたいこと整理・後段テーマ）
+- Gmail / Google カレンダー / Slack / Notion 連携。
+- 会議文字起こし→システム登録候補・タスク候補を一覧→タスク漏れ防止の一元管理。
+- メールの請求書・納品連絡を読み取ってカレンダー/タスクに追加。
+
+### 未取得の参考資料
+- 慎太郎さんのドライブ（仕様書・パターン）共有リンクは **Claude から直接開けない**。仕様書を設計に反映するには、代表的な1枚を**会話に直接アップロード**が必要（次段で #5 に着手するとき）。
+
+## ⑦ 本日マージしたPR
+- **#93**（B-067 D4ア・資材所要量セクション）commit 082f5fd。
+
+---
+
+## 【継続指示】（慎太郎さんより・最優先）
+- **このログ（Session 12 の議論）は都度読み直す**: セッションをまたいでも conversation_search / recent_chats でこの一連（フロー全体・追加6項目・訂正・照合結果）を復元してから進める。
+- **元々の設計と照らして異なる所を比較し、良い方で進める**: 今日の照合（⑥）を起点に、新規/欠落（#3#4）は設計から、設計済み（#2）は spec を読んで着手判断。
+
+## 環境メモ（再掲）
+- main 先頭: 082f5fd（#93）
+- dev start: lsof -ti:3000,3001 | xargs kill -9 → npx prisma generate → rm -rf .next → npm run dev
+- git: 明示パスのみ（add -A 禁止）。docs単独→main直push可。コード→featureブランチ+PR（squash）。
+- PR 3ゲート: ①ローカル目視(localhost:3000/dev DB) ②GitHub merge=Railway自動デプロイ=本番(不可逆) ③本番確認。
