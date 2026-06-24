@@ -36,7 +36,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Table,
   TableBody,
@@ -376,6 +375,8 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
         <PoImportDialog
           bomId={bomId}
           productId={productId}
+          items={items}
+          colorwayColumns={colorwayColumns.filter((c) => c.status === "ACTIVE")}
           onClose={() => setImportOpen(false)}
           onImported={() => {
             setImportOpen(false)
@@ -1054,23 +1055,34 @@ function BomItemDialog({
 }
 
 // =============================================================================
-// QE-0d: 発注から取り込むモーダル（用尺軸の1行内 select とは別物の専用 UI）。
-//   PO 単位グループ表示・PoItem チェックボックス・1操作1PO 繰り返し可。
+// B-065: 発注から取り込むモーダル。候補行ごとに取り込み先を指定する。
+//   モード①「品目として」= 新規 BomItem 行（importPoItemsToBom・現挙動）。
+//   モード②「各カラーへ」= 既存 BomItem のカラーウェイ調達色（upsertBomItemColorway で C/# を張る）。
+//   仕様: docs/specs/b-065-po-import-colorway-spec-confirmation-v1_0-2026-06-23.md（E1〜E6/F1）
 // =============================================================================
+type ImportTarget =
+  | { mode: "ITEM" }
+  | { mode: "COLORWAY"; bomItemId: string; productColorwayId: string }
+
 function PoImportDialog({
   bomId,
   productId,
+  items,
+  colorwayColumns,
   onClose,
   onImported,
 }: {
   bomId: string
   productId: string
+  items: BomItemView[]
+  colorwayColumns: ColorwayRow[]
   onClose: () => void
   onImported: () => void
 }) {
   const [loading, setLoading] = useState(true)
   const [groups, setGroups] = useState<PoImportGroup[]>([])
-  const [selected, setSelected] = useState<Set<string>>(new Set())
+  // key: PoItem.id。Map に存在しない＝取り込まない（未選択）。
+  const [targets, setTargets] = useState<Map<string, ImportTarget>>(new Map())
   const [isPending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -1090,42 +1102,108 @@ function PoImportDialog({
     }
   }, [productId])
 
-  const toggle = (id: string) =>
-    setSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+  const setRowMode = (poItemId: string, mode: "NONE" | "ITEM" | "COLORWAY") =>
+    setTargets((prev) => {
+      const next = new Map(prev)
+      if (mode === "NONE") next.delete(poItemId)
+      else if (mode === "ITEM") next.set(poItemId, { mode: "ITEM" })
+      else next.set(poItemId, { mode: "COLORWAY", bomItemId: "", productColorwayId: "" })
+      return next
+    })
+
+  const setRowColorwayField = (
+    poItemId: string,
+    field: "bomItemId" | "productColorwayId",
+    value: string,
+  ) =>
+    setTargets((prev) => {
+      const cur = prev.get(poItemId)
+      if (!cur || cur.mode !== "COLORWAY") return prev
+      const next = new Map(prev)
+      next.set(poItemId, { ...cur, [field]: value })
       return next
     })
 
   const totalItems = groups.reduce((acc, g) => acc + g.items.length, 0)
 
+  // COLORWAY 行で bomItemId/productColorwayId 未充足のものがあれば実行不可（E1）。
+  const cwIncomplete = [...targets.values()].some(
+    (t) => t.mode === "COLORWAY" && (!t.bomItemId || !t.productColorwayId),
+  )
+
   const handleImport = () => {
-    if (selected.size === 0) {
+    if (targets.size === 0) {
       toast.error("取り込む明細を選択してください")
       return
     }
+    const poItemById = new Map(
+      groups.flatMap((g) => g.items).map((i) => [i.id, i]),
+    )
+    const entries = [...targets.entries()]
+    const itemIds = entries
+      .filter(([, t]) => t.mode === "ITEM")
+      .map(([id]) => id)
+    const cwTargets = entries.filter(
+      (e): e is [string, Extract<ImportTarget, { mode: "COLORWAY" }>] =>
+        e[1].mode === "COLORWAY",
+    )
+
     startTransition(async () => {
-      const r = await importPoItemsToBom({
-        bomId,
-        poItemIds: [...selected],
-      })
-      if (!r.ok) {
-        toast.error(r.error)
-        return
+      let okCount = 0
+      let ngCount = 0
+      let firstErr: string | null = null
+      let itemCount = 0
+
+      // ① 品目として（新規 BomItem）＝既存 action に一括
+      if (itemIds.length > 0) {
+        const r = await importPoItemsToBom({ bomId, poItemIds: itemIds })
+        if (r.ok) {
+          itemCount = r.data.count
+          okCount += r.data.count
+        } else {
+          ngCount += itemIds.length
+          firstErr = firstErr ?? r.error
+        }
       }
-      toast.success(`${r.data.count}件の明細を取り込みました`)
+
+      // ② 各カラーへ（C/#）＝1件ずつ upsert。1件失敗しても残りは続行。
+      let cwCount = 0
+      for (const [poItemId, t] of cwTargets) {
+        const poItem = poItemById.get(poItemId)
+        const code = normalizeSupplierColorCode(poItem?.supplierItemCode ?? "")
+        const r = await upsertBomItemColorway({
+          bomItemId: t.bomItemId,
+          productColorwayId: t.productColorwayId,
+          supplierColorCode: code,
+          supplierColorName: "",
+        })
+        if (r.ok) {
+          cwCount++
+          okCount++
+        } else {
+          ngCount++
+          firstErr = firstErr ?? r.error
+        }
+      }
+
+      if (ngCount === 0) {
+        toast.success(`品目${itemCount}件 / カラー割当${cwCount}件 を反映しました`)
+      } else {
+        toast.error(
+          `一部失敗: 成功${okCount}件・失敗${ngCount}件（${firstErr ?? ""}）`,
+        )
+      }
       onImported()
     })
   }
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] max-w-4xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>発注から取り込む</DialogTitle>
           <DialogDescription>
-            この品番に紐づく発注の明細を資材表へ起票します（単価・通貨・仕入先をコピー。用尺は空・後でマーキングから引き当て）。区分は発注の種別から既定設定後、必要に応じて修正してください。
+            各明細の取り込み先を指定します。「品目として」＝新規の資材行を起票（単価・通貨・仕入先をコピー）。「各カラーへ」＝既存資材のカラーウェイ調達色（C/#）として仕入先品番を張る（新規行は作りません）。
           </DialogDescription>
         </DialogHeader>
 
@@ -1159,53 +1237,118 @@ function PoImportDialog({
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[40px]" />
+                        <TableHead className="w-[280px]">取り込み先</TableHead>
                         <TableHead>品名</TableHead>
-                        <TableHead className="w-[120px]">仕入先品番</TableHead>
-                        <TableHead className="w-[120px]">色</TableHead>
-                        <TableHead className="w-[90px]">サイズ</TableHead>
-                        <TableHead className="w-[110px] text-right">単価</TableHead>
+                        <TableHead className="w-[110px]">仕入先品番</TableHead>
+                        <TableHead className="w-[110px]">色</TableHead>
+                        <TableHead className="w-[80px]">サイズ</TableHead>
+                        <TableHead className="w-[100px] text-right">単価</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {g.items.map((it) => (
-                        <TableRow key={it.id}>
-                          <TableCell>
-                            <Checkbox
-                              checked={selected.has(it.id)}
-                              onCheckedChange={() => toggle(it.id)}
-                            />
-                          </TableCell>
-                          <TableCell className="text-sm">
-                            <div className="font-medium">
-                              {it.customItemName ?? "—"}
-                            </div>
-                            {it.alreadyInBom && (
-                              <Badge variant="outline" className="mt-0.5 text-[10px]">
-                                BOM に既存
-                              </Badge>
-                            )}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs">
-                            {it.supplierItemCode ?? "—"}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {it.colorCode ? `C/#${it.colorCode} ` : ""}
-                            {it.color ?? ""}
-                            {!it.colorCode && !it.color ? "—" : ""}
-                          </TableCell>
-                          <TableCell className="text-xs">
-                            {it.sizeValue !== null
-                              ? `${it.sizeValue}${it.sizeUnit ?? ""}`
-                              : "—"}
-                          </TableCell>
-                          <TableCell className="text-right text-sm">
-                            {it.unitPrice === null
-                              ? "未定"
-                              : `${it.currency} ${Number(it.unitPrice).toLocaleString("ja-JP", { maximumFractionDigits: 4 })}`}
-                          </TableCell>
-                        </TableRow>
-                      ))}
+                      {g.items.map((it) => {
+                        const target = targets.get(it.id)
+                        const mode = target?.mode ?? "NONE"
+                        const noCode = !it.supplierItemCode
+                        return (
+                          <TableRow key={it.id}>
+                            <TableCell className="align-top">
+                              <div className="space-y-1.5">
+                                <Select
+                                  value={mode}
+                                  onValueChange={(v) =>
+                                    setRowMode(it.id, v as "NONE" | "ITEM" | "COLORWAY")
+                                  }
+                                >
+                                  <SelectTrigger className="h-8">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="NONE">取り込まない</SelectItem>
+                                    <SelectItem value="ITEM">品目として（新規行）</SelectItem>
+                                    <SelectItem value="COLORWAY" disabled={noCode}>
+                                      各カラーへ（C/#）
+                                    </SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                {noCode && (
+                                  <p className="text-[10px] leading-tight text-muted-foreground">
+                                    仕入先品番が空のため各カラーへ割り当て不可。取り込み後に BOM 表の C/# セルで入力。
+                                  </p>
+                                )}
+                                {target?.mode === "COLORWAY" && (
+                                  <div className="space-y-1.5">
+                                    <Select
+                                      value={target.bomItemId}
+                                      onValueChange={(v) =>
+                                        setRowColorwayField(it.id, "bomItemId", v)
+                                      }
+                                    >
+                                      <SelectTrigger className="h-8">
+                                        <SelectValue placeholder="既存資材を選択" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {items.map((bi) => (
+                                          <SelectItem key={bi.id} value={bi.id}>
+                                            {bi.materialLabel ??
+                                              bi.customMaterialName ??
+                                              bi.itemCategory}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                    <Select
+                                      value={target.productColorwayId}
+                                      onValueChange={(v) =>
+                                        setRowColorwayField(it.id, "productColorwayId", v)
+                                      }
+                                    >
+                                      <SelectTrigger className="h-8">
+                                        <SelectValue placeholder="カラーウェイを選択" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {colorwayColumns.map((cw) => (
+                                          <SelectItem key={cw.id} value={cw.id}>
+                                            {cw.colorwayCode} {cw.colorwayName}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-sm">
+                              <div className="font-medium">
+                                {it.customItemName ?? "—"}
+                              </div>
+                              {it.alreadyInBom && (
+                                <Badge variant="outline" className="mt-0.5 text-[10px]">
+                                  BOM に既存
+                                </Badge>
+                              )}
+                            </TableCell>
+                            <TableCell className="font-mono text-xs">
+                              {it.supplierItemCode ?? "—"}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {it.colorCode ? `C/#${it.colorCode} ` : ""}
+                              {it.color ?? ""}
+                              {!it.colorCode && !it.color ? "—" : ""}
+                            </TableCell>
+                            <TableCell className="text-xs">
+                              {it.sizeValue !== null
+                                ? `${it.sizeValue}${it.sizeUnit ?? ""}`
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="text-right text-sm">
+                              {it.unitPrice === null
+                                ? "未定"
+                                : `${it.currency} ${Number(it.unitPrice).toLocaleString("ja-JP", { maximumFractionDigits: 4 })}`}
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 )}
@@ -1218,13 +1361,16 @@ function PoImportDialog({
           <Button variant="outline" onClick={onClose} disabled={isPending}>
             キャンセル
           </Button>
-          <Button onClick={handleImport} disabled={isPending || selected.size === 0}>
+          <Button
+            onClick={handleImport}
+            disabled={isPending || targets.size === 0 || cwIncomplete}
+          >
             {isPending ? (
               <Loader2 className="mr-1 h-4 w-4 animate-spin" />
             ) : (
               <Download className="mr-1 h-4 w-4" />
             )}
-            選択した{selected.size > 0 ? `${selected.size}件を` : ""}取り込む
+            選択した{targets.size > 0 ? `${targets.size}件を` : ""}取り込む
           </Button>
         </DialogFooter>
       </DialogContent>
