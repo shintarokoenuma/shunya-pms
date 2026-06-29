@@ -42,6 +42,7 @@ export const colorInputSchema = z
       .trim()
       .min(1, "色名は必須です")
       .max(100, "100文字以内で入力してください"),
+    colorNameEn: optionalString(100), // 輸出下げ札・貿易書類向け（任意・空可→create/update で空は null 化）
     cmyk: z.string().trim().max(20, "20文字以内で入力してください").default(""),
     hex: z.string().trim().max(7, "7文字以内で入力してください").default(""),
     impression: optionalString(100),

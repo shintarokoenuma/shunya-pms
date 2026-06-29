@@ -149,6 +149,7 @@ export async function createColor(
           companyId,
           colorNumber: data.colorNumber,
           colorName: data.colorName,
+          colorNameEn: data.colorNameEn || null,
           hueGroup,
           toneStep,
           cmyk: data.cmyk,
@@ -169,6 +170,7 @@ export async function createColor(
           afterData: {
             colorNumber: c.colorNumber,
             colorName: c.colorName,
+            colorNameEn: c.colorNameEn,
             hueGroup: c.hueGroup,
             toneStep: c.toneStep,
             cmyk: c.cmyk,
@@ -250,6 +252,7 @@ export async function updateColor(
         data: {
           colorNumber: data.colorNumber,
           colorName: data.colorName,
+          colorNameEn: data.colorNameEn || null,
           hueGroup,
           toneStep,
           cmyk: data.cmyk,
@@ -270,6 +273,7 @@ export async function updateColor(
           beforeData: {
             colorNumber: existing.colorNumber,
             colorName: existing.colorName,
+            colorNameEn: existing.colorNameEn,
             cmyk: existing.cmyk,
             hex: existing.hex,
             status: existing.status,
@@ -277,6 +281,7 @@ export async function updateColor(
           afterData: {
             colorNumber: updated.colorNumber,
             colorName: updated.colorName,
+            colorNameEn: updated.colorNameEn,
             cmyk: updated.cmyk,
             hex: updated.hex,
             status: updated.status,
@@ -534,6 +539,7 @@ export async function listActiveColorsForPicker(): Promise<ColorPickerOption[]> 
       id: true,
       colorNumber: true,
       colorName: true,
+      colorNameEn: true,
       hueGroup: true,
       toneStep: true,
       hex: true,

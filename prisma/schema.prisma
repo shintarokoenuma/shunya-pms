@@ -1510,8 +1510,9 @@ model Color {
   id        String @id @default(uuid())
   companyId String @map("company_id")
 
-  colorNumber String @map("color_number") @db.VarChar(2) // "51" 偶数はイレギュラー予約
-  colorName   String @map("color_name") @db.VarChar(100) // 業界呼称（サックス、ネイビー…）
+  colorNumber String  @map("color_number") @db.VarChar(2) // "51" 偶数はイレギュラー予約
+  colorName   String  @map("color_name") @db.VarChar(100) // 業界呼称（サックス、ネイビー…）
+  colorNameEn String? @map("color_name_en") @db.VarChar(100) // 輸出下げ札・貿易書類向け（任意・後埋め）
 
   hueGroup Int @map("hue_group") // 十の位 0-9（色相系統）
   toneStep Int @map("tone_step") // 一の位（1/3/5/7/9 基本、偶数は追加枠）

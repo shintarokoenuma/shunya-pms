@@ -9,6 +9,7 @@ export type ColorPickerOption = {
   id: string
   colorNumber: string
   colorName: string
+  colorNameEn: string | null
   hueGroup: number
   toneStep: number
   hex: string

@@ -47,6 +47,7 @@ type Props = {
 const emptyDefaults: ColorFormValues = {
   colorNumber: "",
   colorName: "",
+  colorNameEn: "",
   cmyk: "",
   hex: "",
   impression: "",
@@ -143,6 +144,20 @@ export function ColorForm({ mode, initialId, initialValues }: Props) {
                 </p>
               )}
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="colorNameEn">色名（英語）</Label>
+            <Input
+              id="colorNameEn"
+              {...form.register("colorNameEn")}
+              placeholder="例：Navy / Sax Blue（任意・輸出下げ札用）"
+              maxLength={100}
+            />
+            {form.formState.errors.colorNameEn && (
+              <p className="text-xs text-destructive">
+                {form.formState.errors.colorNameEn.message}
+              </p>
+            )}
           </div>
           {isUndefinedColor && (
             <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">

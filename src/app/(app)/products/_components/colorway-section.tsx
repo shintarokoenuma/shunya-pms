@@ -74,6 +74,8 @@ export function ColorwaySection({
   patternOptions: TextilePatternOption[]
 }) {
   const router = useRouter()
+  // B-063: colorId → マスター色（colorName / colorNameEn）解決用。ピッカー結果の再利用（N+1 を作らない）。
+  const colorById = new Map(colorOptions.map((o) => [o.id, o]))
   // B-066-③b: 色展開 / 柄展開で別ダイアログ（案A）。editing は共用。
   const [colorDialogOpen, setColorDialogOpen] = useState(false)
   const [patternDialogOpen, setPatternDialogOpen] = useState(false)
@@ -151,6 +153,18 @@ export function ColorwaySection({
                           <Badge variant="outline" className="ml-2 text-[10px]">
                             柄 {p ? p.patternNumber : ""}
                           </Badge>
+                        )
+                      })()}
+                    {cw.colorId &&
+                      (() => {
+                        const c = colorById.get(cw.colorId)
+                        if (!c) return null
+                        // マスター解決名: 番号＋色名（あれば英語名を併記）
+                        return (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {c.colorNumber} {c.colorName}
+                            {c.colorNameEn ? ` / ${c.colorNameEn}` : ""}
+                          </span>
                         )
                       })()}
                   </TableCell>
