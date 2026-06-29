@@ -27,6 +27,7 @@ export default async function EditColorPage({
   const initialValues: Partial<ColorFormValues> = {
     colorNumber: color.colorNumber,
     colorName: color.colorName,
+    colorNameEn: color.colorNameEn ?? "",
     cmyk: color.cmyk,
     hex: color.hex,
     impression: color.impression ?? "",
