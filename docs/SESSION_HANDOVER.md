@@ -1,50 +1,67 @@
-# shunya-pms セッション引き継ぎメモ（2026-06-29）
+# shunya-pms セッション引き継ぎメモ（2026-07-01）
 
-## ① 進行中フェーズと完了状態
-- Phase 1A〜1B 移行帯。本日は B-063 PR1 を本番まで完了させ、QE-1（見積もりエンジン）設計に着手・確定材料まで到達して区切り。
-- シナリオ A 継続（マスター → 業務トランザクション → AI）。AI 前倒しなし。
+## ⓪ プロジェクト棲み分け（毎回先頭・要目視確認）
+- 対象: shunya-pms（repo: github.com/shintarokoenuma/shunya-pms / local: ~/shunya-production-system / 本番: shunya-pms-web-production.up.railway.app）
+- saagara-v2 とは別物。Claude Code 着手前に VS Code が ~/shunya-production-system を指しているか目視確認。
 
-## ② 本日マージした PR・本番反映
-- **PR #95（B-063: Color.colorNameEn 追加＋色名解決）= マージ済み（squash c5a6356）・本番デプロイ済み**。
-  - 本番 migration `20260629000000_color_name_en` 適用確認済み（Railway ログ `Applying migration ...` 目視・三重ガード完了）。
-  - 9ファイル（schema/migration/types/actions/validator/color-form/colorway-section/edit-page/docs）。gate①修正（編集フォーム initialValues に colorNameEn）も同 squash に内包済み（git show c5a6356 で確認・別PR不要だった）。
-  - gate① 完全クリア：色 編集フォームの英語名初期表示（#99→Black/#01→White）＋カラー展開カードの色名解決併記（A:99ブラック/Black・B:01晒し/White・C:柄=colorId未設定で併記なし=正常）を localhost で目視。
-- **本番 colorNameEn バックフィル = COMMIT 済み（三重ガード）**。50色に英語名・00（カラー未定）のみ NULL。host=shuttle:16099 照合→dry-run ROLLBACK（en_filled=50/code00_null=1）→GO→COMMIT。dev も同一投入済み。AuditLog は不要判断で残さず。
+## 1. 本セッションの最重要事項（見積もりの框の組み直し）
+今日の核心は「(あ)(い) という文字ラベルで見積もりを組んでいたのが誤りで、サンプルと量産は別軸だと確定したこと」。
+旧構想メモ v0.1 の前提（サンプル見積の2段階＝(あ)概算/(い)納品金額）は誤り。実体は別軸が2つ並んでいた。最終的に業界標準形に着地:
 
-## ③ dev DB / 環境
-- dev=hopper:12921（postgres-7492）／本番=shuttle:16099（postgres-ab6d / internal postgres-ab6d.railway.internal）。
-- colors：dev・本番とも51行（50色英語名・00 NULL）。BomItem/PoItem は dev 全 JPY（混在通貨の実データはまだ無い）。量産 WO（PRODUCTION）は dev 0件＝QE-1 の工賃源は空。
-- 申し送り：本番 PROD_URL は今回 railway CLI 自己解決した。次回以降は「PROD_URL は人手で渡す／CLI 自己解決しない」に厳格化推奨（host照合+ROLLBACKで今回は担保済み）。
-- 後始末メモ：`feat/b-063-color-name-en`（#95 マージ済み）はローカル/remote とも残存＝削除可。`feat/b-065-po-import-colorway`（#94 OPEN・保留）は残す。
+- サンプル軸（サンプル請求）= サンプルを作って納める代金。実際に作るので金額は固い。初期費用（パターン代・版代・パンチ代・サンプル代）が別項目で乗る＝1枚原価に溶かさない（絶対防衛線）。概算段階は持たない。サンプルの概算見積は不要。
+- 量産軸（量産見積：概算→確定）=
+  - 概算: 仕様・素材確定前に「単価・MOQ・条件」を出して交渉に乗せる。発行履歴として保存する（いつ・いくら・MOQ・どの条件で出したか）＝保存型。
+  - 確定: 仕様確定後の正式見積。QE-1 v1.0（取り切り・数量別単価・確定原価）が確定計算の本体。概算は QE-1 確定見積の前段。
 
-## ④ 直近の spec / 参照ドキュメント
-- color-master-spec-confirmation-2026-06-01.md（§6-6/L184 に colorNameEn 採用確定を本日追記済み）。
-- qe-0-quotation-foundation-spec-confirmation-v1_0-2026-06-12.md（QE 段階分割 §1・取り切り式 Q5）。
-- qe-0d-po-bom-cost-linkage-spec-confirmation-v1_0-2026-06-13.md。
-- id-map-and-linkage-audit-v0_1-2026-06-25.md（要件A/B §5）。
-- 元設計 quotation_engine.md（project knowledge・20260516 v1.0・フル野心版＝過剰スコープ注意）。
+決定事項:
+- (あ)(い) の文字ラベルは廃止。今後は「サンプル請求」「量産見積（概算/確定）」という現実の名前で呼ぶ（文字ラベルは中身が空で何度も裏返ったため）。
+- 旧構想メモ v0.1（sample-quotation-concept-v0_1-2026-06-30.md）の §0/§2 は框ごと組み直し対象。次セッションで改訂 or 後継メモ。
 
-## ⑤ 次セッションで最初にやること（優先順）
-1. **QE-1 仕様確認書を起こす（最優先・次回これから）**。下記「QE-1 確定事項」をそのまま落とす。`qe-1-spec-confirmation-v0_1-{date}.md` 想定。docs 単独なら main 直可。確定後に実装ブリーフ。
-2. その後 B-065 作り直し（B-069 に吸収 or その後）。PR #94 は OPEN のまま保留（主従逆・作り直し前提）。
-3. B-069 本体（PO↔品番 解決一本化・案α'・PoItem.productId）も未着手で控える。
+## 2. 完了状態・本セッションのコミット
+- 直近マイルストーン（前セッション）: QE-1 量産見積計算 仕様確認書 v1.0（43cf194・量産・確定計算・計算ビューのみ・スキーマ変更なし）
+- 本セッションのコミット（いずれも docs 単独・main 直 push）:
+  - edcd47a: サンプル見積 構想メモ v0.1（docs/specs/sample-quotation-concept-v0_1-2026-06-30.md）※ 框は旧前提。記録として残置、内容は組み直し対象。
+  - 89af2b0: QE-1 v1.0 §0 末尾にサンプル見積との相互リンク1行追記（量産/サンプル取り違え再発防止）
+- main 先頭: 89af2b0
 
-### QE-1 確定事項（次回そのまま仕様確認書へ）
-- **段階分割（qe-0 §1）**: QE-1＝量産見積「計算」（原反取り切り・数量別単価表）＝B-052本体。QE-2＝見積書化（Quotationモデル・PDF・有効期限）。QE-3+＝マージン4階層・MOQカスタム・多通貨/為替・多言語。
-- **★owner上書き（要 spec 明記）**: 慎太郎さん指示で「日英」「為替（ドル円）」を QE-1 v1 に前倒し。qe-0 §1 の staging（為替/多言語=QE-3+）と衝突するため、QE-1 仕様確認書で staging 見直しを明記すること。
-- **v1 スコープ（確定）**: 計算ビュー（永続化なし・スキーマ変更なし・#93 material-requirement-section.tsx 隣接/拡張）。原価まで（売価・マージンは QE-3+）。
-- **2源集計（確定）**: 原価＝材料費＋工賃。材料費＝BomItem×所要量（#93 が用尺×数量×ロスまで実装済み・×単価が QE-1 増分。取り切り ROLL=ceil(必要量/rollLength)×rollPrice / METER=必要量×unitPrice）。工賃＝PRODUCTION の WorkOrder/WoItem。1枚原価＝(材料費Σ＋工賃Σ)÷Σ productionQuantity。工賃源は dev 空＝「WO未登録なら工賃0で材料費のみ」を正常系に。
-- **混在通貨（確定・Q2 で確定）**: 行ごとに currency 保持、USD 行は入力 USD/JPY レートで JPY 換算して合算、USD 換算トグルも提供。レートは v1 保存しない（送付用に残すなら QE-2）。**USD・JPY のみ／EUR・GBP・CNY・VND はブロック**。※Claude Code は「dev 全 JPY だから JPY 限定で実害ゼロ」と提案したが、要件（ベトナム例）に反するため不採用＝混在換算で確定。
-- **写像（確定）**: 材料費＝BomItem.itemCategory→InternalCostCategory。工賃＝WoItem.costCategoryId→CostCategory.externalCategory→ExternalCostCategory(SEWING/PROCESSING/OVERHEAD)。表示器 CostBreakdownRow/CostBreakdownSection 型は既存・再利用可。
-- **日英（確定）**: 原価ラベルを日英併記まで（QuotationMultilingual 永続化はしない＝QE-2）。
-- 残小論点: 割戻し分母＝Σ productionQuantity でよいか／取り切りの出力単位（反数/金額）の見せ方。
+## 3. 未マージ PR
+- 本セッションでの未マージ PR は無し（docs 単独・main 直 push のみ）。
 
-## ⑥ メモ・残課題
-- **混在通貨は業務の常態**（本日ログ＝memory #18）：項目ごとに JPY/USD 混在。ベトナム＝生地JPY・工賃/プリント/検品/刺繍USD／中国買い＝反製品USD・国内プリント/仕上げJPY／海外販売＝売価USD/EUR。基本通貨はドル円のみ確定・EUR/GBP は通貨として存在も換算 v1 対象外。
-- **CMYK/HEX 任意化タスク（後回し・memory #17）**: colors の cmyk/hex を nullable 化（本番スキーマ変更＝三重ガード）＋validator "00"例外を全色一般化＋form 必須マーク除去＋★hex は描画使用ゆえ null時 fallback 必須（CMYK は描画依存なし）。優先度低（当面マスターから選ぶ運用）。着手時 migration timestamp は 20260629000000 より後。
-- 既存バックログ（棚卸し §7）：hard-delete 経路（Q1c）／Product採番3桁999桁あふれ（Q1b）／「色が変われば別品番」明文化（小B）／採番retry横断（B-048）／貿易書類・免税製造（#3）／買側請求×発注照合（#4）／仕様書→用尺自動投入（#5）／議事録→タスク化（#6）。
+## 4. DB 状態
+- 本セッションで DB 書き込みは一切無し（docs のみ・migration 無し）。
+- dev=hopper.proxy.rlwy.net:12921（postgres-7492）/ 本番=shuttle.proxy.rlwy.net:16099（postgres-ab6d）。残置データ変更なし。
 
-## ⑦ 本日の学び（再発防止）
-- spec 本文が古いまま放置される轍：colorNameEn は2026-06-01 spec では「未定（§6-6）」のまま、確定は v0.4 §0 にあった。design-reread で spec を読み直して回避。確定したら spec 本文に必ず追記する（本日 color-master spec に追記済み）。
-- squash マージのコミット hash 非一致＝未マージではない：`git branch --contains <元hash>` が main 未到達でも、内容は squash コミットに取り込まれている。判定は `git show <squash>` で実 diff を見る。
-- recon の「データ現況」で「設計判断」を上書きしない：Claude Code が「dev 全 JPY だから JPY 限定」と提案したが、要件（混在通貨）が正。spec/確定方針 > データ現況。
+## 5. recon 済みの土台（次セッションの設計が乗る事実）
+- qe-0 ファイル名: qe-0-quotation-foundation-spec-confirmation-v1_0-2026-06-12.md（本文内に v1.1/v1.2 追補を内包。「v1.2」は版表記でファイル名ではない）。関連 qe-0d-…-v1_0-2026-06-13.md。
+- qe-0 §3 末尾の排他文: 用尺・取り切りは量産(QE-1)専用。「概算」という語は qe-0 に0件＝概算は新概念。
+- 過去実額の引き元（概算見積の source 候補）: 過去 PoItem（materialId キーで unitPrice 検索）＋ WoItem（costCategoryId キー）。いずれも unitPrice nullable・currency 列が実在。引き当ては参照でなくスナップショットコピー方針（後で元 PO が変わっても概算は動かさない）。
+- 初期費用の識別: PoItem.billingClassification=INDIVIDUAL_BILLING ＋ PoItem.isPhysicalAsset。product-sample §6-2 で個別売り立て＝パターン代/版代/型代/刺繍パンチ代/グレーディング代と確定。
+- Quotation 系は箱が実在・ロジック休眠: Quotation / QuotationMoqTier / QuotationCostBreakdown / QuotationApprovalHistory / QuotationMultilingual / QuotationPdfOutput / QuotationConversion の7モデル。QuotationCostBreakdown は原価→マージン→売価・日英(itemNameEn)・多通貨換算(costAmountJpy/exchangeRateUsed)・BOM引用(bomItemId)まで列完備。ただし createQuotation 等の生成ロジックは前 recon で未ヒット＝休眠前提。
+- マージン層: MarginSetting（4階層 = COMPANY_DEFAULT/BRAND_LEVEL/PRODUCT_LEVEL/ITEM_LEVEL）＋ MarginSource ＋ QuotationCostBreakdown.margin 列。元設計 quotation_engine の「マージン4階層」は実装済み。
+- QuotationCostBreakdown は billingClassification 列を持たない → 初期費用を1枚原価から外す判定は PoItem/WoItem 側で行い、製品単価インクルード分のみを CostBreakdown へ流す設計になる。
+
+## 6. 次セッションで最初にやること（優先順）
+1. STEP 0: git log origin/main で実態確認（main 先頭が 89af2b0 か）。
+2. design-reread の Step 0「対象確定ゲート」の実体確認（下記7の残課題）。
+3. 「概算の量産見積（保存型・QE-1 前段）」の仕様確認書を起草する。
+   - source: 過去 PoItem（materialId）＋ WoItem（costCategoryId）のスナップショットコピー。
+   - 保存項目: 品番・発行日・単価・MOQ・条件。
+   - スコープ外: サンプルの概算（不要）／品番候補提案（B-038）／粗BOM計算／マージン・売価／換算の永続化。
+   - 着手前に qe-0 §1 staging と QE-1 v1.0 §0 を読み直す（記憶で書かない）。
+   - 保存箱は既存 Quotation 流用 vs 軽量新設、が起草時の論点。
+
+## 7. 注意点・残課題・教訓
+- 【未解決】design-reread スキルに Step 0「対象確定ゲート」が入っていない。旧構想メモ v0.1 §7 は「本日スキル更新済み」と書くが、live の shunya-design-reread/SKILL.md はワークフローが 1〜5 のままで Step 0 が無い（2026-07-01 確認）。再発防止策の取りこぼし。次セッションで実体確認し、必要なら追記。
+- 【教訓・最重要】見積もりを (あ)(い) の文字ラベルで設計すると裏返る。今日 §7 で「因果取り違え」を記録した直後、同セッションでさらにラベルが裏返った（(あ)=サンプル概算 と置いた後、(あ)=量産概算・(い)=サンプル納品 へ訂正）。対策: 文字ラベルを使わず現実の名前で呼ぶ。
+- 【業界標準形】サンプルと量産は別軸／量産だけ概算→確定の段階を持つ／初期費用はサンプル側に別項目、が標準。慎太郎さんの商売と合致を確認済み。
+- 【QE-1 側の宿題・引き込まない】qe-1 v1.0 §4 は ROLL/METER 止まりで、qe-0 §QE-1論点の「指定数 vs 取り切り 2本立て・サンプルは指定数」が未反映。これは量産(QE-1)側の論点。概算の量産見積には引き込まない（スコープ逆流防止）。QE-1 改訂時の宿題。
+
+## 8. 本日マージされたコミット一覧
+- edcd47a docs: サンプル見積 構想メモ v0.1
+- 89af2b0 docs: QE-1 v1.0 冒頭にサンプル見積との相互リンク追記
+
+## 9. 次セッション冒頭の手順
+1. このメモで状態復元。
+2. git log origin/main --oneline -8 で実態確認（先頭 89af2b0 か・ズレがないか）。
+3. design-reread スキル発動（Step 0 対象確定ゲート→該当 spec 読み直し）。本セッションの框組み直し（サンプル/量産の別軸）を旧構想メモ v0.1 の古い框より優先。
+4. 上記6の優先順で「概算の量産見積 仕様確認書」起草へ。
