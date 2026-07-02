@@ -33,6 +33,15 @@ import { BomSection, type BomItemView } from "../_components/bom-section"
 import { MaterialRequirementSection } from "../_components/material-requirement-section"
 import type { MaterialReqBomItem } from "@/lib/calc/material-requirement"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
+import { RoughEstimateSection } from "../_components/rough-estimate-section"
+import {
+  listRoughEstimatesByProduct,
+  getDefaultMarginRateForProduct,
+} from "@/lib/actions/rough-estimates"
+import {
+  listActiveMaterialsForPoSelect,
+  listActiveCostCategoriesForPoSelect,
+} from "@/lib/actions/purchase-orders"
 import {
   primaryProductCode,
   secondaryProductCode,
@@ -156,6 +165,18 @@ export default async function ProductDetailPage({
       supplierColorCode: cw.supplierColorCode,
     })),
   }))
+
+  // QE-1R: 概算量産見積（提示価格）。一覧・既定利益率・引き当てピッカー用の素材/費目候補を取得。
+  const [roughEstimateRows, marginDefaultResult, qeMaterials, qeCostCategories] =
+    await Promise.all([
+      listRoughEstimatesByProduct(id),
+      getDefaultMarginRateForProduct(id),
+      listActiveMaterialsForPoSelect(),
+      listActiveCostCategoriesForPoSelect(),
+    ])
+  const brandDefaultMarginRate = marginDefaultResult.ok
+    ? marginDefaultResult.data.marginRate
+    : 0
 
   // QE-0c: マーキング実測
   const markingResult = await getMarkingRecordsByProductId(id)
@@ -485,6 +506,22 @@ export default async function ProductDetailPage({
             productId={item.id}
             items={markingViews}
             materials={bomMaterials}
+          />
+        </CardContent>
+      </Card>
+
+      {/* 概算量産見積（QE-1R・量産軸の提示価格。原価基盤の下＝原価から価格を出す流れ） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">概算量産見積（提示価格）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RoughEstimateSection
+            productId={item.id}
+            rows={roughEstimateRows}
+            brandDefaultMarginRate={brandDefaultMarginRate}
+            materials={qeMaterials}
+            costCategories={qeCostCategories}
           />
         </CardContent>
       </Card>

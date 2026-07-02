@@ -9478,3 +9478,120 @@ model MarkingRecord {
   @@index([companyId, productId])
   @@map("marking_records")
 }
+
+// =====================================================
+// QE-1R: 概算量産見積（Rough estimate・量産軸の概算レーン）
+// 仕様: docs/specs/quotation-rough-estimate-spec-confirmation-v0_1-2026-07-01.md
+//       docs/specs/quotation-rough-estimate-implementation-brief-2026-07-01.md
+// 確定計算 QE-1 とは別系統。客に見せるのは提示価格（原価×(1+利益率)）。
+// 保存型（発行履歴）。既存 Quotation には相乗りしない（重い箱・型値に量産概算なし）。
+// house style: 既存モデルへの FK は scalar のみ（@relation 不使用・明示クエリで結合）。
+// =====================================================
+
+/// 概算明細の費目区分（単層3区分）。INITIAL_COST は別枠＝1枚原価に混ぜない（絶対防衛線）。
+enum RoughEstimateCategory {
+  MATERIAL // 材料費（製品単価インクルード）
+  LABOR // 工賃（製品単価インクルード）
+  INITIAL_COST // 初期費用（別枠・1枚原価に混ぜない）
+}
+
+/// 概算明細1行の値の出所。過去実額はスナップショットコピー（参照リンクにしない）。
+enum RoughEstimateItemSource {
+  MANUAL // 直接入力
+  PAST_PO // 過去 PoItem から引き当て（スナップショット）
+  PAST_WO // 過去 WoItem から引き当て（スナップショット）
+}
+
+/// 概算ヘッダの利益率の出所（デフォルト由来か手動上書きか）。
+enum MarginRateSource {
+  BRAND_DEFAULT // Brand.defaultMarginRate 由来
+  MANUAL_OVERRIDE // 手動上書き
+}
+
+/// 概算量産見積ヘッダ（発行1件）。品番に紐づく交渉用の提示価格の発行履歴。
+model RoughEstimate {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+
+  // 採番 RE-{year}-NNNN（既存 PO/WO/SP と同作法・P2002 retry）
+  estimateNumber String @map("estimate_number") @db.VarChar(50)
+
+  // 品番（scalar FK・@relation なし＝house style）
+  productId String @map("product_id")
+
+  // 発行メタ
+  issuedAt DateTime @default(now()) @map("issued_at")
+  title    String?  @db.VarChar(255)
+  notes    String?  @db.Text // 前提メモ（素材グレード仮定・色数・納期前提等の自由記述）
+
+  // 提示条件
+  presentedMoq         Int?      @map("presented_moq") // 提示 MOQ 単一値（階段は QE-3+）
+  expectedQuantityBand String?   @map("expected_quantity_band") @db.VarChar(100) // 想定数量帯・自由入力
+  currency             Currency  @default(JPY) // 通貨前提（行別通貨は明細側）
+  validUntil           DateTime? @map("valid_until") @db.Date // 有効期限＝任意参考列（必須にしない）
+
+  // 利益率（ヘッダ1件1率）。Brand.defaultMarginRate と同型。
+  marginRate       Decimal?         @map("margin_rate") @db.Decimal(5, 2) // 適用利益率（%）
+  marginRateSource MarginRateSource @map("margin_rate_source")
+
+  // 金額の2層保存（自動値と手打ち最終値を別列で両方）
+  autoCostTotalJpy    Decimal? @map("auto_cost_total_jpy") @db.Decimal(15, 2) // 自動集計原価（JPY 換算後合計）
+  autoPriceTotalJpy   Decimal? @map("auto_price_total_jpy") @db.Decimal(15, 2) // 自動提示価格合計＝原価×(1+利益率)
+  finalPriceManualJpy Decimal? @map("final_price_manual_jpy") @db.Decimal(15, 2) // 手打ち最終値（客へ出した数字・正）
+
+  // 監査
+  createdByUserId String? @map("created_by_user_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  items RoughEstimateItem[]
+
+  @@unique([companyId, estimateNumber])
+  @@index([companyId, productId])
+  @@map("rough_estimates")
+}
+
+/// 概算明細1行。過去 PoItem/WoItem からのスナップショット or 手入力。行別通貨。
+model RoughEstimateItem {
+  id              String @id @default(uuid())
+  roughEstimateId String @map("rough_estimate_id")
+
+  itemOrder Int @map("item_order")
+
+  // 費目区分（MATERIAL/LABOR は原価分子・INITIAL_COST は別枠）
+  itemCategory RoughEstimateCategory @map("item_category")
+
+  // 品目（日英）
+  itemName   String  @map("item_name") @db.VarChar(255)
+  itemNameEn String? @map("item_name_en") @db.VarChar(255)
+
+  // source 根拠 FK（scalar・@relation なし）
+  materialId     String? @map("material_id") // 材料費行の source 根拠
+  costCategoryId String? @map("cost_category_id") // 工賃行の費目（確定側と同名）
+
+  // 値の出所（過去実額はスナップショットコピー＝焼き込み）
+  source         RoughEstimateItemSource
+  sourcePoItemId String?                 @map("source_po_item_id") // PAST_PO 引き当て元の記録（scalar）
+  sourceWoItemId String?                 @map("source_wo_item_id") // PAST_WO 引き当て元の記録（scalar）
+
+  // 数量・単価・通貨（行別 JPY/USD）
+  quantity    Decimal? @db.Decimal(15, 4)
+  unit        String?  @db.VarChar(20)
+  unitPrice   Decimal? @map("unit_price") @db.Decimal(15, 4) // スナップショット値
+  currency    Currency @default(JPY)
+  subtotal    Decimal? @db.Decimal(15, 2)
+  subtotalJpy Decimal? @map("subtotal_jpy") @db.Decimal(15, 2) // JPY 換算（入力レート方式）
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  roughEstimate RoughEstimate @relation(fields: [roughEstimateId], references: [id], onDelete: Cascade)
+
+  @@index([roughEstimateId, itemOrder])
+  @@index([materialId])
+  @@map("rough_estimate_items")
+}
