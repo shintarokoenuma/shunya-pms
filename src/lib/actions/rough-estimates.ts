@@ -6,6 +6,8 @@ import {
   Currency,
   MarginRateSource,
   type RoughEstimate,
+  type RoughEstimateCategory,
+  type RoughEstimateItemSource,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
@@ -16,6 +18,7 @@ import {
 import {
   computeAutoCostTotalJpy,
   computeAutoPriceTotalJpy,
+  isBelowMarginWarning,
   type RoughEstimateLineForCalc,
 } from "@/lib/rough-estimate/calc"
 
@@ -637,6 +640,71 @@ export async function softDeleteRoughEstimate(
 }
 
 // =============================================================================
+// 一覧（品番配下・P3 UI 用のサマリ行）
+// =============================================================================
+export type RoughEstimateListRow = {
+  id: string
+  estimateNumber: string
+  issuedAt: string
+  title: string | null
+  presentedMoq: number | null
+  expectedQuantityBand: string | null
+  currency: Currency
+  marginRate: number | null
+  marginRateSource: MarginRateSource
+  autoCostTotalJpy: number | null
+  autoPriceTotalJpy: number | null
+  finalPriceManualJpy: number | null
+  belowMarginWarning: boolean
+}
+
+export async function listRoughEstimatesByProduct(
+  productId: string,
+): Promise<RoughEstimateListRow[]> {
+  const sess = await requireSession()
+  if (!sess.ok) return []
+  const rows = await prisma.roughEstimate.findMany({
+    where: { companyId: sess.companyId, productId, deletedAt: null },
+    orderBy: { issuedAt: "desc" },
+    select: {
+      id: true,
+      estimateNumber: true,
+      issuedAt: true,
+      title: true,
+      presentedMoq: true,
+      expectedQuantityBand: true,
+      currency: true,
+      marginRate: true,
+      marginRateSource: true,
+      autoCostTotalJpy: true,
+      autoPriceTotalJpy: true,
+      finalPriceManualJpy: true,
+    },
+  })
+  return rows.map((r) => {
+    const marginRate = r.marginRate != null ? Number(r.marginRate) : null
+    return {
+      id: r.id,
+      estimateNumber: r.estimateNumber,
+      issuedAt: r.issuedAt.toISOString(),
+      title: r.title,
+      presentedMoq: r.presentedMoq,
+      expectedQuantityBand: r.expectedQuantityBand,
+      currency: r.currency,
+      marginRate,
+      marginRateSource: r.marginRateSource,
+      autoCostTotalJpy:
+        r.autoCostTotalJpy != null ? Number(r.autoCostTotalJpy) : null,
+      autoPriceTotalJpy:
+        r.autoPriceTotalJpy != null ? Number(r.autoPriceTotalJpy) : null,
+      finalPriceManualJpy:
+        r.finalPriceManualJpy != null ? Number(r.finalPriceManualJpy) : null,
+      belowMarginWarning: isBelowMarginWarning(marginRate),
+    }
+  })
+}
+
+// =============================================================================
 // 単票取得（明細同梱・P3 UI / smoke 用）
 // =============================================================================
 export type RoughEstimateDetail = RoughEstimate & {
@@ -660,6 +728,106 @@ export async function getRoughEstimate(
       orderBy: { itemOrder: "asc" },
     })
     return { ok: true, data: { ...header, items } }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "取得に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
+// 編集プレフィル用（Decimal をクライアントへ渡さず plain number/string 化）
+// =============================================================================
+export type RoughEstimateEditItem = {
+  itemCategory: RoughEstimateCategory
+  itemName: string
+  itemNameEn: string | null
+  materialId: string | null
+  costCategoryId: string | null
+  source: RoughEstimateItemSource
+  sourcePoItemId: string | null
+  sourceWoItemId: string | null
+  quantity: number | null
+  unit: string | null
+  unitPrice: number | null
+  currency: Currency
+  notes: string | null
+}
+
+export type RoughEstimateEditData = {
+  id: string
+  estimateNumber: string
+  productId: string
+  title: string | null
+  notes: string | null
+  presentedMoq: number | null
+  expectedQuantityBand: string | null
+  currency: Currency
+  validUntil: string | null
+  marginRate: number | null
+  marginRateSource: MarginRateSource
+  finalPriceManualJpy: number | null
+  /** USD 行の subtotalJpy は保存済みだがレートは非保存（v1）。編集時は再入力を促す。 */
+  hasUsdLine: boolean
+  items: RoughEstimateEditItem[]
+}
+
+export async function getRoughEstimateForEdit(
+  id: string,
+): Promise<ActionResult<RoughEstimateEditData>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const header = await prisma.roughEstimate.findFirst({
+      where: { id, companyId: sess.companyId, deletedAt: null },
+    })
+    if (!header) return { ok: false, error: "概算見積が見つかりません" }
+
+    const items = await prisma.roughEstimateItem.findMany({
+      where: { roughEstimateId: id },
+      orderBy: { itemOrder: "asc" },
+    })
+
+    return {
+      ok: true,
+      data: {
+        id: header.id,
+        estimateNumber: header.estimateNumber,
+        productId: header.productId,
+        title: header.title,
+        notes: header.notes,
+        presentedMoq: header.presentedMoq,
+        expectedQuantityBand: header.expectedQuantityBand,
+        currency: header.currency,
+        validUntil: header.validUntil
+          ? header.validUntil.toISOString().slice(0, 10)
+          : null,
+        marginRate: header.marginRate != null ? Number(header.marginRate) : null,
+        marginRateSource: header.marginRateSource,
+        finalPriceManualJpy:
+          header.finalPriceManualJpy != null
+            ? Number(header.finalPriceManualJpy)
+            : null,
+        hasUsdLine: items.some((it) => it.currency === Currency.USD),
+        items: items.map((it) => ({
+          itemCategory: it.itemCategory,
+          itemName: it.itemName,
+          itemNameEn: it.itemNameEn,
+          materialId: it.materialId,
+          costCategoryId: it.costCategoryId,
+          source: it.source,
+          sourcePoItemId: it.sourcePoItemId,
+          sourceWoItemId: it.sourceWoItemId,
+          quantity: it.quantity != null ? Number(it.quantity) : null,
+          unit: it.unit,
+          unitPrice: it.unitPrice != null ? Number(it.unitPrice) : null,
+          currency: it.currency,
+          notes: it.notes,
+        })),
+      },
+    }
   } catch (e) {
     return {
       ok: false,
