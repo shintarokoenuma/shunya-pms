@@ -4,6 +4,7 @@ import {
   RoughEstimateCategory,
   RoughEstimateItemSource,
   MarginRateSource,
+  InitialCostBillingMode,
 } from "@prisma/client"
 
 /**
@@ -106,8 +107,11 @@ export const roughEstimateInputSchema = z
       .refine((v) => v === null || v >= 0, "提示MOQは0以上で入力してください")
       .nullable()
       .default(null),
-    expectedQuantityBand: optionalString(100),
     currency: allowedCurrencyField.default(Currency.JPY),
+    // 初期費用の請求方式（B-2）。既定 SEPARATE。INCLUDED は presentedMoq>0 必須（下記 superRefine）。
+    initialCostBillingMode: z
+      .nativeEnum(InitialCostBillingMode)
+      .default(InitialCostBillingMode.SEPARATE),
     validUntil: optionalDateString,
     // 利益率（％）。未指定なら action が Brand.defaultMarginRate を供給（§4）。
     marginRate: optionalNonNegativeNumber,
@@ -142,6 +146,18 @@ export const roughEstimateInputSchema = z
         code: z.ZodIssueCode.custom,
         message: "USD 明細があるため USD/JPY レートの入力が必須です",
         path: ["usdJpyRate"],
+      })
+    }
+    // INCLUDED（1枚単価にインクルーズ）は割り返し母数として presentedMoq>0 必須（0除算防止・B-2）。
+    if (
+      d.initialCostBillingMode === InitialCostBillingMode.INCLUDED &&
+      (d.presentedMoq === null || d.presentedMoq <= 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          "初期費用を製品単価にインクルーズする場合は提示MOQ（1以上）が必須です",
+        path: ["presentedMoq"],
       })
     }
   })

@@ -1,7 +1,13 @@
 "use client"
 
 import { useEffect, useState, useTransition } from "react"
-import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form"
+import {
+  useForm,
+  useFieldArray,
+  useWatch,
+  type UseFormReturn,
+  type SubmitHandler,
+} from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -11,6 +17,7 @@ import {
   RoughEstimateCategory,
   RoughEstimateItemSource,
   MarginRateSource,
+  InitialCostBillingMode,
 } from "@prisma/client"
 import {
   roughEstimateInputSchema,
@@ -40,6 +47,7 @@ import {
 } from "@/lib/constants/rough-estimate-types"
 import {
   summarizeRoughEstimate,
+  computePriceBreakdownFromTotals,
   type RoughEstimateLineForCalc,
 } from "@/lib/rough-estimate/calc"
 import { Button } from "@/components/ui/button"
@@ -47,6 +55,7 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Table,
   TableBody,
@@ -138,77 +147,115 @@ export function RoughEstimateSection({
           概算見積はまだありません。
         </p>
       ) : (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>見積番号</TableHead>
-              <TableHead>発行日</TableHead>
-              <TableHead className="text-right">提示MOQ</TableHead>
-              <TableHead className="text-right">利益率</TableHead>
-              <TableHead className="text-right">原価(自動)</TableHead>
-              <TableHead className="text-right">提示価格(自動)</TableHead>
-              <TableHead className="text-right">最終値(手打ち)</TableHead>
-              <TableHead className="w-[100px]" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r) => (
-              <TableRow key={r.id}>
-                <TableCell className="font-mono text-xs">
-                  {r.estimateNumber}
-                  {r.title && (
-                    <span className="ml-2 text-muted-foreground">{r.title}</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-xs">
-                  {new Date(r.issuedAt).toLocaleDateString("ja-JP")}
-                </TableCell>
-                <TableCell className="text-right">
-                  {r.presentedMoq != null
-                    ? r.presentedMoq.toLocaleString("ja-JP")
-                    : "—"}
-                </TableCell>
-                <TableCell className="text-right">
-                  {r.marginRate != null ? `${r.marginRate}%` : "—"}
-                  {r.belowMarginWarning && (
-                    <Badge variant="destructive" className="ml-1 text-[10px]">
-                      赤字
-                    </Badge>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  {jpy(r.autoCostTotalJpy)}
-                </TableCell>
-                <TableCell className="text-right">
-                  {jpy(r.autoPriceTotalJpy)}
-                </TableCell>
-                <TableCell className="text-right font-medium">
-                  {jpy(r.finalPriceManualJpy)}
-                </TableCell>
-                <TableCell>
-                  <div className="flex justify-end gap-1">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7"
-                      onClick={() => openEdit(r.id)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => setDeleting(r)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </TableCell>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>見積番号</TableHead>
+                <TableHead>発行日</TableHead>
+                <TableHead className="text-right">提示MOQ</TableHead>
+                <TableHead className="text-right">利益率</TableHead>
+                <TableHead className="text-right">原価(自動)</TableHead>
+                <TableHead className="text-right">量産提示分</TableHead>
+                <TableHead className="text-right">初期費用提示分</TableHead>
+                <TableHead className="text-right">提示価格計</TableHead>
+                <TableHead className="text-right">最終値(手打ち)</TableHead>
+                <TableHead className="w-[90px]" />
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {rows.map((r) => {
+                const bd = computePriceBreakdownFromTotals(
+                  r.autoCostTotalJpy ?? 0,
+                  r.autoPriceTotalJpy ?? 0,
+                  r.marginRate,
+                  r.initialCostBillingMode,
+                  r.presentedMoq,
+                )
+                const included =
+                  r.initialCostBillingMode === InitialCostBillingMode.INCLUDED
+                return (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-mono text-xs">
+                      {r.estimateNumber}
+                      {included && (
+                        <Badge variant="secondary" className="ml-1 text-[10px]">
+                          込み
+                        </Badge>
+                      )}
+                      {r.title && (
+                        <span className="ml-2 text-muted-foreground">
+                          {r.title}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs">
+                      {new Date(r.issuedAt).toLocaleDateString("ja-JP")}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.presentedMoq != null
+                        ? r.presentedMoq.toLocaleString("ja-JP")
+                        : "—"}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {r.marginRate != null ? `${r.marginRate}%` : "—"}
+                      {r.belowMarginWarning && (
+                        <Badge variant="destructive" className="ml-1 text-[10px]">
+                          赤字
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {jpy(r.autoCostTotalJpy)}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {jpy(bd.productionPriceTotalJpy)}
+                      {included && bd.perUnit && (
+                        <div className="text-[10px] text-muted-foreground">
+                          @{jpy(bd.perUnit.includedPerUnitPriceJpy)}/枚
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right text-amber-700">
+                      {jpy(bd.initialCostPriceTotalJpy)}
+                      {included && (
+                        <div className="text-[10px] text-muted-foreground">
+                          1枚単価に配賦
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {jpy(r.autoPriceTotalJpy)}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {jpy(r.finalPriceManualJpy)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => openEdit(r.id)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7 text-destructive"
+                          onClick={() => setDeleting(r)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {dialogOpen && (
@@ -223,10 +270,7 @@ export function RoughEstimateSection({
       )}
 
       {deleting && (
-        <DeleteConfirmDialog
-          row={deleting}
-          onClose={() => setDeleting(null)}
-        />
+        <DeleteConfirmDialog row={deleting} onClose={() => setDeleting(null)} />
       )}
     </div>
   )
@@ -331,11 +375,11 @@ function RoughEstimateFormDialog({
       title: "",
       notes: "",
       presentedMoq: "",
-      expectedQuantityBand: "",
       currency: Currency.JPY,
       validUntil: "",
       marginRate: String(brandDefaultMarginRate),
       marginRateSource: null,
+      initialCostBillingMode: InitialCostBillingMode.SEPARATE,
       usdJpyRate: "",
       finalPriceManualJpy: "",
       items: [emptyItem()],
@@ -363,11 +407,11 @@ function RoughEstimateFormDialog({
         title: d.title ?? "",
         notes: d.notes ?? "",
         presentedMoq: d.presentedMoq != null ? String(d.presentedMoq) : "",
-        expectedQuantityBand: d.expectedQuantityBand ?? "",
         currency: d.currency,
         validUntil: d.validUntil ?? "",
         marginRate: d.marginRate != null ? String(d.marginRate) : "",
         marginRateSource: d.marginRateSource,
+        initialCostBillingMode: d.initialCostBillingMode,
         usdJpyRate: "",
         finalPriceManualJpy:
           d.finalPriceManualJpy != null ? String(d.finalPriceManualJpy) : "",
@@ -398,19 +442,40 @@ function RoughEstimateFormDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingId])
 
-  // ---- ライブ集計（P2 純関数を直接使用） ----
-  const watched = form.watch()
-  const usdRateNum = toNumOrNull(watched.usdJpyRate)
-  const marginNum = toNumOrNull(watched.marginRate)
+  // ---- ライブ集計（useWatch で反応的に購読・A-3 修正：form.watch() 由来の派生値取りこぼしを解消） ----
+  const watchedItems = useWatch({ control: form.control, name: "items" })
+  const watchedMargin = useWatch({ control: form.control, name: "marginRate" })
+  const watchedUsd = useWatch({ control: form.control, name: "usdJpyRate" })
+  const watchedMoq = useWatch({ control: form.control, name: "presentedMoq" })
+  const watchedMode = useWatch({
+    control: form.control,
+    name: "initialCostBillingMode",
+  })
 
-  const lines: RoughEstimateLineForCalc[] = (watched.items ?? []).map((it) => ({
+  const items = watchedItems ?? []
+  const usdRateNum = toNumOrNull(watchedUsd)
+  const marginNum = toNumOrNull(watchedMargin)
+  const moqNum = toNumOrNull(watchedMoq)
+  const billingMode = watchedMode ?? InitialCostBillingMode.SEPARATE
+
+  // 各行の JPY 換算小計（単一ソース：ここで計算し行にも渡す）。
+  const rowSubtotals = items.map((it) => lineSubtotalJpy(it, usdRateNum))
+  const lines: RoughEstimateLineForCalc[] = items.map((it, i) => ({
     itemCategory: it.itemCategory,
-    subtotalJpy: lineSubtotalJpy(it, usdRateNum),
+    subtotalJpy: rowSubtotals[i],
   }))
   const summary = summarizeRoughEstimate(lines, marginNum)
+  const breakdown = computePriceBreakdownFromTotals(
+    summary.autoCostTotalJpy,
+    summary.autoPriceTotalJpy,
+    marginNum,
+    billingMode,
+    moqNum,
+  )
+  const included = billingMode === InitialCostBillingMode.INCLUDED
 
   // INITIAL_COST 行で数量未入力（単価あり）を検出（集計から静かに消えるのを防ぐ・P2注意点）。
-  const initialCostMissingQty = (watched.items ?? []).some(
+  const initialCostMissingQty = items.some(
     (it) =>
       it.itemCategory === RoughEstimateCategory.INITIAL_COST &&
       isBlank(it.quantity) &&
@@ -463,13 +528,13 @@ function RoughEstimateFormDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-4xl overflow-y-auto">
+      <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editingId ? "概算見積を編集" : "概算見積を作成"}
           </DialogTitle>
           <DialogDescription>
-            量産軸の概算（提示価格）。初期費用は別枠で計上し1枚原価には混ぜません。
+            量産軸の概算（提示価格）。初期費用は既定では別枠、チェックで1枚単価にインクルーズできます。
           </DialogDescription>
         </DialogHeader>
 
@@ -480,10 +545,7 @@ function RoughEstimateFormDialog({
           </div>
         ) : (
           <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(onSubmit)}
-              className="space-y-5"
-            >
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
               {/* ヘッダ */}
               <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
                 <FormField
@@ -491,9 +553,9 @@ function RoughEstimateFormDialog({
                   name="title"
                   render={({ field }) => (
                     <FormItem className="md:col-span-3">
-                      <FormLabel>タイトル（任意）</FormLabel>
+                      <FormLabel>タイトル / 想定数量帯など（任意）</FormLabel>
                       <FormControl>
-                        <Input placeholder="例：2026SS 概算" {...field} />
+                        <Input placeholder="例：2026SS 概算・想定100〜300" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -504,7 +566,9 @@ function RoughEstimateFormDialog({
                   name="presentedMoq"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>提示MOQ</FormLabel>
+                      <FormLabel>
+                        提示MOQ{included && <span className="text-destructive">（必須）</span>}
+                      </FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -523,27 +587,11 @@ function RoughEstimateFormDialog({
                 />
                 <FormField
                   control={form.control}
-                  name="expectedQuantityBand"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>想定数量帯</FormLabel>
-                      <FormControl>
-                        <Input placeholder="例：100〜300" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
                   name="currency"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>通貨（前提）</FormLabel>
-                      <Select
-                        value={field.value}
-                        onValueChange={field.onChange}
-                      >
+                      <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue />
@@ -636,6 +684,44 @@ function RoughEstimateFormDialog({
                 />
               </div>
 
+              {/* B-2: 初期費用インクルーズ切替 */}
+              <FormField
+                control={form.control}
+                name="initialCostBillingMode"
+                render={({ field }) => (
+                  <FormItem className="rounded-md border p-3">
+                    <div className="flex items-start gap-3">
+                      <FormControl>
+                        <Checkbox
+                          checked={field.value === InitialCostBillingMode.INCLUDED}
+                          onCheckedChange={(c) =>
+                            field.onChange(
+                              c
+                                ? InitialCostBillingMode.INCLUDED
+                                : InitialCostBillingMode.SEPARATE,
+                            )
+                          }
+                        />
+                      </FormControl>
+                      <div className="space-y-1">
+                        <FormLabel className="cursor-pointer">
+                          初期費用を製品単価にインクルーズする
+                        </FormLabel>
+                        <p className="text-[11px] text-muted-foreground">
+                          OFF＝別枠請求（既定）。ON＝初期費用の価格化後金額を提示MOQで割り返し1枚単価に配賦。
+                          ON にすると提示MOQ（1以上）が必須になります。
+                        </p>
+                        {included && !breakdown.moqValid && (
+                          <p className="text-[11px] text-destructive">
+                            提示MOQ（1以上）を入力してください（0除算防止）。
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </FormItem>
+                )}
+              />
+
               <Separator />
 
               {/* 明細 */}
@@ -673,9 +759,10 @@ function RoughEstimateFormDialog({
                     key={f.id}
                     form={form}
                     idx={idx}
+                    itemValue={items[idx]}
+                    subtotalJpy={rowSubtotals[idx] ?? null}
                     materials={materials}
                     costCategories={costCategories}
-                    usdRate={usdRateNum}
                     onRemove={() => (fields.length > 1 ? remove(idx) : null)}
                     canRemove={fields.length > 1}
                   />
@@ -689,33 +776,89 @@ function RoughEstimateFormDialog({
 
               <Separator />
 
-              {/* 集計サマリ */}
+              {/* 集計サマリ（B-3 内訳分離） */}
               <div className="rounded-md border p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">
                     原価小計（材料費＋工賃・INITIAL_COST 除外）
                   </span>
-                  <span className="font-mono">
-                    {jpy(summary.autoCostTotalJpy)}
-                  </span>
+                  <span className="font-mono">{jpy(summary.autoCostTotalJpy)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">
-                    初期費用小計（別枠・1枚原価に含めない）
+                    初期費用小計（別枠・原価に含めない）
                   </span>
                   <span className="font-mono text-amber-700">
                     {jpy(summary.initialCostTotalJpy)}
                   </span>
                 </div>
                 <Separator />
+
+                {/* 提示価格の内訳（常に分けて表示） */}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">
-                    提示価格（自動）＝全費目 ×(1＋利益率)
+                    量産提示分（原価×(1+利益率)）
                   </span>
-                  <span className="font-mono font-medium">
-                    {jpy(summary.autoPriceTotalJpy)}
+                  <span className="font-mono">
+                    {jpy(breakdown.productionPriceTotalJpy)}
                   </span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    初期費用提示分（別途・価格化後）
+                  </span>
+                  <span className="font-mono text-amber-700">
+                    {jpy(breakdown.initialCostPriceTotalJpy)}
+                  </span>
+                </div>
+                <div className="flex justify-between font-medium">
+                  <span>提示価格（自動・合計）</span>
+                  <span className="font-mono">{jpy(summary.autoPriceTotalJpy)}</span>
+                </div>
+
+                {/* 1枚あたり */}
+                {included ? (
+                  breakdown.perUnit ? (
+                    <div className="rounded bg-muted p-2 space-y-1">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          1枚あたり量産提示（初期費用抜き）
+                        </span>
+                        <span className="font-mono">
+                          {jpy(breakdown.perUnit.productionPricePerUnitJpy)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">
+                          ＋初期費用の1枚あたり配賦
+                        </span>
+                        <span className="font-mono text-amber-700">
+                          {jpy(breakdown.perUnit.initialCostAddonPerUnitJpy)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between font-medium">
+                        <span>＝1枚あたり提示価格（インクルーズ済み）</span>
+                        <span className="font-mono">
+                          {jpy(breakdown.perUnit.includedPerUnitPriceJpy)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2 rounded bg-destructive/10 p-2 text-destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      インクルーズには提示MOQ（1以上）が必要です。
+                    </div>
+                  )
+                ) : (
+                  breakdown.perUnit && (
+                    <div className="flex justify-between text-muted-foreground">
+                      <span>参考：1枚あたり原価（初期費用抜き）</span>
+                      <span className="font-mono">
+                        {jpy(breakdown.perUnit.costPerUnitJpy)}
+                      </span>
+                    </div>
+                  )
+                )}
 
                 {summary.belowMarginWarning && (
                   <div className="flex items-center gap-2 rounded bg-destructive/10 p-2 text-destructive">
@@ -795,9 +938,7 @@ function RoughEstimateFormDialog({
                   キャンセル
                 </Button>
                 <Button type="submit" disabled={isPending}>
-                  {isPending && (
-                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                  )}
+                  {isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
                   {editingId ? "更新する" : "作成する"}
                 </Button>
               </DialogFooter>
@@ -810,28 +951,62 @@ function RoughEstimateFormDialog({
 }
 
 // =============================================================================
-// 明細1行（費目区分・source・品目日英・数量・単価・通貨・小計＋引き当てピッカー）
+// 明細1行（費目区分・出所・品目日英・数量・単価・通貨・小計＋マスタ選択/引き当て）
+// A-1: ダイアログ幅拡大（max-w-6xl）＋グリッド列を整理し重なり/切れを解消。
+// A-4: MATERIAL 行は素材、LABOR 行は費目のマスタ選択を常時表示（MANUAL でも選べる）。
 // =============================================================================
 function ItemCard({
   form,
   idx,
+  itemValue,
+  subtotalJpy,
   materials,
   costCategories,
-  usdRate,
   onRemove,
   canRemove,
 }: {
-  form: ReturnType<typeof useForm<RoughEstimateFormValues>>
+  form: UseFormReturn<RoughEstimateFormValues>
   idx: number
+  itemValue: RoughEstimateFormValues["items"][number] | undefined
+  subtotalJpy: number | null
   materials: MaterialOption[]
   costCategories: CostCategoryOption[]
-  usdRate: number | null
   onRemove: () => void
   canRemove: boolean
 }) {
-  const item = form.watch(`items.${idx}`)
-  const isInitial = item?.itemCategory === RoughEstimateCategory.INITIAL_COST
-  const subtotalJpy = lineSubtotalJpy(item, usdRate)
+  const category = itemValue?.itemCategory ?? RoughEstimateCategory.MATERIAL
+  const source = itemValue?.source ?? RoughEstimateItemSource.MANUAL
+  const isInitial = category === RoughEstimateCategory.INITIAL_COST
+  const isMaterial = category === RoughEstimateCategory.MATERIAL
+  const isLabor = category === RoughEstimateCategory.LABOR
+
+  // 素材選択時に品目名が空なら自動補完（任意で上書き可）。
+  const onPickMaterial = (materialId: string | null) => {
+    form.setValue(`items.${idx}.materialId`, materialId)
+    if (materialId) {
+      const m = materials.find((x) => x.id === materialId)
+      if (m) {
+        if (isBlank(form.getValues(`items.${idx}.itemName`))) {
+          form.setValue(`items.${idx}.itemName`, m.materialName, {
+            shouldValidate: true,
+          })
+        }
+        if (isBlank(form.getValues(`items.${idx}.unit`))) {
+          form.setValue(`items.${idx}.unit`, m.unit)
+        }
+      }
+    }
+  }
+  const onPickCostCategory = (costCategoryId: string | null) => {
+    form.setValue(`items.${idx}.costCategoryId`, costCategoryId)
+    if (costCategoryId && isBlank(form.getValues(`items.${idx}.itemName`))) {
+      const c = costCategories.find((x) => x.id === costCategoryId)
+      if (c)
+        form.setValue(`items.${idx}.itemName`, c.categoryName, {
+          shouldValidate: true,
+        })
+    }
+  }
 
   return (
     <div
@@ -842,10 +1017,12 @@ function ItemCard({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Badge variant={isInitial ? "outline" : "secondary"}>
-            {ROUGH_ESTIMATE_CATEGORY_LABELS[item?.itemCategory ?? RoughEstimateCategory.MATERIAL]}
+            {ROUGH_ESTIMATE_CATEGORY_LABELS[category]}
           </Badge>
           {isInitial && (
-            <span className="text-[11px] text-amber-700">別枠・原価に含めない</span>
+            <span className="text-[11px] text-amber-700">
+              別枠・原価に含めない
+            </span>
           )}
         </div>
         <Button
@@ -860,7 +1037,8 @@ function ItemCard({
         </Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+      {/* 1段目：費目区分 / 出所 / 品目 / 品目（英） */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <FormField
           control={form.control}
           name={`items.${idx}.itemCategory`}
@@ -927,13 +1105,100 @@ function ItemCard({
             <FormItem>
               <FormLabel className="text-xs">品目（英）</FormLabel>
               <FormControl>
-                <Input placeholder="Item name" {...field} />
+                <Input placeholder="Item name (EN)" {...field} />
               </FormControl>
             </FormItem>
           )}
         />
       </div>
 
+      {/* 2段目：マスタ選択（A-4・MATERIAL=素材 / LABOR=費目・MANUAL でも常時表示） */}
+      {(isMaterial || isLabor) && (
+        <div className="flex items-end gap-2">
+          {isMaterial && (
+            <FormField
+              control={form.control}
+              name={`items.${idx}.materialId`}
+              render={({ field }) => (
+                <FormItem className="flex-1">
+                  <FormLabel className="text-xs">
+                    素材（選ぶと品目名を補完・任意）
+                  </FormLabel>
+                  <Select
+                    value={field.value ?? NONE}
+                    onValueChange={(v) => onPickMaterial(v === NONE ? null : v)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="素材を選択（任意）" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NONE}>（未選択）</SelectItem>
+                      {materials.map((m) => (
+                        <SelectItem key={m.id} value={m.id}>
+                          <span className="font-mono text-xs text-muted-foreground mr-2">
+                            {m.materialCode}
+                          </span>
+                          {m.materialName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+          )}
+          {isLabor && (
+            <FormField
+              control={form.control}
+              name={`items.${idx}.costCategoryId`}
+              render={({ field }) => (
+                <FormItem className="flex-1">
+                  <FormLabel className="text-xs">
+                    費目（選ぶと品目名を補完・任意）
+                  </FormLabel>
+                  <Select
+                    value={field.value ?? NONE}
+                    onValueChange={(v) =>
+                      onPickCostCategory(v === NONE ? null : v)
+                    }
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="費目を選択（任意）" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NONE}>（未選択）</SelectItem>
+                      {costCategories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          <span className="font-mono text-xs text-muted-foreground mr-2">
+                            {c.categoryCode}
+                          </span>
+                          {c.categoryName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormItem>
+              )}
+            />
+          )}
+          {source === RoughEstimateItemSource.PAST_PO && isMaterial && (
+            <PastPoSearch form={form} idx={idx} materialId={itemValue?.materialId ?? null} />
+          )}
+          {source === RoughEstimateItemSource.PAST_WO && isLabor && (
+            <PastWoSearch
+              form={form}
+              idx={idx}
+              costCategoryId={itemValue?.costCategoryId ?? null}
+            />
+          )}
+        </div>
+      )}
+
+      {/* 3段目：数量 / 単位 / 単価 / 通貨 / 小計 */}
       <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
         <FormField
           control={form.control}
@@ -1017,43 +1282,28 @@ function ItemCard({
         <FormItem>
           <FormLabel className="text-xs">小計(JPY)</FormLabel>
           <div className="flex h-9 items-center px-1 font-mono text-sm">
-            {subtotalJpy === null ? "—" : `¥${subtotalJpy.toLocaleString("ja-JP")}`}
+            {subtotalJpy === null
+              ? "—"
+              : `¥${subtotalJpy.toLocaleString("ja-JP")}`}
           </div>
         </FormItem>
       </div>
-
-      {/* 引き当てピッカー（source に応じて材料 or 費目キーで過去実額を検索し行へ焼き込み） */}
-      {item?.source === RoughEstimateItemSource.PAST_PO && (
-        <PastPoPicker
-          form={form}
-          idx={idx}
-          materials={materials}
-        />
-      )}
-      {item?.source === RoughEstimateItemSource.PAST_WO && (
-        <PastWoPicker
-          form={form}
-          idx={idx}
-          costCategories={costCategories}
-        />
-      )}
     </div>
   )
 }
 
 // =============================================================================
-// 過去 PoItem 引き当て（materialId → listPastPoItemsByMaterial → 行へ焼き込み）
+// 過去実額の検索ボタン＋結果（行の materialId / costCategoryId をキーに引き当て・焼き込み）
 // =============================================================================
-function PastPoPicker({
+function PastPoSearch({
   form,
   idx,
-  materials,
+  materialId,
 }: {
-  form: ReturnType<typeof useForm<RoughEstimateFormValues>>
+  form: UseFormReturn<RoughEstimateFormValues>
   idx: number
-  materials: MaterialOption[]
+  materialId: string | null
 }) {
-  const materialId = form.watch(`items.${idx}.materialId`)
   const [isPending, startTransition] = useTransition()
   const [candidates, setCandidates] = useState<PastPoItemCandidate[] | null>(null)
 
@@ -1068,9 +1318,10 @@ function PastPoPicker({
       if (rows.length === 0) toast.info("該当する過去発注明細がありません")
     })
   }
-
   const apply = (c: PastPoItemCandidate) => {
-    form.setValue(`items.${idx}.itemName`, c.itemLabel ?? "（過去発注）", { shouldValidate: true })
+    form.setValue(`items.${idx}.itemName`, c.itemLabel ?? "（過去発注）", {
+      shouldValidate: true,
+    })
     form.setValue(`items.${idx}.quantity`, c.quantity != null ? String(c.quantity) : "")
     form.setValue(`items.${idx}.unit`, c.unit ?? "")
     form.setValue(`items.${idx}.unitPrice`, String(c.unitPrice))
@@ -1082,48 +1333,24 @@ function PastPoPicker({
   }
 
   return (
-    <div className="rounded border border-dashed p-2 space-y-2">
-      <div className="flex items-end gap-2">
-        <FormField
-          control={form.control}
-          name={`items.${idx}.materialId`}
-          render={({ field }) => (
-            <FormItem className="flex-1">
-              <FormLabel className="text-xs">引き当て素材（PAST_PO）</FormLabel>
-              <Select
-                value={field.value ?? NONE}
-                onValueChange={(v) => field.onChange(v === NONE ? null : v)}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="素材を選択" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value={NONE}>（未選択）</SelectItem>
-                  {materials.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>
-                      <span className="font-mono text-xs text-muted-foreground mr-2">
-                        {m.materialCode}
-                      </span>
-                      {m.materialName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormItem>
-          )}
-        />
-        <Button type="button" variant="outline" size="sm" onClick={search} disabled={isPending}>
-          {isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Search className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
+    <div className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={search}
+        disabled={isPending}
+        title="過去発注から検索"
+      >
+        {isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Search className="mr-1 h-4 w-4" />
+        )}
+        過去発注
+      </Button>
       {candidates && candidates.length > 0 && (
-        <div className="max-h-40 overflow-y-auto rounded border">
+        <div className="absolute right-0 z-10 mt-1 max-h-48 w-80 overflow-y-auto rounded border bg-background shadow">
           {candidates.map((c) => (
             <button
               key={c.poItemId}
@@ -1132,11 +1359,10 @@ function PastPoPicker({
               className="flex w-full items-center justify-between gap-2 border-b px-2 py-1 text-left text-xs last:border-b-0 hover:bg-accent"
             >
               <span className="font-mono">{c.poNumber}</span>
-              <span>{c.itemLabel ?? "—"}</span>
+              <span className="truncate">{c.itemLabel ?? "—"}</span>
               <span className="font-mono">
                 {c.currency} {c.unitPrice.toLocaleString("ja-JP")}
               </span>
-              <span className="text-muted-foreground">{c.orderDate ?? ""}</span>
             </button>
           ))}
         </div>
@@ -1145,19 +1371,15 @@ function PastPoPicker({
   )
 }
 
-// =============================================================================
-// 過去 WoItem 引き当て（costCategoryId → listPastWoItemsByCostCategory → 焼き込み）
-// =============================================================================
-function PastWoPicker({
+function PastWoSearch({
   form,
   idx,
-  costCategories,
+  costCategoryId,
 }: {
-  form: ReturnType<typeof useForm<RoughEstimateFormValues>>
+  form: UseFormReturn<RoughEstimateFormValues>
   idx: number
-  costCategories: CostCategoryOption[]
+  costCategoryId: string | null
 }) {
-  const costCategoryId = form.watch(`items.${idx}.costCategoryId`)
   const [isPending, startTransition] = useTransition()
   const [candidates, setCandidates] = useState<PastWoItemCandidate[] | null>(null)
 
@@ -1172,9 +1394,10 @@ function PastWoPicker({
       if (rows.length === 0) toast.info("該当する過去作業発注明細がありません")
     })
   }
-
   const apply = (c: PastWoItemCandidate) => {
-    form.setValue(`items.${idx}.itemName`, c.workDescription || "（過去作業発注）", { shouldValidate: true })
+    form.setValue(`items.${idx}.itemName`, c.workDescription || "（過去作業発注）", {
+      shouldValidate: true,
+    })
     form.setValue(`items.${idx}.quantity`, c.quantity != null ? String(c.quantity) : "")
     form.setValue(`items.${idx}.unit`, c.unit ?? "")
     form.setValue(`items.${idx}.unitPrice`, String(c.unitPrice))
@@ -1186,48 +1409,24 @@ function PastWoPicker({
   }
 
   return (
-    <div className="rounded border border-dashed p-2 space-y-2">
-      <div className="flex items-end gap-2">
-        <FormField
-          control={form.control}
-          name={`items.${idx}.costCategoryId`}
-          render={({ field }) => (
-            <FormItem className="flex-1">
-              <FormLabel className="text-xs">引き当て費目（PAST_WO）</FormLabel>
-              <Select
-                value={field.value ?? NONE}
-                onValueChange={(v) => field.onChange(v === NONE ? null : v)}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="費目を選択" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value={NONE}>（未選択）</SelectItem>
-                  {costCategories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      <span className="font-mono text-xs text-muted-foreground mr-2">
-                        {c.categoryCode}
-                      </span>
-                      {c.categoryName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormItem>
-          )}
-        />
-        <Button type="button" variant="outline" size="sm" onClick={search} disabled={isPending}>
-          {isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <Search className="h-4 w-4" />
-          )}
-        </Button>
-      </div>
+    <div className="relative">
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={search}
+        disabled={isPending}
+        title="過去作業発注から検索"
+      >
+        {isPending ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <Search className="mr-1 h-4 w-4" />
+        )}
+        過去作業発注
+      </Button>
       {candidates && candidates.length > 0 && (
-        <div className="max-h-40 overflow-y-auto rounded border">
+        <div className="absolute right-0 z-10 mt-1 max-h-48 w-80 overflow-y-auto rounded border bg-background shadow">
           {candidates.map((c) => (
             <button
               key={c.woItemId}

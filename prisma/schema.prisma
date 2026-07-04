@@ -9508,6 +9508,12 @@ enum MarginRateSource {
   MANUAL_OVERRIDE // 手動上書き
 }
 
+/// 初期費用の請求方式（B-2）。
+enum InitialCostBillingMode {
+  SEPARATE // 各初期費用を別途詳細明記して請求（1枚原価には混ぜない・既定）
+  INCLUDED // 製品数量で割り返し1枚単価にインクルーズ（presentedMoq 必須）
+}
+
 /// 概算量産見積ヘッダ（発行1件）。品番に紐づく交渉用の提示価格の発行履歴。
 model RoughEstimate {
   id        String @id @default(uuid())
@@ -9525,14 +9531,16 @@ model RoughEstimate {
   notes    String?  @db.Text // 前提メモ（素材グレード仮定・色数・納期前提等の自由記述）
 
   // 提示条件
-  presentedMoq         Int?      @map("presented_moq") // 提示 MOQ 単一値（階段は QE-3+）
-  expectedQuantityBand String?   @map("expected_quantity_band") @db.VarChar(100) // 想定数量帯・自由入力
-  currency             Currency  @default(JPY) // 通貨前提（行別通貨は明細側）
-  validUntil           DateTime? @map("valid_until") @db.Date // 有効期限＝任意参考列（必須にしない）
+  presentedMoq Int?      @map("presented_moq") // 提示 MOQ 単一値（階段は QE-3+）。INCLUDED 時は必須（割り返し母数）
+  currency     Currency  @default(JPY) // 通貨前提（行別通貨は明細側）
+  validUntil   DateTime? @map("valid_until") @db.Date // 有効期限＝任意参考列（必須にしない）
 
   // 利益率（ヘッダ1件1率）。Brand.defaultMarginRate と同型。
   marginRate       Decimal?         @map("margin_rate") @db.Decimal(5, 2) // 適用利益率（%）
   marginRateSource MarginRateSource @map("margin_rate_source")
+
+  // 初期費用の請求方式（B-2）。SEPARATE=別枠請求 / INCLUDED=1枚単価にインクルーズ。
+  initialCostBillingMode InitialCostBillingMode @default(SEPARATE) @map("initial_cost_billing_mode")
 
   // 金額の2層保存（自動値と手打ち最終値を別列で両方）
   autoCostTotalJpy    Decimal? @map("auto_cost_total_jpy") @db.Decimal(15, 2) // 自動集計原価（JPY 換算後合計）

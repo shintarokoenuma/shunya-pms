@@ -12,6 +12,9 @@ CREATE TYPE "RoughEstimateItemSource" AS ENUM ('MANUAL', 'PAST_PO', 'PAST_WO');
 -- CreateEnum
 CREATE TYPE "MarginRateSource" AS ENUM ('BRAND_DEFAULT', 'MANUAL_OVERRIDE');
 
+-- CreateEnum
+CREATE TYPE "InitialCostBillingMode" AS ENUM ('SEPARATE', 'INCLUDED');
+
 -- CreateTable
 CREATE TABLE "rough_estimates" (
     "id" TEXT NOT NULL,
@@ -22,11 +25,11 @@ CREATE TABLE "rough_estimates" (
     "title" VARCHAR(255),
     "notes" TEXT,
     "presented_moq" INTEGER,
-    "expected_quantity_band" VARCHAR(100),
     "currency" "Currency" NOT NULL DEFAULT 'JPY',
     "valid_until" DATE,
     "margin_rate" DECIMAL(5,2),
     "margin_rate_source" "MarginRateSource" NOT NULL,
+    "initial_cost_billing_mode" "InitialCostBillingMode" NOT NULL DEFAULT 'SEPARATE',
     "auto_cost_total_jpy" DECIMAL(15,2),
     "auto_price_total_jpy" DECIMAL(15,2),
     "final_price_manual_jpy" DECIMAL(15,2),

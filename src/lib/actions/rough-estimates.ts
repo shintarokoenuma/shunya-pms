@@ -8,6 +8,7 @@ import {
   type RoughEstimate,
   type RoughEstimateCategory,
   type RoughEstimateItemSource,
+  type InitialCostBillingMode,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
@@ -397,11 +398,11 @@ export async function createRoughEstimate(
                 title: data.title || null,
                 notes: data.notes || null,
                 presentedMoq: data.presentedMoq,
-                expectedQuantityBand: data.expectedQuantityBand || null,
                 currency: data.currency,
                 validUntil: data.validUntil ? new Date(data.validUntil) : null,
                 marginRate: new Prisma.Decimal(marginRate),
                 marginRateSource,
+                initialCostBillingMode: data.initialCostBillingMode,
                 autoCostTotalJpy: new Prisma.Decimal(autoCostTotalJpy),
                 autoPriceTotalJpy: new Prisma.Decimal(autoPriceTotalJpy),
                 finalPriceManualJpy: new Prisma.Decimal(finalPriceManualJpy),
@@ -455,6 +456,7 @@ export async function createRoughEstimate(
           productId: data.productId,
           marginRate,
           marginRateSource,
+          initialCostBillingMode: data.initialCostBillingMode,
           autoCostTotalJpy,
           autoPriceTotalJpy,
           finalPriceManualJpy,
@@ -524,6 +526,7 @@ export async function updateRoughEstimate(
       productId: existing.productId,
       marginRate: existing.marginRate != null ? Number(existing.marginRate) : null,
       marginRateSource: existing.marginRateSource,
+      initialCostBillingMode: existing.initialCostBillingMode,
       autoCostTotalJpy:
         existing.autoCostTotalJpy != null
           ? Number(existing.autoCostTotalJpy)
@@ -547,11 +550,11 @@ export async function updateRoughEstimate(
             title: data.title || null,
             notes: data.notes || null,
             presentedMoq: data.presentedMoq,
-            expectedQuantityBand: data.expectedQuantityBand || null,
             currency: data.currency,
             validUntil: data.validUntil ? new Date(data.validUntil) : null,
             marginRate: new Prisma.Decimal(marginRate),
             marginRateSource,
+            initialCostBillingMode: data.initialCostBillingMode,
             autoCostTotalJpy: new Prisma.Decimal(autoCostTotalJpy),
             autoPriceTotalJpy: new Prisma.Decimal(autoPriceTotalJpy),
             finalPriceManualJpy: new Prisma.Decimal(finalPriceManualJpy),
@@ -579,6 +582,7 @@ export async function updateRoughEstimate(
           productId: data.productId,
           marginRate,
           marginRateSource,
+          initialCostBillingMode: data.initialCostBillingMode,
           autoCostTotalJpy,
           autoPriceTotalJpy,
           finalPriceManualJpy,
@@ -648,10 +652,10 @@ export type RoughEstimateListRow = {
   issuedAt: string
   title: string | null
   presentedMoq: number | null
-  expectedQuantityBand: string | null
   currency: Currency
   marginRate: number | null
   marginRateSource: MarginRateSource
+  initialCostBillingMode: InitialCostBillingMode
   autoCostTotalJpy: number | null
   autoPriceTotalJpy: number | null
   finalPriceManualJpy: number | null
@@ -672,10 +676,10 @@ export async function listRoughEstimatesByProduct(
       issuedAt: true,
       title: true,
       presentedMoq: true,
-      expectedQuantityBand: true,
       currency: true,
       marginRate: true,
       marginRateSource: true,
+      initialCostBillingMode: true,
       autoCostTotalJpy: true,
       autoPriceTotalJpy: true,
       finalPriceManualJpy: true,
@@ -689,10 +693,10 @@ export async function listRoughEstimatesByProduct(
       issuedAt: r.issuedAt.toISOString(),
       title: r.title,
       presentedMoq: r.presentedMoq,
-      expectedQuantityBand: r.expectedQuantityBand,
       currency: r.currency,
       marginRate,
       marginRateSource: r.marginRateSource,
+      initialCostBillingMode: r.initialCostBillingMode,
       autoCostTotalJpy:
         r.autoCostTotalJpy != null ? Number(r.autoCostTotalJpy) : null,
       autoPriceTotalJpy:
@@ -762,11 +766,11 @@ export type RoughEstimateEditData = {
   title: string | null
   notes: string | null
   presentedMoq: number | null
-  expectedQuantityBand: string | null
   currency: Currency
   validUntil: string | null
   marginRate: number | null
   marginRateSource: MarginRateSource
+  initialCostBillingMode: InitialCostBillingMode
   finalPriceManualJpy: number | null
   /** USD 行の subtotalJpy は保存済みだがレートは非保存（v1）。編集時は再入力を促す。 */
   hasUsdLine: boolean
@@ -799,13 +803,13 @@ export async function getRoughEstimateForEdit(
         title: header.title,
         notes: header.notes,
         presentedMoq: header.presentedMoq,
-        expectedQuantityBand: header.expectedQuantityBand,
         currency: header.currency,
         validUntil: header.validUntil
           ? header.validUntil.toISOString().slice(0, 10)
           : null,
         marginRate: header.marginRate != null ? Number(header.marginRate) : null,
         marginRateSource: header.marginRateSource,
+        initialCostBillingMode: header.initialCostBillingMode,
         finalPriceManualJpy:
           header.finalPriceManualJpy != null
             ? Number(header.finalPriceManualJpy)

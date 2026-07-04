@@ -1,4 +1,4 @@
-import { RoughEstimateCategory } from "@prisma/client"
+import { RoughEstimateCategory, InitialCostBillingMode } from "@prisma/client"
 
 /**
  * QE-1R（概算量産見積）集計の純関数群。
@@ -102,5 +102,101 @@ export function summarizeRoughEstimate(
     autoPriceTotalJpy,
     finalPriceManualJpyDefault: autoPriceTotalJpy,
     belowMarginWarning: isBelowMarginWarning(marginRatePercent),
+  }
+}
+
+// =============================================================================
+// B-2/B-3: 提示価格の内訳分離 ＋ 初期費用の請求方式（SEPARATE / INCLUDED）
+// =============================================================================
+
+/** 量産提示分＝原価×(1+利益率)。1枚原価（初期費用抜き）に利益率を乗せた額。 */
+export function computeProductionPriceTotalJpy(
+  autoCostTotalJpy: number,
+  marginRatePercent: number | null | undefined,
+): number {
+  return round2(autoCostTotalJpy * (1 + (marginRatePercent ?? 0) / 100))
+}
+
+/**
+ * INCLUDED（1枚単価にインクルーズ）で割り返しが可能か。
+ * presentedMoq が null / 0 以下なら不可（0除算防止・silent fallback 禁止）。SEPARATE は常に可。
+ */
+export function isMoqValidForBillingMode(
+  billingMode: InitialCostBillingMode,
+  presentedMoq: number | null | undefined,
+): boolean {
+  if (billingMode === InitialCostBillingMode.SEPARATE) return true
+  return presentedMoq != null && presentedMoq > 0
+}
+
+export type RoughEstimatePriceBreakdown = {
+  autoCostTotalJpy: number
+  autoPriceTotalJpy: number
+  /** 量産提示分＝原価×(1+利益率)。 */
+  productionPriceTotalJpy: number
+  /** 初期費用提示分（別途・価格化後）＝ autoPriceTotalJpy − 量産提示分（B-3 の導出式・新規列は増やさない）。 */
+  initialCostPriceTotalJpy: number
+  belowMarginWarning: boolean
+  billingMode: InitialCostBillingMode
+  /** INCLUDED のとき presentedMoq>0 か（SEPARATE は常に true）。false は保存不可（バリデーションエラー）。 */
+  moqValid: boolean
+  /** 1枚あたり内訳（presentedMoq>0 のときのみ算出・無ければ null）。 */
+  perUnit:
+    | null
+    | {
+        /** 参考：1枚あたり原価（初期費用抜き）。 */
+        costPerUnitJpy: number
+        /** 1枚あたり量産提示（原価×(1+利益率)/moq）。 */
+        productionPricePerUnitJpy: number
+        /** 1枚あたり初期費用上乗せ（初期費用提示分/moq）。INCLUDED の肝。 */
+        initialCostAddonPerUnitJpy: number
+        /** INCLUDED の1枚あたり提示価格＝ autoPriceTotalJpy / moq（＝量産1枚＋初期費用上乗せ）。 */
+        includedPerUnitPriceJpy: number
+      }
+}
+
+/**
+ * 保存済み合計（autoCost/autoPrice）から提示価格の内訳・1枚あたりを導出（B-3）。
+ * 一覧テーブル（明細を持たない）と編集ダイアログの両方で使う共通関数。新規列は増やさない。
+ */
+export function computePriceBreakdownFromTotals(
+  autoCostTotalJpy: number,
+  autoPriceTotalJpy: number,
+  marginRatePercent: number | null | undefined,
+  billingMode: InitialCostBillingMode,
+  presentedMoq: number | null | undefined,
+): RoughEstimatePriceBreakdown {
+  const productionPriceTotalJpy = computeProductionPriceTotalJpy(
+    autoCostTotalJpy,
+    marginRatePercent,
+  )
+  const initialCostPriceTotalJpy = round2(
+    autoPriceTotalJpy - productionPriceTotalJpy,
+  )
+  const moqValid = isMoqValidForBillingMode(billingMode, presentedMoq)
+
+  const perUnit =
+    presentedMoq != null && presentedMoq > 0
+      ? {
+          costPerUnitJpy: round2(autoCostTotalJpy / presentedMoq),
+          productionPricePerUnitJpy: round2(
+            productionPriceTotalJpy / presentedMoq,
+          ),
+          initialCostAddonPerUnitJpy: round2(
+            initialCostPriceTotalJpy / presentedMoq,
+          ),
+          includedPerUnitPriceJpy: round2(autoPriceTotalJpy / presentedMoq),
+        }
+      : null
+
+  return {
+    autoCostTotalJpy,
+    autoPriceTotalJpy,
+    productionPriceTotalJpy,
+    initialCostPriceTotalJpy,
+    belowMarginWarning: isBelowMarginWarning(marginRatePercent),
+    billingMode,
+    moqValid,
+    perUnit,
   }
 }
