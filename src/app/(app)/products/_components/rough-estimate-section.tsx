@@ -528,7 +528,8 @@ function RoughEstimateFormDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
+      {/* 共通 dialog.tsx の既定 sm:max-w-sm を上書きするため sm: 変種で指定（素の max-w-* では負ける） */}
+      <DialogContent className="max-h-[92vh] sm:max-w-6xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {editingId ? "概算見積を編集" : "概算見積を作成"}
