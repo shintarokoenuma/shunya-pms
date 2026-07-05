@@ -123,6 +123,7 @@ async function resolveMarginRate(
 export type PastPoItemCandidate = {
   poItemId: string
   poNumber: string
+  poTitle: string | null // 引き当て元 PurchaseOrder.title（識別用）
   materialId: string | null
   itemLabel: string | null
   quantity: number | null
@@ -136,6 +137,7 @@ export type PastPoItemCandidate = {
 export type PastWoItemCandidate = {
   woItemId: string
   woNumber: string
+  woTitle: string | null // 引き当て元 WorkOrder.title（識別用）
   costCategoryId: string | null
   workDescription: string
   quantity: number | null
@@ -155,7 +157,7 @@ export async function listPastPoItemsByMaterial(
 
   const pos = await prisma.purchaseOrder.findMany({
     where: { companyId: sess.companyId, deletedAt: null },
-    select: { id: true, poNumber: true, orderDate: true },
+    select: { id: true, poNumber: true, title: true, orderDate: true },
   })
   if (pos.length === 0) return []
   const poById = new Map(pos.map((p) => [p.id, p]))
@@ -175,6 +177,7 @@ export async function listPastPoItemsByMaterial(
     return {
       poItemId: it.id,
       poNumber: po?.poNumber ?? "",
+      poTitle: po?.title ?? null,
       materialId: it.materialId,
       itemLabel: it.customItemName,
       quantity: it.quantity != null ? Number(it.quantity) : null,
@@ -197,7 +200,7 @@ export async function listPastWoItemsByCostCategory(
 
   const wos = await prisma.workOrder.findMany({
     where: { companyId: sess.companyId, deletedAt: null },
-    select: { id: true, woNumber: true },
+    select: { id: true, woNumber: true, title: true },
   })
   if (wos.length === 0) return []
   const woById = new Map(wos.map((w) => [w.id, w]))
@@ -212,9 +215,12 @@ export async function listPastWoItemsByCostCategory(
     take: 20,
   })
 
-  return items.map((it) => ({
+  return items.map((it) => {
+    const wo = woById.get(it.woId)
+    return {
     woItemId: it.id,
-    woNumber: woById.get(it.woId)?.woNumber ?? "",
+    woNumber: wo?.woNumber ?? "",
+    woTitle: wo?.title ?? null,
     costCategoryId: it.costCategoryId,
     workDescription: it.workDescription,
     quantity: it.quantity != null ? Number(it.quantity) : null,
@@ -222,7 +228,8 @@ export async function listPastWoItemsByCostCategory(
     unitPrice: Number(it.unitPrice),
     currency: it.currency,
     subtotal: it.subtotal != null ? Number(it.subtotal) : null,
-  }))
+    }
+  })
 }
 
 // =============================================================================

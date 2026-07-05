@@ -101,6 +101,24 @@ const SOURCE_OPTIONS = Object.values(RoughEstimateItemSource).map((v) => ({
   label: ROUGH_ESTIMATE_ITEM_SOURCE_LABELS[v],
 }))
 
+/**
+ * 費目区分ごとに選べる出所（source）を制限する（確定仕様）:
+ * - MATERIAL      → MANUAL / PAST_PO（PAST_WO は除外）
+ * - LABOR         → MANUAL / PAST_WO（PAST_PO は除外）
+ * - INITIAL_COST  → MANUAL のみ
+ */
+function allowedSourcesFor(
+  category: RoughEstimateCategory,
+): RoughEstimateItemSource[] {
+  if (category === RoughEstimateCategory.MATERIAL) {
+    return [RoughEstimateItemSource.MANUAL, RoughEstimateItemSource.PAST_PO]
+  }
+  if (category === RoughEstimateCategory.LABOR) {
+    return [RoughEstimateItemSource.MANUAL, RoughEstimateItemSource.PAST_WO]
+  }
+  return [RoughEstimateItemSource.MANUAL] // INITIAL_COST
+}
+
 type Props = {
   productId: string
   rows: RoughEstimateListRow[]
@@ -1046,7 +1064,23 @@ function ItemCard({
           render={({ field }) => (
             <FormItem>
               <FormLabel className="text-xs">費目区分</FormLabel>
-              <Select value={field.value} onValueChange={field.onChange}>
+              <Select
+                value={field.value}
+                onValueChange={(v) => {
+                  const next = v as RoughEstimateCategory
+                  field.onChange(next)
+                  // 新しい費目区分で現在の出所が選べなくなる場合は MANUAL にリセット。
+                  const cur =
+                    form.getValues(`items.${idx}.source`) ??
+                    RoughEstimateItemSource.MANUAL
+                  if (!allowedSourcesFor(next).includes(cur)) {
+                    form.setValue(
+                      `items.${idx}.source`,
+                      RoughEstimateItemSource.MANUAL,
+                    )
+                  }
+                }}
+              >
                 <FormControl>
                   <SelectTrigger className="w-full">
                     <SelectValue />
@@ -1076,7 +1110,10 @@ function ItemCard({
                   </SelectTrigger>
                 </FormControl>
                 <SelectContent>
-                  {SOURCE_OPTIONS.map((o) => (
+                  {/* 費目区分に応じて選べる出所を制限（確定仕様） */}
+                  {SOURCE_OPTIONS.filter((o) =>
+                    allowedSourcesFor(category).includes(o.value),
+                  ).map((o) => (
                     <SelectItem key={o.value} value={o.value}>
                       {o.label}
                     </SelectItem>
@@ -1351,19 +1388,28 @@ function PastPoSearch({
         過去発注
       </Button>
       {candidates && candidates.length > 0 && (
-        <div className="absolute right-0 z-10 mt-1 max-h-48 w-80 overflow-y-auto rounded border bg-background shadow">
+        <div className="absolute right-0 z-10 mt-1 max-h-56 w-96 overflow-y-auto rounded border bg-background shadow">
           {candidates.map((c) => (
             <button
               key={c.poItemId}
               type="button"
               onClick={() => apply(c)}
-              className="flex w-full items-center justify-between gap-2 border-b px-2 py-1 text-left text-xs last:border-b-0 hover:bg-accent"
+              className="flex w-full flex-col gap-0.5 border-b px-2 py-1.5 text-left text-xs last:border-b-0 hover:bg-accent"
             >
-              <span className="font-mono">{c.poNumber}</span>
-              <span className="truncate">{c.itemLabel ?? "—"}</span>
-              <span className="font-mono">
-                {c.currency} {c.unitPrice.toLocaleString("ja-JP")}
-              </span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-muted-foreground">
+                  {c.poNumber}
+                </span>
+                <span className="truncate font-medium">
+                  {c.poTitle ?? "（無題の発注）"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate">{c.itemLabel ?? "—"}</span>
+                <span className="font-mono">
+                  {c.currency} {c.unitPrice.toLocaleString("ja-JP")}
+                </span>
+              </div>
             </button>
           ))}
         </div>
@@ -1427,19 +1473,28 @@ function PastWoSearch({
         過去作業発注
       </Button>
       {candidates && candidates.length > 0 && (
-        <div className="absolute right-0 z-10 mt-1 max-h-48 w-80 overflow-y-auto rounded border bg-background shadow">
+        <div className="absolute right-0 z-10 mt-1 max-h-56 w-96 overflow-y-auto rounded border bg-background shadow">
           {candidates.map((c) => (
             <button
               key={c.woItemId}
               type="button"
               onClick={() => apply(c)}
-              className="flex w-full items-center justify-between gap-2 border-b px-2 py-1 text-left text-xs last:border-b-0 hover:bg-accent"
+              className="flex w-full flex-col gap-0.5 border-b px-2 py-1.5 text-left text-xs last:border-b-0 hover:bg-accent"
             >
-              <span className="font-mono">{c.woNumber}</span>
-              <span className="truncate">{c.workDescription}</span>
-              <span className="font-mono">
-                {c.currency} {c.unitPrice.toLocaleString("ja-JP")}
-              </span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-mono text-muted-foreground">
+                  {c.woNumber}
+                </span>
+                <span className="truncate font-medium">
+                  {c.woTitle ?? "（無題の作業発注）"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <span className="truncate">{c.workDescription}</span>
+                <span className="font-mono">
+                  {c.currency} {c.unitPrice.toLocaleString("ja-JP")}
+                </span>
+              </div>
             </button>
           ))}
         </div>
