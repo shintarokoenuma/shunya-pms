@@ -385,7 +385,7 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
       )}
 
       <Dialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -557,7 +557,7 @@ function BomItemDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] sm:max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? "明細を編集" : "明細を追加"}</DialogTitle>
         </DialogHeader>
@@ -1121,7 +1121,7 @@ function PoImportDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] sm:max-w-3xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>発注から取り込む</DialogTitle>
           <DialogDescription>

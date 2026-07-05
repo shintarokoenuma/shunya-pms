@@ -201,7 +201,7 @@ export function MarkingSection({ productId, items, materials }: Props) {
       )}
 
       <Dialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -399,7 +399,7 @@ function MarkingDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[90vh] sm:max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{editing ? "マーキング実測を編集" : "マーキング実測を追加"}</DialogTitle>
         </DialogHeader>
