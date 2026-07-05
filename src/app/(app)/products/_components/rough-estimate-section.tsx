@@ -574,7 +574,7 @@ function RoughEstimateFormDialog({
                     <FormItem className="md:col-span-3">
                       <FormLabel>タイトル / 想定数量帯など（任意）</FormLabel>
                       <FormControl>
-                        <Input placeholder="例：2026SS 概算・想定100〜300" {...field} />
+                        <Input autoComplete="off" placeholder="例：2026SS 概算・想定100〜300" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -589,7 +589,7 @@ function RoughEstimateFormDialog({
                         提示MOQ{included && <span className="text-destructive">（必須）</span>}
                       </FormLabel>
                       <FormControl>
-                        <Input
+                        <Input autoComplete="off"
                           type="number"
                           step="1"
                           placeholder="例：100"
@@ -635,7 +635,7 @@ function RoughEstimateFormDialog({
                     <FormItem>
                       <FormLabel>利益率（%）</FormLabel>
                       <FormControl>
-                        <Input
+                        <Input autoComplete="off"
                           type="number"
                           step="any"
                           placeholder="例：20"
@@ -666,7 +666,7 @@ function RoughEstimateFormDialog({
                     <FormItem>
                       <FormLabel>有効期限（任意）</FormLabel>
                       <FormControl>
-                        <Input
+                        <Input autoComplete="off"
                           type="date"
                           value={field.value ?? ""}
                           onChange={field.onChange}
@@ -686,7 +686,7 @@ function RoughEstimateFormDialog({
                     <FormItem>
                       <FormLabel>USD/JPY レート</FormLabel>
                       <FormControl>
-                        <Input
+                        <Input autoComplete="off"
                           type="number"
                           step="any"
                           placeholder="USD 明細がある場合のみ"
@@ -901,7 +901,7 @@ function RoughEstimateFormDialog({
                       <FormLabel>最終見積額（手打ち・JPY）</FormLabel>
                       <div className="flex gap-2">
                         <FormControl>
-                          <Input
+                          <Input autoComplete="off"
                             type="number"
                             step="any"
                             placeholder={`未入力なら自動値 ${summary.autoPriceTotalJpy}`}
@@ -936,7 +936,7 @@ function RoughEstimateFormDialog({
                   <FormItem>
                     <FormLabel>前提メモ（任意）</FormLabel>
                     <FormControl>
-                      <Textarea
+                      <Textarea autoComplete="off"
                         rows={2}
                         placeholder="素材グレード仮定・色数・納期前提など"
                         {...field}
@@ -1130,7 +1130,7 @@ function ItemCard({
             <FormItem>
               <FormLabel className="text-xs">品目 *</FormLabel>
               <FormControl>
-                <Input placeholder="品目名" {...field} />
+                <Input autoComplete="off" placeholder="品目名" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -1143,7 +1143,7 @@ function ItemCard({
             <FormItem>
               <FormLabel className="text-xs">品目（英）</FormLabel>
               <FormControl>
-                <Input placeholder="Item name (EN)" {...field} />
+                <Input autoComplete="off" placeholder="Item name (EN)" {...field} />
               </FormControl>
             </FormItem>
           )}
@@ -1245,7 +1245,7 @@ function ItemCard({
             <FormItem>
               <FormLabel className="text-xs">数量</FormLabel>
               <FormControl>
-                <Input
+                <Input autoComplete="off"
                   type="number"
                   step="any"
                   placeholder="1"
@@ -1267,7 +1267,7 @@ function ItemCard({
             <FormItem>
               <FormLabel className="text-xs">単位</FormLabel>
               <FormControl>
-                <Input placeholder="式/m/枚" {...field} />
+                <Input autoComplete="off" placeholder="式/m/枚" {...field} />
               </FormControl>
             </FormItem>
           )}
@@ -1279,7 +1279,7 @@ function ItemCard({
             <FormItem>
               <FormLabel className="text-xs">単価</FormLabel>
               <FormControl>
-                <Input
+                <Input autoComplete="off"
                   type="number"
                   step="any"
                   placeholder="単価"
