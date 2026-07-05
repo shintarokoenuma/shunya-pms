@@ -119,6 +119,29 @@ function allowedSourcesFor(
   return [RoughEstimateItemSource.MANUAL] // INITIAL_COST
 }
 
+/**
+ * Radix Select 選択時に form.setValue を連鎖させると、再レンダリング中に
+ * スクロール可能なダイアログの scrollTop が巻き戻る（実測 1627→531）。
+ * 操作直前の scrollTop を保存し、再レンダリング/クローズが落ち着いた次フレームで復元する。
+ * （field.onChange のみの Select では発生しないため、setValue を伴うハンドラだけを包む）
+ */
+function preserveDialogScroll(run: () => void) {
+  if (typeof document === "undefined") {
+    run()
+    return
+  }
+  const el = document.querySelector<HTMLElement>('[role="dialog"]')
+  const top = el?.scrollTop ?? 0
+  run()
+  if (!el) return
+  requestAnimationFrame(() => {
+    el.scrollTop = top
+    requestAnimationFrame(() => {
+      el.scrollTop = top
+    })
+  })
+}
+
 type Props = {
   productId: string
   rows: RoughEstimateListRow[]
@@ -999,33 +1022,35 @@ function ItemCard({
   const isMaterial = category === RoughEstimateCategory.MATERIAL
   const isLabor = category === RoughEstimateCategory.LABOR
 
-  // 素材選択時に品目名が空なら自動補完（任意で上書き可）。
-  const onPickMaterial = (materialId: string | null) => {
-    form.setValue(`items.${idx}.materialId`, materialId)
-    if (materialId) {
-      const m = materials.find((x) => x.id === materialId)
-      if (m) {
-        if (isBlank(form.getValues(`items.${idx}.itemName`))) {
-          form.setValue(`items.${idx}.itemName`, m.materialName, {
-            shouldValidate: true,
-          })
-        }
-        if (isBlank(form.getValues(`items.${idx}.unit`))) {
-          form.setValue(`items.${idx}.unit`, m.unit)
+  // 素材選択時に品目名が空なら自動補完（任意で上書き可）。setValue 連鎖のスクロール巻き戻りを回避。
+  const onPickMaterial = (materialId: string | null) =>
+    preserveDialogScroll(() => {
+      form.setValue(`items.${idx}.materialId`, materialId)
+      if (materialId) {
+        const m = materials.find((x) => x.id === materialId)
+        if (m) {
+          if (isBlank(form.getValues(`items.${idx}.itemName`))) {
+            form.setValue(`items.${idx}.itemName`, m.materialName, {
+              shouldValidate: true,
+            })
+          }
+          if (isBlank(form.getValues(`items.${idx}.unit`))) {
+            form.setValue(`items.${idx}.unit`, m.unit)
+          }
         }
       }
-    }
-  }
-  const onPickCostCategory = (costCategoryId: string | null) => {
-    form.setValue(`items.${idx}.costCategoryId`, costCategoryId)
-    if (costCategoryId && isBlank(form.getValues(`items.${idx}.itemName`))) {
-      const c = costCategories.find((x) => x.id === costCategoryId)
-      if (c)
-        form.setValue(`items.${idx}.itemName`, c.categoryName, {
-          shouldValidate: true,
-        })
-    }
-  }
+    })
+  const onPickCostCategory = (costCategoryId: string | null) =>
+    preserveDialogScroll(() => {
+      form.setValue(`items.${idx}.costCategoryId`, costCategoryId)
+      if (costCategoryId && isBlank(form.getValues(`items.${idx}.itemName`))) {
+        const c = costCategories.find((x) => x.id === costCategoryId)
+        if (c)
+          form.setValue(`items.${idx}.itemName`, c.categoryName, {
+            shouldValidate: true,
+          })
+      }
+    })
 
   return (
     <div
@@ -1066,20 +1091,22 @@ function ItemCard({
               <FormLabel className="text-xs">費目区分</FormLabel>
               <Select
                 value={field.value}
-                onValueChange={(v) => {
-                  const next = v as RoughEstimateCategory
-                  field.onChange(next)
-                  // 新しい費目区分で現在の出所が選べなくなる場合は MANUAL にリセット。
-                  const cur =
-                    form.getValues(`items.${idx}.source`) ??
-                    RoughEstimateItemSource.MANUAL
-                  if (!allowedSourcesFor(next).includes(cur)) {
-                    form.setValue(
-                      `items.${idx}.source`,
-                      RoughEstimateItemSource.MANUAL,
-                    )
-                  }
-                }}
+                onValueChange={(v) =>
+                  preserveDialogScroll(() => {
+                    const next = v as RoughEstimateCategory
+                    field.onChange(next)
+                    // 新しい費目区分で現在の出所が選べなくなる場合は MANUAL にリセット。
+                    const cur =
+                      form.getValues(`items.${idx}.source`) ??
+                      RoughEstimateItemSource.MANUAL
+                    if (!allowedSourcesFor(next).includes(cur)) {
+                      form.setValue(
+                        `items.${idx}.source`,
+                        RoughEstimateItemSource.MANUAL,
+                      )
+                    }
+                  })
+                }
               >
                 <FormControl>
                   <SelectTrigger className="w-full">
@@ -1356,19 +1383,20 @@ function PastPoSearch({
       if (rows.length === 0) toast.info("該当する過去発注明細がありません")
     })
   }
-  const apply = (c: PastPoItemCandidate) => {
-    form.setValue(`items.${idx}.itemName`, c.itemLabel ?? "（過去発注）", {
-      shouldValidate: true,
+  const apply = (c: PastPoItemCandidate) =>
+    preserveDialogScroll(() => {
+      form.setValue(`items.${idx}.itemName`, c.itemLabel ?? "（過去発注）", {
+        shouldValidate: true,
+      })
+      form.setValue(`items.${idx}.quantity`, c.quantity != null ? String(c.quantity) : "")
+      form.setValue(`items.${idx}.unit`, c.unit ?? "")
+      form.setValue(`items.${idx}.unitPrice`, String(c.unitPrice))
+      form.setValue(`items.${idx}.currency`, c.currency)
+      form.setValue(`items.${idx}.materialId`, c.materialId)
+      form.setValue(`items.${idx}.sourcePoItemId`, c.poItemId)
+      setCandidates(null)
+      toast.success(`${c.poNumber} から引き当てました`)
     })
-    form.setValue(`items.${idx}.quantity`, c.quantity != null ? String(c.quantity) : "")
-    form.setValue(`items.${idx}.unit`, c.unit ?? "")
-    form.setValue(`items.${idx}.unitPrice`, String(c.unitPrice))
-    form.setValue(`items.${idx}.currency`, c.currency)
-    form.setValue(`items.${idx}.materialId`, c.materialId)
-    form.setValue(`items.${idx}.sourcePoItemId`, c.poItemId)
-    setCandidates(null)
-    toast.success(`${c.poNumber} から引き当てました`)
-  }
 
   return (
     <div className="relative">
@@ -1441,19 +1469,20 @@ function PastWoSearch({
       if (rows.length === 0) toast.info("該当する過去作業発注明細がありません")
     })
   }
-  const apply = (c: PastWoItemCandidate) => {
-    form.setValue(`items.${idx}.itemName`, c.workDescription || "（過去作業発注）", {
-      shouldValidate: true,
+  const apply = (c: PastWoItemCandidate) =>
+    preserveDialogScroll(() => {
+      form.setValue(`items.${idx}.itemName`, c.workDescription || "（過去作業発注）", {
+        shouldValidate: true,
+      })
+      form.setValue(`items.${idx}.quantity`, c.quantity != null ? String(c.quantity) : "")
+      form.setValue(`items.${idx}.unit`, c.unit ?? "")
+      form.setValue(`items.${idx}.unitPrice`, String(c.unitPrice))
+      form.setValue(`items.${idx}.currency`, c.currency)
+      form.setValue(`items.${idx}.costCategoryId`, c.costCategoryId)
+      form.setValue(`items.${idx}.sourceWoItemId`, c.woItemId)
+      setCandidates(null)
+      toast.success(`${c.woNumber} から引き当てました`)
     })
-    form.setValue(`items.${idx}.quantity`, c.quantity != null ? String(c.quantity) : "")
-    form.setValue(`items.${idx}.unit`, c.unit ?? "")
-    form.setValue(`items.${idx}.unitPrice`, String(c.unitPrice))
-    form.setValue(`items.${idx}.currency`, c.currency)
-    form.setValue(`items.${idx}.costCategoryId`, c.costCategoryId)
-    form.setValue(`items.${idx}.sourceWoItemId`, c.woItemId)
-    setCandidates(null)
-    toast.success(`${c.woNumber} から引き当てました`)
-  }
 
   return (
     <div className="relative">
