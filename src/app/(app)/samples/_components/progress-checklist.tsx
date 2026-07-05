@@ -413,7 +413,7 @@ function AddProcessingDialog({
           加工を追加
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-md">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>加工を追加</DialogTitle>
           <DialogDescription>

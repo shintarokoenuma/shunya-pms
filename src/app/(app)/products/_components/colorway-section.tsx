@@ -429,7 +429,7 @@ function ColorwayDialogShell({
 }) {
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="flex max-h-[90vh] max-w-lg flex-col overflow-y-auto">
+      <DialogContent className="flex max-h-[90vh] sm:max-w-lg flex-col overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
