@@ -1057,6 +1057,14 @@ function ItemCard({
   const isMaterial = category === RoughEstimateCategory.MATERIAL
   const isLabor = category === RoughEstimateCategory.LABOR
 
+  // USD 行のとき、¥換算(subtotalJpy)の下に薄く併記する $ 小計（行ネイティブ通貨の小計）。
+  // subtotalJpy からは逆算しない（レート未入力で null・0除算対策）。数量×単価から直接算出。
+  const isUsdRow = itemValue?.currency === Currency.USD
+  const usdQ = toNumOrNull(itemValue?.quantity)
+  const usdP = toNumOrNull(itemValue?.unitPrice)
+  const usdSubtotal =
+    isUsdRow && usdQ != null && usdP != null ? usdQ * usdP : null
+
   // PAST_PO 引き当ての痕跡。直近詳細（appliedInfo）は親が保持、無い（編集で開き直した等）ときは
   // sourcePoItemId の存在のみで最小バッジにフォールバック（追加クエリなし・軽量版）。
   // 表示条件は source===PAST_PO かつ sourcePoItemId 非null の AND（MANUAL へ変えたら消える）。
@@ -1400,10 +1408,20 @@ function ItemCard({
         />
         <FormItem>
           <FormLabel className="text-xs">小計(JPY)</FormLabel>
-          <div className="flex h-9 items-center px-1 font-mono text-sm">
-            {subtotalJpy === null
-              ? "—"
-              : `¥${subtotalJpy.toLocaleString("ja-JP")}`}
+          <div className="flex h-9 flex-col items-start justify-center px-1 font-mono">
+            <span className="text-sm leading-tight">
+              {subtotalJpy === null
+                ? "—"
+                : `¥${subtotalJpy.toLocaleString("ja-JP")}`}
+            </span>
+            {usdSubtotal !== null && (
+              <span className="text-[10px] leading-tight text-muted-foreground">
+                {`$${usdSubtotal.toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}`}
+              </span>
+            )}
           </div>
         </FormItem>
       </div>
