@@ -414,6 +414,12 @@ function RoughEstimateFormDialog({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [loading, setLoading] = useState(editingId !== null)
+  // PAST_PO 引き当ての直近詳細（PO番号・品目名）を明細 index で保持。
+  // ItemCard は useFieldArray の都合で apply 後に再マウントし得るため、
+  // 再マウントしない親（FormDialog）側で保持する（編集で開き直すと空＝最小バッジにフォールバック）。
+  const [appliedByIdx, setAppliedByIdx] = useState<
+    Record<number, { poNumber: string; displayName: string }>
+  >({})
 
   const form = useForm<RoughEstimateFormValues>({
     resolver: zodResolver(roughEstimateInputSchema),
@@ -812,6 +818,10 @@ function RoughEstimateFormDialog({
                     materials={materials}
                     costCategories={costCategories}
                     suppliers={suppliers}
+                    appliedInfo={appliedByIdx[idx] ?? null}
+                    onApplied={(info) =>
+                      setAppliedByIdx((prev) => ({ ...prev, [idx]: info }))
+                    }
                     onRemove={() => (fields.length > 1 ? remove(idx) : null)}
                     canRemove={fields.length > 1}
                   />
@@ -898,15 +908,27 @@ function RoughEstimateFormDialog({
                       インクルーズには提示MOQ（1以上）が必要です。
                     </div>
                   )
-                ) : (
-                  breakdown.perUnit && (
+                ) : breakdown.perUnit ? (
+                  <div className="rounded bg-muted p-2 space-y-1">
+                    {/* SEPARATE の1枚あたりは必ず量産提示分÷MOQ（productionPricePerUnitJpy）。
+                        初期費用込みの includedPerUnitPriceJpy は使わない＝別枠請求の絶対防衛線（v0.1 §6）。 */}
+                    <div className="flex justify-between font-medium">
+                      <span>1枚あたり提示単価（量産分・初期費用は別枠）</span>
+                      <span className="font-mono">
+                        {jpy(breakdown.perUnit.productionPricePerUnitJpy)}
+                      </span>
+                    </div>
                     <div className="flex justify-between text-muted-foreground">
                       <span>参考：1枚あたり原価（初期費用抜き）</span>
                       <span className="font-mono">
                         {jpy(breakdown.perUnit.costPerUnitJpy)}
                       </span>
                     </div>
-                  )
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground">
+                    1枚あたり提示単価は提示MOQを入力すると表示されます
+                  </div>
                 )}
 
                 {summary.belowMarginWarning && (
@@ -1012,6 +1034,8 @@ function ItemCard({
   materials,
   costCategories,
   suppliers,
+  appliedInfo,
+  onApplied,
   onRemove,
   canRemove,
 }: {
@@ -1022,6 +1046,8 @@ function ItemCard({
   materials: MaterialOption[]
   costCategories: CostCategoryOption[]
   suppliers: SupplierOption[]
+  appliedInfo: { poNumber: string; displayName: string } | null
+  onApplied: (info: { poNumber: string; displayName: string }) => void
   onRemove: () => void
   canRemove: boolean
 }) {
@@ -1030,6 +1056,13 @@ function ItemCard({
   const isInitial = category === RoughEstimateCategory.INITIAL_COST
   const isMaterial = category === RoughEstimateCategory.MATERIAL
   const isLabor = category === RoughEstimateCategory.LABOR
+
+  // PAST_PO 引き当ての痕跡。直近詳細（appliedInfo）は親が保持、無い（編集で開き直した等）ときは
+  // sourcePoItemId の存在のみで最小バッジにフォールバック（追加クエリなし・軽量版）。
+  // 表示条件は source===PAST_PO かつ sourcePoItemId 非null の AND（MANUAL へ変えたら消える）。
+  const isAllocated =
+    source === RoughEstimateItemSource.PAST_PO &&
+    !!itemValue?.sourcePoItemId
 
   // 素材選択時に品目名が空なら自動補完（任意で上書き可）。setValue 連鎖のスクロール巻き戻りを回避。
   const onPickMaterial = (materialId: string | null) =>
@@ -1072,6 +1105,13 @@ function ItemCard({
           <Badge variant={isInitial ? "outline" : "secondary"}>
             {ROUGH_ESTIMATE_CATEGORY_LABELS[category]}
           </Badge>
+          {isAllocated && (
+            <Badge variant="outline" className="border-emerald-300 text-emerald-700">
+              {appliedInfo
+                ? `引き当て: ${appliedInfo.poNumber} / ${appliedInfo.displayName}`
+                : "引き当て済み（PAST_PO）"}
+            </Badge>
+          )}
           {isInitial && (
             <span className="text-[11px] text-amber-700">
               別枠・原価に含めない
@@ -1260,7 +1300,12 @@ function ItemCard({
             />
           )}
           {source === RoughEstimateItemSource.PAST_PO && isMaterial && (
-            <PastPoSearch form={form} idx={idx} suppliers={suppliers} />
+            <PastPoSearch
+              form={form}
+              idx={idx}
+              suppliers={suppliers}
+              onApplied={onApplied}
+            />
           )}
           {source === RoughEstimateItemSource.PAST_WO && isLabor && (
             <PastWoSearch
@@ -1374,10 +1419,12 @@ function PastPoSearch({
   form,
   idx,
   suppliers,
+  onApplied,
 }: {
   form: UseFormReturn<RoughEstimateFormValues>
   idx: number
   suppliers: SupplierOption[]
+  onApplied: (info: { poNumber: string; displayName: string }) => void
 }) {
   // 検索キーはローカル state の仕入先 id（setValue 連鎖を伴わないためスクロール巻き戻りは起きない）。
   const [supplierId, setSupplierId] = useState<string | null>(null)
@@ -1407,6 +1454,8 @@ function PastPoSearch({
       // 素材マスター品目なら materialId を焼く。自由名品目なら null（sourcePoItemId で追跡）。
       form.setValue(`items.${idx}.materialId`, c.materialId)
       form.setValue(`items.${idx}.sourcePoItemId`, c.poItemId)
+      // 直近引き当ての詳細を行バッジへ（PO番号・品目名）。
+      onApplied({ poNumber: c.poNumber, displayName: c.displayName })
       setCandidates(null)
       toast.success(`${c.poNumber} から引き当てました`)
     })
