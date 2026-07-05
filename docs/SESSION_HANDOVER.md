@@ -1,75 +1,76 @@
-# shunya-pms セッション引き継ぎメモ（2026-07-01 / QE-1R 実装ブリーフ v1.0 完成まで）
+# shunya-pms セッション引き継ぎメモ（2026-07-05 / QE-1R P1〜P4完了・引き当て詳細は次回に持ち越し）
 
 ## ⓪ プロジェクト棲み分け（毎回先頭・要目視確認）
 - 対象: shunya-pms（repo: github.com/shintarokoenuma/shunya-pms / local: ~/shunya-production-system / 本番: shunya-pms-web-production.up.railway.app）
 - saagara-v2 とは別物。Claude Code 着手前に VS Code が ~/shunya-production-system を指しているか目視確認。
 
-## 1. 本セッションの成果（設計フェーズ完了）
-見積もりの框の組み直し（サンプル軸/量産軸の分離）から、QE-1R（概算量産見積）の仕様確認書・実装ブリーフまで、設計フェーズが一本で完結した。
+## 1. 本セッションの成果
+QE-1R（概算量産見積）の実装を P1〜P4 まで完走し、実機での複数ラウンドの不具合修正まで完了した。
 
-- (あ)(い) の文字ラベルは廃止。サンプルと量産は別軸。量産軸の中を「概算レーン(QE-1R)」と「確定計算レーン(QE-1)」に分ける、で確定。
-- サンプル軸（サンプル請求）= サンプルを作って納める代金。初期費用が別項目。概算段階は持たない。
-- 量産軸 = 概算レーン(QE-1R・保存型・提示価格) / 確定計算レーン(QE-1 v1.0・原価計算のみ)。
-- QE-1R の設計は v0.1（框）→ v1.0（実装ブリーフ・列定義まで）で完結。次は実装フェーズ（P1〜）。
+- **P1（スキーマ＋migration・dev反映）**: RoughEstimate/RoughEstimateItem 2モデル＋enum3種、migration 39本目。dev db push済み・慎太郎さん目視確認済み。
+- **P2（サーバ側ロジック）**: 採番（RE-{year}-NNNN・P2002リトライ）／デフォルト利益率供給（Brand.defaultMarginRate）／過去実額引き当てクエリ（PoItem.materialId・WoItem.costCategoryId）／集計純関数（INITIAL_COST を原価分子から除外する絶対防衛線）。dev smoke で検算済み。
+- **P3（UI＋結線）**: products/[id] の資材表BOM→資材所要量→マーキング実測の直後にQE-1Rセクション設置。
+- **P4以降（実機不具合修正・複数ラウンド）**:
+  - A-1〜A-4: ダイアログ崩れ・更新反映バグ（実は表示側の再計算漏れが原因）・工賃小計「—」バグ（form.watch()→useWatch化で解消）・MANUAL入力でも素材/費目選択できるように修正
+  - B-1〜B-3: expectedQuantityBand列を削除（タイトル欄に統合）／初期費用インクルーズ切替機能（InitialCostBillingMode enum・SEPARATE/INCLUDED・提示MOQで割り返し1枚あたり配賦）／提示価格の内訳表示分離（量産提示分／初期費用提示分）
+  - ダイアログ幅の全社的是正: 共通dialog.tsxのデフォルトがsm:max-w-sm(384px)で、個別ページのmax-w-*（sm:無し）は全てこれに負けて効いていなかったという根本原因を特定。共通デフォルトをsm:max-w-lgに是正し、各フォーム系ダイアログもsm:max-w-*に統一。
+  - 明細セレクトの文字重なり・スクロール巻き戻りバグ: 真因はposition="popper"だけでは足りず、onValueChange内で他フィールドへform.setValueを連鎖させるSelect（費目区分・素材ピッカー・費目ピッカー・PAST_PO/WO候補焼き込み）で、選択→setValue→再レンダリング中にダイアログのscrollTopが巻き戻ることが原因。preserveDialogScroll()でdouble rAF方式のスクロール位置復元を実装し解消。慎太郎さん実機確認済み（「治りました」）。
+  - 費目区分↔出所（source）の連動制限: MATERIAL→MANUAL/PAST_POのみ、LABOR→MANUAL/PAST_WOのみ、INITIAL_COST→MANUALのみ。費目区分変更時に無効なsourceは自動でMANUALへリセット。
+  - 引き当て候補に親PO/WOのタイトル表示を追加。
 
-## 2. 完了状態・本セッションのコミット
-- 本セッションのコミット（すべて docs 単独・main 直 push）:
-  - 89af2b0: QE-1 v1.0 §0 にサンプル見積との相互リンク追記
-  - afd92b9: 引き継ぎメモ更新（框をサンプル/量産の別軸へ組み直し）
-  - ed73e18: 概算量産見積(QE-1R) 仕様確認書 v0.1
-  - 27d804f: 引き継ぎメモ更新（QE-1R v0.1 確定・次は実装ブリーフ）
-  - f957788: 概算量産見積(QE-1R) 実装ブリーフ v1.0 ← 本セッションの最終成果
-- main 先頭: f957788
+## 2. 完了状態・PR状態
+- ブランチ: feat/qe1r-p1-rough-estimate-schema
+- PR #96（P1〜P4すべてこの1本に積載・継続中・未マージ）
+- 直近コミット: d617890（スクロール巻き戻り修正・慎太郎さん実機確認済みの最終コミット）
+- マージ判断は慎太郎さん。マージすると本番 migrate deploy（RoughEstimate/RoughEstimateItem 新設テーブル＋enum4種・expectedQuantityBand削除・InitialCostBillingMode追加を含む）が走る＝triple-gate対象。
 
-## 3. QE-1R の設計内容（実装フェーズの前提・詳細は docs/specs/ 2ファイル参照）
-- 仕様確認書: docs/specs/quotation-rough-estimate-spec-confirmation-v0_1-2026-07-01.md（框）
-- 実装ブリーフ: docs/specs/quotation-rough-estimate-implementation-brief-2026-07-01.md（列定義・P1/P2/P3）
-- 要点:
-  - 位置づけ: 量産軸の独立レーン。確定計算 QE-1 とは時間軸でのみ接続・別系統。客に見せるのは提示価格（利益込み）。
-  - 保存箱: 新設2モデル RoughEstimate（ヘッダ）＋ RoughEstimateItem（明細）。既存 Quotation には相乗りしない（必須列が重すぎる・型値に量産概算なし）。→ migration＝初の本番スキーマ変更。triple-gate 対象。
-  - 価格: 提示価格＝原価×(1＋利益率)。利益率＝1件1率・デフォルトは Brand.defaultMarginRate（null時は0%開始）・変更可・材料費/工賃/初期費用の全費目に適用。
-  - 絶対防衛線: 初期費用は価格化するが1枚原価には混ぜない（別枠計上維持）。将来フェーズで「初期費用を1枚単価にインクルーズする切替」をバックログ化済み（客要望対応・§6）。
-  - 赤字警告: marginRate=0 は理由を問わず一律で赤字警告（未設定と明示入力を区別しない・見落とし防止優先で確定）。
-  - 手打ちレイヤー: 最終見積/納品額は人が手打ちで整える。自動計算値をデフォルト表示。自動値と手打ち最終値を別列で両方保存。
-  - source: 過去 PoItem（materialId）＋ WoItem（costCategoryId）のスナップショットコピー（参照リンクにしない）。
-  - 費目区分: 単層3区分 enum（MATERIAL/LABOR/INITIAL_COST）。確定見積のような2階層(external/internal)は持たない。
-  - 採番: RE-{year}-NNNN（既存5関数と同作法・P2002 retry）。
-  - UI設置場所: 未確定・実装 P3 着手時に products/[id] 配下を1回 recon してから確定（唯一の遅延事項）。
+## 3. DB状態
+- dev = hopper.proxy.rlwy.net:12921（postgres-7492）: QE-1R関連スキーマ反映済み・慎太郎さん目視確認済み。P4セッション中の検証用一時データ（PoItem/WoItem等）はすべて削除・親レコードのtitle等も復元済み。
+- 本番 = shuttle.proxy.rlwy.net:16099（postgres-ab6d）: 未反映（PR #96マージ後にtriple-gateで実施）。
+- migration本数: 39本目（20260701000000_rough_estimate、PR未マージのため直接書き換え可能な状態で複数回改訂している。マージ前提でこのまま1本として本番に流す）。
 
-## 4. DB 状態
-- 本セッションで DB 書き込みは一切無し（docs のみ・migration 無し）。
-- dev=hopper.proxy.rlwy.net:12921（postgres-7492）/ 本番=shuttle.proxy.rlwy.net:16099（postgres-ab6d）。残置データ変更なし。
-- 次フェーズで初の migration が発生する（RoughEstimate/RoughEstimateItem 純増テーブル＋enum3種）。triple-gate（dev db push確認→本番 dry-run ROLLBACK＋件数→本番 migrate deploy commit）必須。
+## 4. 未確定の設計論点（次回セッションで詰めたいこと＝慎太郎さんの最優先事項）
+QE-1R過去実額引き当てキーの再検討（2026-07-05起票・詳細はメモ#22参照）:
+- 現行設計: PAST_PO引き当てはmaterialId（素材マスター）キー、PAST_WO引き当てはcostCategoryId（費目マスター）キーで検索。
+- 慎太郎さんの指摘: 工賃（costCategoryId）は費目マスターで問題ないが、材料費側は「素材マスターに登録済み」でないと引き当てできず、都度素材登録が必要になり実務で使われない懸念がある。
+- 代替案: 「発注先（仕入先/外注先）」をキーにする方が、材料費・工賃の両方で共通に使え実用的ではないか、という論点。
+- 次回セッション最優先タスク: この引き当てキー設計を再検討する（材料費側だけ仕入先ベースに変える案／両方仕入先ベースに揃える案、を比較検討してから実装方針を決める）。設計変更を伴うため、着手前に design-reread Step 0 で対象確定してから進める。
 
-## 5. 次セッションで最初にやること（優先順）
-1. STEP 0: git log origin/main で実態確認（main 先頭が f957788 か）。
-2. design-reread Step 0 発動 → docs/specs/quotation-rough-estimate-implementation-brief-2026-07-01.md（§8 記載の再確認リスト: 本ブリーフ＋v0.1＋QE-1 v1.0 §5/§7＋product-sample §6-2＋実スキーマ live grep）を読み直してから着手。
-3. QE-1R 実装 P1 から開始（ブリーフ §7）:
-   - schema.prisma に RoughEstimate/RoughEstimateItem 2モデル＋enum3種（RoughEstimateCategory/RoughEstimateItemSource/MarginRateSource）を追加。
-   - enum ごとに co-located Record<enum,string> ラベル定義を同 PR に含める（house rule）。
-   - prisma db push（dev: hopper:12921）→ prisma generate → tsc/lint/build クリーン。
-   - P1完了でいったん停止。慎太郎さんが dev 反映を確認するまで P2 に進まない。
-4. P1 の作業はコードを含むので feature ブランチ＋PR（docs 単独ではない・main 直 push 不可）。
+## 5. 記憶に残っているその他のバックログ（QE-1Rとは別テーマ・優先度中）
+- WorkOrder（WO）がステータス=DRAFTの間は編集を許可してほしい（メモ#21）
+- PurchaseOrder（PO）を品番カルテから作成した場合、保存後に一覧ページへ飛ばさずカルテ内に留まってほしい（メモ#23）
+- PO明細行の「複製」機能（色違い・サイズ違いの発注を効率化）
+- 全体的な入力UX見直し（入力動線・必須項目視認性・色分け等）
 
-## 6. 注意点・残課題・教訓
-- 【解消済み】design-reread スキルの Step 0「対象確定ゲート」: claude.ai へアップロード上書き済み。次回発動時に先頭で Step 0 が出るか再確認。
-- 【教訓】見積もりを (あ)(い) の文字ラベルで組むと裏返る。現実の名前（サンプル請求／量産見積の概算・確定）で呼ぶことで解消。今後も新規の層を扱う時はこの教訓を優先。
-- 【プロセス】spec/ブリーフを Claude Code に保存させる際、heredoc にコードフェンスを含む本文を渡すと誤検知の恐れがあるため、フェンスは字下げブロックに置換して渡す（本セッションで実施・以後も踏襲）。
-- 【プロセス】heredoc にプレースホルダを残さない。Claude Code は「file not read」等で検知して停止するのが正しい挙動（本セッションで2回発生・都度検知され事故なし）。
-- 【業界標準形】サンプルと量産は別軸／量産だけ概算→確定の段階を持つ／初期費用はサンプル側別項目かつ量産側でも別枠、が標準。慎太郎さんの商売と合致確認済み。
+## 6. 次セッションで最初にやること（優先順）
+1. STEP 0: git log origin/main --oneline -8 で実態確認。
+2. design-reread Step 0 発動 → QE-1R引き当てキー再検討の対象確定（v0.1 §4「一次source」の記述を再読）。
+3. 引き当てキー設計の再検討（§4参照）に着手。慎太郎さんとの論点整理から入る。
+4. 設計が決まれば、既存のlistPastPoItemsByMaterial/listPastWoItemsByCostCategoryとUI（PastPoSearch/PastWoSearch）を改修。PR #96はまだ未マージなので、同一PRに追加するかどうかは慎太郎さんと相談。
+5. PR #96自体のマージ判断も並行して仰ぐ（ローカル目視は完了済み、マージのタイミングは慎太郎さん次第）。
 
-## 7. 本日マージされたコミット一覧
-- 89af2b0 docs: QE-1 v1.0 冒頭にサンプル見積との相互リンク追記
-- afd92b9 docs: セッション引き継ぎメモ更新（框をサンプル/量産の別軸へ組み直し）
-- ed73e18 docs: 概算量産見積(QE-1R) 仕様確認書 v0.1
-- 27d804f docs: セッション引き継ぎメモ更新（QE-1R v0.1 確定・次は実装ブリーフ）
-- f957788 docs: 概算量産見積(QE-1R) 実装ブリーフ v1.0
+## 7. 注意点・教訓（本セッションで得た重要な学び）
+- 「ビルドが通った」「コードを直した」だけで「直りました」と報告しない。今セッションで複数回、Claude Codeがコード修正のみで完了報告し、実際には直っていない事態が発生した。以後は必ずPlaywright等で実際にブラウザ操作を再現し、スクリーンショット・実測値（scrollTop等）で裏取りしてから報告するルールを徹底した。
+- headless環境で再現しない不具合がある。ダイアログのスクロール巻き戻りは、viewport高さや明細行数を変えることで初めてheadlessでも再現できた。「headlessで再現しないので対策のみ」という報告は不十分な場合があるため、条件を変えて再現を試みることが重要。
+- 共通コンポーネントのデフォルト値がページ側の指定に勝つケースがある（Tailwindのクラス優先順位・sm:変種の有無で発生）。個別ページの「幅を広げたはず」という思い込みだけで判断せず、実際にDOMを検証すること。
+- 設計論点（引き当てキーの妥当性）は実装バグとは別に扱う。慎太郎さんからの「わかりずらい」「流用性がない」といった指摘は、バグ修正ではなく設計変更の話であり、次回セッションで腰を据えて検討する。
 
-## 8. open PR
-- #94（B-065・保留）のみ。本セッションでの新規 PR なし（すべて docs 単独・main 直 push）。
+## 8. 本セッションでのコミット一覧（PR #96・feature branchへの積み増し。mainへのマージはまだ）
+- cf81638 P1: スキーマ
+- 78220b0 P2: サーバ側ロジック
+- 6e1f04d P3: UI＋結線
+- 0f58634 P4: 不具合修正＋初期費用インクルーズ切替
+- 014ff06 hotfix: Runtime TypeError（Prisma generate漏れ）
+- e259d9c fix: ダイアログ幅の全社的是正
+- 1e30f28 fix: SelectTrigger w-full化（一部原因）
+- e491a25 fix: ダイアログ幅の真因修正（sm:max-w-*統一）
+- 3d019f0 feat: 費目↔出所連動制限＋候補タイトル表示
+- cf9e86a fix: スクロールジャンプ修正（position=popper・不完全）
+- 91492d0 fix: 全SelectContent popper徹底＋autoComplete対策
+- d617890 fix: スクロール巻き戻りの真因修正（preserveDialogScroll・慎太郎さん実機確認済み）
 
 ## 9. 次セッション冒頭の手順
 1. このメモで状態復元。
-2. git log origin/main --oneline -8 で実態確認（先頭 f957788 か）。
-3. design-reread スキル発動（Step 0 対象確定ゲート→上記5-2の再確認リストを読み直し）。
-4. QE-1R 実装 P1 着手（feature ブランチ作成 → schema.prisma 編集 → dev push → 停止）。
+2. git log origin/main --oneline -8 で実態確認（feature branchの先頭がd617890か、あるいはさらに進んでいないか確認）。
+3. design-reread スキル発動 → v0.1 §4を再読してから引き当てキー設計の論点整理に入る。
+4. 慎太郎さんと「材料費側だけ仕入先ベースに変える」か「両方仕入先ベースに揃える」かを相談し、方針確定後に実装。
