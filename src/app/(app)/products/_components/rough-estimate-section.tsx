@@ -616,7 +616,7 @@ function RoughEstimateFormDialog({
                             <SelectValue />
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent>
+                        <SelectContent position="popper">
                           {QE_CURRENCY_OPTIONS.map((o) => (
                             <SelectItem key={o.value} value={o.value}>
                               {o.label}
@@ -1086,7 +1086,7 @@ function ItemCard({
                     <SelectValue />
                   </SelectTrigger>
                 </FormControl>
-                <SelectContent>
+                <SelectContent position="popper">
                   {ROUGH_ESTIMATE_CATEGORY_OPTIONS.map((o) => (
                     <SelectItem key={o.value} value={o.value}>
                       {o.label}
@@ -1109,7 +1109,7 @@ function ItemCard({
                     <SelectValue />
                   </SelectTrigger>
                 </FormControl>
-                <SelectContent>
+                <SelectContent position="popper">
                   {/* 費目区分に応じて選べる出所を制限（確定仕様） */}
                   {SOURCE_OPTIONS.filter((o) =>
                     allowedSourcesFor(category).includes(o.value),
@@ -1171,7 +1171,7 @@ function ItemCard({
                         <SelectValue placeholder="素材を選択（任意）" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent position="popper">
                       <SelectItem value={NONE}>（未選択）</SelectItem>
                       {materials.map((m) => (
                         <SelectItem key={m.id} value={m.id}>
@@ -1207,7 +1207,7 @@ function ItemCard({
                         <SelectValue placeholder="費目を選択（任意）" />
                       </SelectTrigger>
                     </FormControl>
-                    <SelectContent>
+                    <SelectContent position="popper">
                       <SelectItem value={NONE}>（未選択）</SelectItem>
                       {costCategories.map((c) => (
                         <SelectItem key={c.id} value={c.id}>
@@ -1306,7 +1306,7 @@ function ItemCard({
                     <SelectValue />
                   </SelectTrigger>
                 </FormControl>
-                <SelectContent>
+                <SelectContent position="popper">
                   {QE_CURRENCY_OPTIONS.map((o) => (
                     <SelectItem key={o.value} value={o.value}>
                       {o.value}
