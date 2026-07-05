@@ -593,7 +593,7 @@ function RoughEstimateFormDialog({
                       <FormLabel>通貨（前提）</FormLabel>
                       <Select value={field.value} onValueChange={field.onChange}>
                         <FormControl>
-                          <SelectTrigger>
+                          <SelectTrigger className="w-full">
                             <SelectValue />
                           </SelectTrigger>
                         </FormControl>
@@ -1047,7 +1047,7 @@ function ItemCard({
               <FormLabel className="text-xs">費目区分</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                 </FormControl>
@@ -1070,7 +1070,7 @@ function ItemCard({
               <FormLabel className="text-xs">出所</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                 </FormControl>
@@ -1129,7 +1129,7 @@ function ItemCard({
                     onValueChange={(v) => onPickMaterial(v === NONE ? null : v)}
                   >
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="素材を選択（任意）" />
                       </SelectTrigger>
                     </FormControl>
@@ -1165,7 +1165,7 @@ function ItemCard({
                     }
                   >
                     <FormControl>
-                      <SelectTrigger>
+                      <SelectTrigger className="w-full">
                         <SelectValue placeholder="費目を選択（任意）" />
                       </SelectTrigger>
                     </FormControl>
@@ -1264,7 +1264,7 @@ function ItemCard({
               <FormLabel className="text-xs">通貨</FormLabel>
               <Select value={field.value} onValueChange={field.onChange}>
                 <FormControl>
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                 </FormControl>
