@@ -124,8 +124,10 @@ export type PastPoItemCandidate = {
   poItemId: string
   poNumber: string
   poTitle: string | null // 引き当て元 PurchaseOrder.title（識別用）
-  materialId: string | null
-  itemLabel: string | null
+  materialId: string | null // 焼き込み用に残す（素材マスター品目のとき非null）
+  displayName: string // 表示名: customItemName 優先 → 素材名 → 「（過去発注）」
+  color: string | null // 品目識別補助
+  colorCode: string | null
   quantity: number | null
   unit: string | null
   unitPrice: number
@@ -147,16 +149,21 @@ export type PastWoItemCandidate = {
   subtotal: number | null
 }
 
-/** materialId キーで過去 PoItem（単価確定分）を新しい順に引き当て候補として返す（PAST_PO）。 */
-export async function listPastPoItemsByMaterial(
-  materialId: string,
+/**
+ * 仕入先キーで過去 PoItem（単価確定分）を新しい順に引き当て候補として返す（PAST_PO）。
+ * 素材マスター未登録の品目も引けるよう、materialId ではなく親 PurchaseOrder.supplierId で絞る。
+ * 表示名は customItemName 優先、null なら素材名を一括解決して補う。
+ */
+export async function listPastPoItemsBySupplier(
+  supplierId: string,
 ): Promise<PastPoItemCandidate[]> {
   const sess = await requireSession()
   if (!sess.ok) return []
-  if (!materialId) return []
+  if (!supplierId) return []
 
+  // その仕入先の PO だけを親として絞る（会社スコープ＋論理削除除外）。
   const pos = await prisma.purchaseOrder.findMany({
-    where: { companyId: sess.companyId, deletedAt: null },
+    where: { companyId: sess.companyId, deletedAt: null, supplierId },
     select: { id: true, poNumber: true, title: true, orderDate: true },
   })
   if (pos.length === 0) return []
@@ -165,21 +172,39 @@ export async function listPastPoItemsByMaterial(
   const items = await prisma.poItem.findMany({
     where: {
       poId: { in: [...poById.keys()] },
-      materialId,
       unitPrice: { not: null },
     },
     orderBy: { createdAt: "desc" },
-    take: 20,
+    take: 50,
   })
+
+  // customItemName が null（素材マスター品目）の行の表示名用に、素材名を一括解決。
+  const materialIds = [
+    ...new Set(items.map((it) => it.materialId).filter((v): v is string => !!v)),
+  ]
+  const materialNameById = new Map<string, string>()
+  if (materialIds.length > 0) {
+    const mats = await prisma.material.findMany({
+      where: { companyId: sess.companyId, id: { in: materialIds } },
+      select: { id: true, materialName: true },
+    })
+    mats.forEach((m) => materialNameById.set(m.id, m.materialName))
+  }
 
   return items.map((it) => {
     const po = poById.get(it.poId)
+    const displayName =
+      it.customItemName ??
+      (it.materialId ? materialNameById.get(it.materialId) ?? null : null) ??
+      "（過去発注）"
     return {
       poItemId: it.id,
       poNumber: po?.poNumber ?? "",
       poTitle: po?.title ?? null,
       materialId: it.materialId,
-      itemLabel: it.customItemName,
+      displayName,
+      color: it.color,
+      colorCode: it.colorCode,
       quantity: it.quantity != null ? Number(it.quantity) : null,
       unit: it.unit,
       unitPrice: Number(it.unitPrice),

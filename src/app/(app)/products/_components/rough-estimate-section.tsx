@@ -29,7 +29,7 @@ import {
   updateRoughEstimate,
   softDeleteRoughEstimate,
   getRoughEstimateForEdit,
-  listPastPoItemsByMaterial,
+  listPastPoItemsBySupplier,
   listPastWoItemsByCostCategory,
   type RoughEstimateListRow,
   type PastPoItemCandidate,
@@ -38,6 +38,7 @@ import {
 import type {
   MaterialOption,
   CostCategoryOption,
+  SupplierOption,
 } from "@/lib/actions/purchase-orders"
 import {
   ROUGH_ESTIMATE_CATEGORY_LABELS,
@@ -148,6 +149,7 @@ type Props = {
   brandDefaultMarginRate: number
   materials: MaterialOption[]
   costCategories: CostCategoryOption[]
+  suppliers: SupplierOption[]
 }
 
 function jpy(n: number | null): string {
@@ -160,6 +162,7 @@ export function RoughEstimateSection({
   brandDefaultMarginRate,
   materials,
   costCategories,
+  suppliers,
 }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -306,6 +309,7 @@ export function RoughEstimateSection({
           brandDefaultMarginRate={brandDefaultMarginRate}
           materials={materials}
           costCategories={costCategories}
+          suppliers={suppliers}
           onClose={() => setDialogOpen(false)}
         />
       )}
@@ -396,6 +400,7 @@ function RoughEstimateFormDialog({
   brandDefaultMarginRate,
   materials,
   costCategories,
+  suppliers,
   onClose,
 }: {
   productId: string
@@ -403,6 +408,7 @@ function RoughEstimateFormDialog({
   brandDefaultMarginRate: number
   materials: MaterialOption[]
   costCategories: CostCategoryOption[]
+  suppliers: SupplierOption[]
   onClose: () => void
 }) {
   const router = useRouter()
@@ -805,6 +811,7 @@ function RoughEstimateFormDialog({
                     subtotalJpy={rowSubtotals[idx] ?? null}
                     materials={materials}
                     costCategories={costCategories}
+                    suppliers={suppliers}
                     onRemove={() => (fields.length > 1 ? remove(idx) : null)}
                     canRemove={fields.length > 1}
                   />
@@ -1004,6 +1011,7 @@ function ItemCard({
   subtotalJpy,
   materials,
   costCategories,
+  suppliers,
   onRemove,
   canRemove,
 }: {
@@ -1013,6 +1021,7 @@ function ItemCard({
   subtotalJpy: number | null
   materials: MaterialOption[]
   costCategories: CostCategoryOption[]
+  suppliers: SupplierOption[]
   onRemove: () => void
   canRemove: boolean
 }) {
@@ -1251,7 +1260,7 @@ function ItemCard({
             />
           )}
           {source === RoughEstimateItemSource.PAST_PO && isMaterial && (
-            <PastPoSearch form={form} idx={idx} materialId={itemValue?.materialId ?? null} />
+            <PastPoSearch form={form} idx={idx} suppliers={suppliers} />
           )}
           {source === RoughEstimateItemSource.PAST_WO && isLabor && (
             <PastWoSearch
@@ -1358,40 +1367,44 @@ function ItemCard({
 }
 
 // =============================================================================
-// 過去実額の検索ボタン＋結果（行の materialId / costCategoryId をキーに引き当て・焼き込み）
+// 過去実額の検索ボタン＋結果
+// PAST_PO は仕入先（PurchaseOrder.supplierId）キーで引き当て（素材未登録品目も引ける）。焼き込み。
 // =============================================================================
 function PastPoSearch({
   form,
   idx,
-  materialId,
+  suppliers,
 }: {
   form: UseFormReturn<RoughEstimateFormValues>
   idx: number
-  materialId: string | null
+  suppliers: SupplierOption[]
 }) {
+  // 検索キーはローカル state の仕入先 id（setValue 連鎖を伴わないためスクロール巻き戻りは起きない）。
+  const [supplierId, setSupplierId] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
   const [candidates, setCandidates] = useState<PastPoItemCandidate[] | null>(null)
 
   const search = () => {
-    if (!materialId) {
-      toast.error("素材を選択してください")
+    if (!supplierId) {
+      toast.error("仕入先を選択してください")
       return
     }
     startTransition(async () => {
-      const rows = await listPastPoItemsByMaterial(materialId)
+      const rows = await listPastPoItemsBySupplier(supplierId)
       setCandidates(rows)
       if (rows.length === 0) toast.info("該当する過去発注明細がありません")
     })
   }
   const apply = (c: PastPoItemCandidate) =>
     preserveDialogScroll(() => {
-      form.setValue(`items.${idx}.itemName`, c.itemLabel ?? "（過去発注）", {
+      form.setValue(`items.${idx}.itemName`, c.displayName, {
         shouldValidate: true,
       })
       form.setValue(`items.${idx}.quantity`, c.quantity != null ? String(c.quantity) : "")
       form.setValue(`items.${idx}.unit`, c.unit ?? "")
       form.setValue(`items.${idx}.unitPrice`, String(c.unitPrice))
       form.setValue(`items.${idx}.currency`, c.currency)
+      // 素材マスター品目なら materialId を焼く。自由名品目なら null（sourcePoItemId で追跡）。
       form.setValue(`items.${idx}.materialId`, c.materialId)
       form.setValue(`items.${idx}.sourcePoItemId`, c.poItemId)
       setCandidates(null)
@@ -1399,7 +1412,31 @@ function PastPoSearch({
     })
 
   return (
-    <div className="relative">
+    <div className="relative flex items-end gap-2">
+      <div className="w-48">
+        <span className="text-xs text-muted-foreground">
+          引き当て仕入先（PAST_PO）
+        </span>
+        <Select
+          value={supplierId ?? NONE}
+          onValueChange={(v) => setSupplierId(v === NONE ? null : v)}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="仕入先を選択" />
+          </SelectTrigger>
+          <SelectContent position="popper">
+            <SelectItem value={NONE}>（未選択）</SelectItem>
+            {suppliers.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                <span className="font-mono text-xs text-muted-foreground mr-2">
+                  {s.supplierCode}
+                </span>
+                {s.companyName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
       <Button
         type="button"
         variant="outline"
@@ -1416,7 +1453,7 @@ function PastPoSearch({
         過去発注
       </Button>
       {candidates && candidates.length > 0 && (
-        <div className="absolute right-0 z-10 mt-1 max-h-56 w-96 overflow-y-auto rounded border bg-background shadow">
+        <div className="absolute left-0 top-full z-10 mt-1 max-h-56 w-[30rem] overflow-y-auto rounded border bg-background shadow">
           {candidates.map((c) => (
             <button
               key={c.poItemId}
@@ -1427,14 +1464,22 @@ function PastPoSearch({
               <div className="flex items-center justify-between gap-2">
                 <span className="font-mono text-muted-foreground">
                   {c.poNumber}
+                  {c.orderDate ? ` ・ ${c.orderDate}` : ""}
                 </span>
-                <span className="truncate font-medium">
+                <span className="truncate">
                   {c.poTitle ?? "（無題の発注）"}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <span className="truncate">{c.itemLabel ?? "—"}</span>
-                <span className="font-mono">
+                <span className="truncate font-medium">
+                  {c.displayName}
+                  {(c.color || c.colorCode) && (
+                    <span className="ml-1 font-normal text-muted-foreground">
+                      / {c.color ?? c.colorCode}
+                    </span>
+                  )}
+                </span>
+                <span className="font-mono whitespace-nowrap">
                   {c.currency} {c.unitPrice.toLocaleString("ja-JP")}
                 </span>
               </div>

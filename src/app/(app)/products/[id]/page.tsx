@@ -41,6 +41,7 @@ import {
 import {
   listActiveMaterialsForPoSelect,
   listActiveCostCategoriesForPoSelect,
+  listActiveSuppliersForPoSelect,
 } from "@/lib/actions/purchase-orders"
 import {
   primaryProductCode,
@@ -166,14 +167,20 @@ export default async function ProductDetailPage({
     })),
   }))
 
-  // QE-1R: 概算量産見積（提示価格）。一覧・既定利益率・引き当てピッカー用の素材/費目候補を取得。
-  const [roughEstimateRows, marginDefaultResult, qeMaterials, qeCostCategories] =
-    await Promise.all([
-      listRoughEstimatesByProduct(id),
-      getDefaultMarginRateForProduct(id),
-      listActiveMaterialsForPoSelect(),
-      listActiveCostCategoriesForPoSelect(),
-    ])
+  // QE-1R: 概算量産見積（提示価格）。一覧・既定利益率・引き当てピッカー用の素材/費目/仕入先候補を取得。
+  const [
+    roughEstimateRows,
+    marginDefaultResult,
+    qeMaterials,
+    qeCostCategories,
+    qeSuppliers,
+  ] = await Promise.all([
+    listRoughEstimatesByProduct(id),
+    getDefaultMarginRateForProduct(id),
+    listActiveMaterialsForPoSelect(),
+    listActiveCostCategoriesForPoSelect(),
+    listActiveSuppliersForPoSelect(),
+  ])
   const brandDefaultMarginRate = marginDefaultResult.ok
     ? marginDefaultResult.data.marginRate
     : 0
@@ -522,6 +529,7 @@ export default async function ProductDetailPage({
             brandDefaultMarginRate={brandDefaultMarginRate}
             materials={qeMaterials}
             costCategories={qeCostCategories}
+            suppliers={qeSuppliers}
           />
         </CardContent>
       </Card>
