@@ -1,93 +1,87 @@
-import {
-  Prisma,
-  Currency,
-  InitialCostBillingMode,
-  RoughEstimateCategory,
-} from "@prisma/client"
+import { Prisma, RoughEstimateCategory, InitialCostBillingMode } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { primaryProductCode } from "@/lib/utils/product-code"
-import { computePriceBreakdownFromTotals } from "@/lib/rough-estimate/calc"
+import {
+  computePriceBreakdownFromTotals,
+  resolveUnitPriceJpy,
+  resolveInitialCostPresentedJpy,
+} from "@/lib/rough-estimate/calc"
 
 /**
- * QE-1R 見積書 PDF 用に RoughEstimate を正規化した型（Part B）。
- * ★原価(autoCostTotalJpy)・利益率(marginRate) は型に一切載せない（§6-2・型で漏れ防止）。
+ * QE-1R 見積書 PDF（道A・2セクション＋総合計）用に RoughEstimate を正規化した型。
+ * ★原価（autoCostTotalJpy・subtotalJpy）・利益率（marginRate）・材料/工賃明細は型に一切載せない
+ *   （§5-4・型レベルで漏れ防止）。導出（率掛け）は data 層内部でのみ使い、出力は提示額だけ。
  */
-export type QuotationPdfItem = {
-  itemName: string
-  itemCategory: RoughEstimateCategory
-  quantity: number | null
-  unit: string | null
-  unitPrice: number | null
-  currency: Currency
-  subtotalJpy: number | null
-}
 
-/** 対象品番ブロック（order-data.ts の OrderPdfTarget と同語彙）。 */
-export type QuotationPdfTarget = {
-  brandName: string | null
-  productName: string
-  itemNumber: string
-  season: string | null
-}
-
-export type QuotationPdfBlock = {
-  target: QuotationPdfTarget | null
-  title: string | null
+/** 製品セクションの1行（1見積＝1行）。 */
+export type QuotationPdfProductRow = {
   estimateNumber: string
-  presentedMoq: number | null
-  materialItems: QuotationPdfItem[]
-  laborItems: QuotationPdfItem[]
-  initialCostItems: QuotationPdfItem[]
-  /** 1枚あたり提示単価（§6-3・presentedMoq>0 かつ合計が揃うときのみ）。 */
-  perUnit: { label: string; valueJpy: number } | null
-  /** ご提示価格（§6-1・finalPriceManualJpy ?? autoPriceTotalJpy）。 */
-  finalPriceJpy: number | null
+  /** 品名（productName（productCode）＋title 併記）。 */
+  productLabel: string
+  /** 数量＝提示MOQ。 */
+  quantity: number
+  /** 客提示の1枚単価（手打ち ?? 自動参考・整数円）。 */
+  unitPriceJpy: number
+  /** INCLUDED（初期費用込）表記を付けるか。 */
+  includedBadge: boolean
+  /** 金額＝unitPriceJpy × quantity（電卓一致）。 */
+  amountJpy: number
   notes: string | null
+}
+
+/** 初期費用セクションの1行（SEPARATE の見積の INITIAL_COST 行のみ）。 */
+export type QuotationPdfInitialCostRow = {
+  /** 項目名（itemName（productName 付記）＝どの製品か明示）。 */
+  label: string
+  amountJpy: number
+}
+
+/** 備考行（notes が非 null の見積のみ）。 */
+export type QuotationPdfNoteRow = {
+  productLabel: string
+  notes: string
 }
 
 export type QuotationPdfData = {
   issuedAt: Date
   clientName: string
-  blocks: QuotationPdfBlock[]
+  productRows: QuotationPdfProductRow[]
+  productTotalJpy: number
+  initialCostRows: QuotationPdfInitialCostRow[]
+  initialCostTotalJpy: number
+  grandTotalJpy: number
+  /** INCLUDED を含むか（脚注の出し分け）。 */
+  hasIncluded: boolean
+  notesRows: QuotationPdfNoteRow[]
 }
 
 export type QuotationPdfError = {
-  error: "MIXED_CLIENT" | "NOT_FOUND" | "EMPTY"
+  error: "MIXED_CLIENT" | "NOT_FOUND" | "EMPTY" | "MOQ_REQUIRED" | "UNIT_UNRESOLVED"
+  /** MOQ_REQUIRED / UNIT_UNRESOLVED のとき対象 RE 番号。 */
+  estimateNumbers?: string[]
 }
 
-/** Decimal|number|null → number|null（order-data.ts と同実装）。 */
+/** Decimal|number|null → number|null。 */
 function dec(v: Prisma.Decimal | number | null | undefined): number | null {
   if (v === null || v === undefined) return null
   const n = typeof v === "number" ? v : "toNumber" in v ? v.toNumber() : Number(v)
   return Number.isFinite(n) ? n : null
 }
 
-/** productId 起点で対象品番ブロックを解決（sampleProductionId 起点の既存は流用不可）。 */
-async function resolveTargetByProduct(
+/** 品名ラベル（productName（productCode）＋title 併記）。 */
+async function resolveProductLabel(
   productId: string,
   companyId: string,
-): Promise<QuotationPdfTarget | null> {
+  title: string | null,
+): Promise<string> {
   const product = await prisma.product.findFirst({
     where: { id: productId, companyId },
-    select: {
-      productName: true,
-      productCode: true,
-      clientProductCode: true,
-      season: true,
-      brandId: true,
-    },
+    select: { productName: true, productCode: true, clientProductCode: true },
   })
-  if (!product) return null
-  const brand = await prisma.brand.findFirst({
-    where: { id: product.brandId, companyId },
-    select: { brandName: true },
-  })
-  return {
-    brandName: brand?.brandName ?? null,
-    productName: product.productName,
-    itemNumber: primaryProductCode(product),
-    season: product.season,
-  }
+  const base = product
+    ? `${product.productName}（${primaryProductCode(product)}）`
+    : "（品番不明）"
+  return title ? `${base} ${title}` : base
 }
 
 export async function getQuotationPdfData(
@@ -110,7 +104,7 @@ export async function getQuotationPdfData(
   })
   const clientIdByProduct = new Map(products.map((p) => [p.id, p.clientId]))
 
-  // product 欠損 estimate があると宛先が定まらない → NOT_FOUND。
+  // product 欠損 → 宛先不定 → NOT_FOUND。
   const clientIds = new Set<string>()
   for (const e of estimates) {
     const clientId = clientIdByProduct.get(e.productId)
@@ -119,6 +113,14 @@ export async function getQuotationPdfData(
   }
   if (clientIds.size > 1) return { error: "MIXED_CLIENT" }
 
+  // MOQ_REQUIRED: presentedMoq が null/0 の RE が1件でもあれば弾く（製品行＝単価×MOQ が不成立）。
+  const moqMissing = estimates
+    .filter((e) => e.presentedMoq == null || e.presentedMoq <= 0)
+    .map((e) => e.estimateNumber)
+  if (moqMissing.length > 0) {
+    return { error: "MOQ_REQUIRED", estimateNumbers: moqMissing }
+  }
+
   const clientId = [...clientIds][0]
   const client = await prisma.client.findFirst({
     where: { id: clientId, companyId },
@@ -126,79 +128,101 @@ export async function getQuotationPdfData(
   })
   const clientName = client?.companyName ?? "—"
 
-  // ids の並び順を尊重してブロックを整列。
   const estimateById = new Map(estimates.map((e) => [e.id, e]))
-  const blocks: QuotationPdfBlock[] = []
+  const productRows: QuotationPdfProductRow[] = []
+  const initialCostRows: QuotationPdfInitialCostRow[] = []
+  const notesRows: QuotationPdfNoteRow[] = []
+  const unitUnresolved: string[] = []
+  let hasIncluded = false
+
+  // ids の並び順を尊重。
   for (const id of uniqueIds) {
     const e = estimateById.get(id)
-    if (!e) continue // findMany 数一致を上で担保済み（保険）。
+    if (!e) continue
 
-    const items = await prisma.roughEstimateItem.findMany({
-      where: { roughEstimateId: e.id },
-      orderBy: { itemOrder: "asc" },
-    })
-
-    const materialItems: QuotationPdfItem[] = []
-    const laborItems: QuotationPdfItem[] = []
-    const initialCostItems: QuotationPdfItem[] = []
-    for (const it of items) {
-      const row: QuotationPdfItem = {
-        itemName: it.itemName,
-        itemCategory: it.itemCategory,
-        quantity: dec(it.quantity),
-        unit: it.unit,
-        unitPrice: dec(it.unitPrice),
-        currency: it.currency,
-        subtotalJpy: dec(it.subtotalJpy),
-      }
-      if (it.itemCategory === RoughEstimateCategory.MATERIAL) materialItems.push(row)
-      else if (it.itemCategory === RoughEstimateCategory.LABOR) laborItems.push(row)
-      else initialCostItems.push(row)
-    }
-
+    const moq = e.presentedMoq as number // MOQ_REQUIRED で > 0 を担保済み。
     const autoCost = dec(e.autoCostTotalJpy)
     const autoPrice = dec(e.autoPriceTotalJpy)
     const margin = dec(e.marginRate)
+    const manualUnit = dec(e.finalUnitPriceManualJpy)
+    const productLabel = await resolveProductLabel(e.productId, companyId, e.title)
 
-    let perUnit: { label: string; valueJpy: number } | null = null
-    if (autoCost != null && autoPrice != null) {
-      const bd = computePriceBreakdownFromTotals(
-        autoCost,
-        autoPrice,
-        margin,
-        e.initialCostBillingMode,
-        e.presentedMoq,
-      )
-      if (bd.perUnit) {
-        perUnit =
-          e.initialCostBillingMode === InitialCostBillingMode.SEPARATE
-            ? {
-                label: "量産1枚あたり",
-                valueJpy: bd.perUnit.productionPricePerUnitJpy,
-              }
-            : {
-                label: "1枚あたり（初期費用込）",
-                valueJpy: bd.perUnit.includedPerUnitPriceJpy,
-              }
-      }
+    // 1枚単価解決（手打ち ?? 自動参考）。自動側は autoCost/autoPrice が要る。
+    const breakdown =
+      autoCost != null && autoPrice != null
+        ? computePriceBreakdownFromTotals(
+            autoCost,
+            autoPrice,
+            margin,
+            e.initialCostBillingMode,
+            moq,
+          )
+        : null
+    const resolved = resolveUnitPriceJpy(
+      manualUnit,
+      breakdown?.perUnit ?? null,
+      e.initialCostBillingMode,
+    )
+    if (resolved == null) {
+      // 手打ちも自動も出せない（合計未保存かつ手打ちなし）。対象として弾く。
+      unitUnresolved.push(e.estimateNumber)
+      continue
     }
+    if (resolved.includedBadge) hasIncluded = true
 
-    const finalPriceJpy = dec(e.finalPriceManualJpy) ?? autoPrice ?? null
-    const target = await resolveTargetByProduct(e.productId, companyId)
-
-    blocks.push({
-      target,
-      title: e.title,
+    productRows.push({
       estimateNumber: e.estimateNumber,
-      presentedMoq: e.presentedMoq,
-      materialItems,
-      laborItems,
-      initialCostItems,
-      perUnit,
-      finalPriceJpy,
+      productLabel,
+      quantity: moq,
+      unitPriceJpy: resolved.valueJpy,
+      includedBadge: resolved.includedBadge,
+      amountJpy: resolved.valueJpy * moq,
       notes: e.notes,
     })
+
+    if (e.notes) notesRows.push({ productLabel, notes: e.notes })
+
+    // 初期費用行: SEPARATE の RE の INITIAL_COST 行のみ（INCLUDED は単価に配賦済み＝出さない）。
+    if (e.initialCostBillingMode === InitialCostBillingMode.SEPARATE) {
+      const items = await prisma.roughEstimateItem.findMany({
+        where: {
+          roughEstimateId: e.id,
+          itemCategory: RoughEstimateCategory.INITIAL_COST,
+        },
+        orderBy: { itemOrder: "asc" },
+      })
+      for (const it of items) {
+        const amount = resolveInitialCostPresentedJpy(
+          dec(it.presentedPriceManualJpy),
+          dec(it.subtotalJpy),
+          margin,
+        )
+        if (amount == null) continue
+        initialCostRows.push({
+          label: `${it.itemName}（${productLabel}）`,
+          amountJpy: amount,
+        })
+      }
+    }
   }
 
-  return { issuedAt: new Date(), clientName, blocks }
+  if (unitUnresolved.length > 0) {
+    return { error: "UNIT_UNRESOLVED", estimateNumbers: unitUnresolved }
+  }
+
+  const productTotalJpy = productRows.reduce((a, r) => a + r.amountJpy, 0)
+  const initialCostTotalJpy = initialCostRows.reduce((a, r) => a + r.amountJpy, 0)
+  const grandTotalJpy = productTotalJpy + initialCostTotalJpy
+
+  return {
+    issuedAt: new Date(),
+    clientName,
+    productRows,
+    productTotalJpy,
+    initialCostRows,
+    initialCostTotalJpy,
+    grandTotalJpy,
+    hasIncluded,
+    notesRows,
+  }
 }

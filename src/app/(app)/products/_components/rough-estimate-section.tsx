@@ -216,6 +216,12 @@ export function RoughEstimateSection({
     setSelectedIds(allSelected ? new Set() : new Set(rows.map((r) => r.id)))
   }
   // カルテ内は同一品番＝単一 client ゆえ混在チェック不要（サーバ側で担保）。
+  // 道A: MOQ 未入力の見積は出力不可（製品行＝1枚単価×MOQ）。
+  const moqMissing = rows
+    .filter((r) => selectedIds.has(r.id))
+    .filter((r) => r.presentedMoq == null || r.presentedMoq <= 0)
+    .map((r) => r.estimateNumber)
+  const hasMoqMissing = moqMissing.length > 0
   const handleExport = () => {
     const ids = [...selectedIds]
     if (ids.length === 0) return
@@ -227,12 +233,17 @@ export function RoughEstimateSection({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end gap-2">
+      <div className="flex items-center justify-end gap-2">
+        {hasMoqMissing && (
+          <span className="text-xs text-destructive">
+            提示MOQ 未入力（{moqMissing.join(", ")}）は出力不可
+          </span>
+        )}
         <Button
           size="sm"
           variant="outline"
           onClick={handleExport}
-          disabled={selectedIds.size === 0 || exporting}
+          disabled={selectedIds.size === 0 || hasMoqMissing || exporting}
         >
           <FileDown className="mr-1 h-4 w-4" />
           選択をPDF出力

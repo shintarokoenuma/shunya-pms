@@ -66,6 +66,17 @@ export function QuotationsList({ rows }: Props) {
   }, [rows, selected])
   const mixed = selectedClientIds.size > 1
 
+  // 道A: 製品行＝1枚単価×MOQ ゆえ MOQ 未入力の見積は出力不可。
+  const moqMissing = useMemo(
+    () =>
+      rows
+        .filter((r) => selected.has(r.id))
+        .filter((r) => r.presentedMoq == null || r.presentedMoq <= 0)
+        .map((r) => r.estimateNumber),
+    [rows, selected],
+  )
+  const hasMoqMissing = moqMissing.length > 0
+
   function handleExport() {
     const ids = [...selected]
     if (ids.length === 0) return
@@ -88,7 +99,7 @@ export function QuotationsList({ rows }: Props) {
       <div className="flex items-center gap-3">
         <Button
           onClick={handleExport}
-          disabled={selected.size === 0 || mixed || pending}
+          disabled={selected.size === 0 || mixed || hasMoqMissing || pending}
         >
           <FileDown className="mr-1 h-4 w-4" />
           選択をPDF出力
@@ -97,6 +108,11 @@ export function QuotationsList({ rows }: Props) {
         {mixed && (
           <p className="text-sm text-destructive">
             宛先が異なる見積が含まれています
+          </p>
+        )}
+        {!mixed && hasMoqMissing && (
+          <p className="text-sm text-destructive">
+            提示MOQ 未入力の見積が含まれています（{moqMissing.join(", ")}）
           </p>
         )}
       </div>

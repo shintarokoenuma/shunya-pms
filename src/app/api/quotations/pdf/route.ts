@@ -29,6 +29,20 @@ export async function POST(req: Request) {
     if (data.error === "NOT_FOUND") {
       return new Response("見積が見つかりません", { status: 404 })
     }
+    if (data.error === "MOQ_REQUIRED") {
+      const nums = data.estimateNumbers?.join(", ") ?? ""
+      return new Response(
+        `提示MOQ 未入力の見積が含まれています: ${nums}`,
+        { status: 400 },
+      )
+    }
+    if (data.error === "UNIT_UNRESOLVED") {
+      const nums = data.estimateNumbers?.join(", ") ?? ""
+      return new Response(
+        `1枚単価を導出できない見積が含まれています（明細か手打ち単価を確認）: ${nums}`,
+        { status: 400 },
+      )
+    }
     return new Response("ids が不正です", { status: 400 })
   }
 
