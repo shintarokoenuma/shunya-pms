@@ -60,6 +60,9 @@ import {
 import {
   summarizeRoughEstimate,
   computePriceBreakdownFromTotals,
+  resolveUnitPriceJpy,
+  resolveInitialCostPresentedJpy,
+  computeInitialCostPresentedJpy,
   type RoughEstimateLineForCalc,
 } from "@/lib/rough-estimate/calc"
 import { downloadQuotationPdf } from "@/lib/quotations/download-quotation-pdf"
@@ -265,7 +268,7 @@ export function RoughEstimateSection({
                 <TableHead className="text-right">量産提示分</TableHead>
                 <TableHead className="text-right">初期費用提示分</TableHead>
                 <TableHead className="text-right">提示価格計</TableHead>
-                <TableHead className="text-right">最終値(手打ち)</TableHead>
+                <TableHead className="text-right">1枚単価(手打ち)</TableHead>
                 <TableHead className="w-[90px]" />
               </TableRow>
             </TableHeader>
@@ -341,7 +344,9 @@ export function RoughEstimateSection({
                       {jpy(r.autoPriceTotalJpy)}
                     </TableCell>
                     <TableCell className="text-right font-medium">
-                      {jpy(r.finalPriceManualJpy)}
+                      {r.finalUnitPriceManualJpy != null
+                        ? `${jpy(r.finalUnitPriceManualJpy)}/枚`
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       <div className="flex justify-end gap-1">
@@ -472,6 +477,7 @@ function emptyItem(
     unit: "",
     unitPrice: "",
     currency: Currency.JPY,
+    presentedPriceManualJpy: "",
     notes: "",
   }
 }
@@ -493,8 +499,10 @@ function toFormValues(
     marginRateSource: d.marginRateSource,
     initialCostBillingMode: d.initialCostBillingMode,
     usdJpyRate: "",
-    finalPriceManualJpy:
-      d.finalPriceManualJpy != null ? String(d.finalPriceManualJpy) : "",
+    finalUnitPriceManualJpy:
+      d.finalUnitPriceManualJpy != null
+        ? String(d.finalUnitPriceManualJpy)
+        : "",
     items: d.items.map((it) => ({
       itemCategory: it.itemCategory,
       itemName: it.itemName,
@@ -508,6 +516,10 @@ function toFormValues(
       unit: it.unit ?? "",
       unitPrice: it.unitPrice != null ? String(it.unitPrice) : "",
       currency: it.currency,
+      presentedPriceManualJpy:
+        it.presentedPriceManualJpy != null
+          ? String(it.presentedPriceManualJpy)
+          : "",
       notes: it.notes ?? "",
     })),
   }
@@ -557,7 +569,7 @@ function RoughEstimateFormDialog({
       marginRateSource: null,
       initialCostBillingMode: InitialCostBillingMode.SEPARATE,
       usdJpyRate: "",
-      finalPriceManualJpy: "",
+      finalUnitPriceManualJpy: "",
       items: [emptyItem()],
     },
   })
@@ -646,6 +658,38 @@ function RoughEstimateFormDialog({
     moqNum,
   )
   const included = billingMode === InitialCostBillingMode.INCLUDED
+
+  // ---- 道A: 手打ち1枚単価と提示総額（導出）----
+  const watchedFinalUnit = useWatch({
+    control: form.control,
+    name: "finalUnitPriceManualJpy",
+  })
+  const manualUnitNum = toNumOrNull(watchedFinalUnit)
+  // 自動参考単価（手打ち null で採用される値・切り上げ済み）。MOQ 未入力なら null。
+  const autoUnit = resolveUnitPriceJpy(null, breakdown.perUnit, billingMode)
+  // 実効1枚単価（手打ち優先・自動フォールバック）。
+  const effectiveUnit = resolveUnitPriceJpy(
+    manualUnitNum,
+    breakdown.perUnit,
+    billingMode,
+  )
+  // 初期費用の提示合計（SEPARATE のときのみ・INITIAL_COST 行を提示額で積み上げ）。
+  const initialPresentedSum = included
+    ? 0
+    : items.reduce((acc, it, i) => {
+        if (it.itemCategory !== RoughEstimateCategory.INITIAL_COST) return acc
+        const v = resolveInitialCostPresentedJpy(
+          toNumOrNull(it.presentedPriceManualJpy),
+          rowSubtotals[i],
+          marginNum,
+        )
+        return acc + (v ?? 0)
+      }, 0)
+  // 提示総額（導出）＝1枚単価×MOQ ＋ 初期費用提示合計（SEPARATE時）。MOQ 未入力なら null。
+  const derivedGrandTotal =
+    effectiveUnit != null && moqNum != null && moqNum > 0
+      ? effectiveUnit.valueJpy * moqNum + initialPresentedSum
+      : null
 
   // INITIAL_COST 行で数量未入力（単価あり）を検出（集計から静かに消えるのを防ぐ・P2注意点）。
   const initialCostMissingQty = items.some(
@@ -939,6 +983,10 @@ function RoughEstimateFormDialog({
                     idx={idx}
                     itemValue={items[idx]}
                     subtotalJpy={rowSubtotals[idx] ?? null}
+                    autoInitialPresentedJpy={computeInitialCostPresentedJpy(
+                      rowSubtotals[idx] ?? null,
+                      marginNum,
+                    )}
                     materials={materials}
                     costCategories={costCategories}
                     suppliers={suppliers}
@@ -1069,18 +1117,24 @@ function RoughEstimateFormDialog({
                 )}
 
                 <Separator />
+                {/* 道A: 手打ち1枚単価（金額の正）。空なら自動参考単価が使われる。総額手打ちは廃止。 */}
                 <FormField
                   control={form.control}
-                  name="finalPriceManualJpy"
+                  name="finalUnitPriceManualJpy"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>最終見積額（手打ち・JPY）</FormLabel>
+                      <FormLabel>1枚単価（手打ち・円）</FormLabel>
                       <div className="flex gap-2">
                         <FormControl>
-                          <Input autoComplete="off"
+                          <Input
+                            autoComplete="off"
                             type="number"
-                            step="any"
-                            placeholder={`未入力なら自動値 ${summary.autoPriceTotalJpy}`}
+                            step="1"
+                            placeholder={
+                              autoUnit != null
+                                ? `未入力なら自動参考 ¥${autoUnit.valueJpy.toLocaleString("ja-JP")}/枚`
+                                : "提示MOQ を入力すると自動単価が出ます"
+                            }
                             value={field.value ?? ""}
                             onChange={field.onChange}
                             onBlur={field.onBlur}
@@ -1088,21 +1142,55 @@ function RoughEstimateFormDialog({
                             ref={field.ref}
                           />
                         </FormControl>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            field.onChange(String(summary.autoPriceTotalJpy))
-                          }
-                        >
-                          自動値を入れる
-                        </Button>
+                        {autoUnit != null && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              field.onChange(String(autoUnit.valueJpy))
+                            }
+                          >
+                            自動値を入れる
+                          </Button>
+                        )}
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        空欄なら PDF は自動参考単価（
+                        {billingMode === InitialCostBillingMode.INCLUDED
+                          ? "初期費用込"
+                          : "初期費用抜き"}
+                        ・円未満切上）を使用。総額は手打ちせず下の導出値で確定します。
+                      </p>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
+                {/* 提示総額（導出・電卓一致）＝1枚単価×MOQ ＋ 初期費用提示合計（SEPARATE時）。 */}
+                <div className="rounded bg-muted p-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">
+                      提示総額（導出）
+                    </span>
+                    <span className="font-mono font-medium">
+                      {derivedGrandTotal != null
+                        ? jpy(derivedGrandTotal)
+                        : "提示MOQ を入力すると算出されます"}
+                    </span>
+                  </div>
+                  {derivedGrandTotal != null && (
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      製品 {jpy((effectiveUnit?.valueJpy ?? 0) * (moqNum ?? 0))}
+                      （{jpy(effectiveUnit?.valueJpy ?? 0)}/枚 ×{" "}
+                      {(moqNum ?? 0).toLocaleString("ja-JP")}）
+                      {!included &&
+                        initialPresentedSum > 0 &&
+                        `　＋ 初期費用 ${jpy(initialPresentedSum)}`}
+                      {included && "　（初期費用は単価に配賦済み）"}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <FormField
@@ -1155,6 +1243,7 @@ function ItemCard({
   idx,
   itemValue,
   subtotalJpy,
+  autoInitialPresentedJpy,
   materials,
   costCategories,
   suppliers,
@@ -1167,6 +1256,7 @@ function ItemCard({
   idx: number
   itemValue: RoughEstimateFormValues["items"][number] | undefined
   subtotalJpy: number | null
+  autoInitialPresentedJpy: number | null
   materials: MaterialOption[]
   costCategories: CostCategoryOption[]
   suppliers: SupplierOption[]
@@ -1549,6 +1639,54 @@ function ItemCard({
           </div>
         </FormItem>
       </div>
+
+      {/* 道A: 初期費用行のみ「提示額（手打ち・円）」。空なら 原価×(1+利益率) の自動提示額。 */}
+      {isInitial && (
+        <FormField
+          control={form.control}
+          name={`items.${idx}.presentedPriceManualJpy`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel className="text-xs">提示額（手打ち・円）</FormLabel>
+              <div className="flex gap-2">
+                <FormControl>
+                  <Input
+                    autoComplete="off"
+                    type="number"
+                    step="1"
+                    placeholder={
+                      autoInitialPresentedJpy != null
+                        ? `未入力なら自動 ¥${autoInitialPresentedJpy.toLocaleString("ja-JP")}`
+                        : "原価×(1+利益率) を自動提示"
+                    }
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </FormControl>
+                {autoInitialPresentedJpy != null && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      field.onChange(String(autoInitialPresentedJpy))
+                    }
+                  >
+                    自動値
+                  </Button>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                見積書の初期費用セクションに出る金額（別途請求）。空なら自動提示額。
+              </p>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+      )}
     </div>
   )
 }

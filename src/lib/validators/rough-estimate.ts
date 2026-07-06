@@ -48,6 +48,18 @@ const optionalNonNegativeNumber = z
   .nullable()
   .default(null)
 
+/** 任意の非負整数円（手打ち提示額・空/null → null・小数は切り捨て）。道A の手打ち単価/初期費用提示額用。 */
+const optionalNonNegativeIntYen = z
+  .union([z.string(), z.number(), z.null()])
+  .transform((v) => {
+    if (v === "" || v === null || v === undefined) return null
+    const n = typeof v === "number" ? v : Number(v)
+    return Number.isFinite(n) ? Math.trunc(n) : null
+  })
+  .refine((v) => v === null || v >= 0, "0以上で入力してください")
+  .nullable()
+  .default(null)
+
 /** 数量（任意・入っていれば > 0）。 */
 const optionalPositiveQuantity = z
   .union([z.string(), z.number(), z.null()])
@@ -84,6 +96,8 @@ export const roughEstimateItemInputSchema = z.object({
   unit: optionalString(20),
   unitPrice: optionalNonNegativeNumber, // スナップショット単価
   currency: allowedCurrencyField.default(Currency.JPY),
+  // 道A: 初期費用行の手打ち提示額（INITIAL_COST 行のみ・整数円）。他費目は action 側で null に落とす。
+  presentedPriceManualJpy: optionalNonNegativeIntYen,
   notes: optionalString(10000),
 })
 
@@ -131,8 +145,9 @@ export const roughEstimateInputSchema = z
       .refine((v) => v === null || v > 0, "レートは0より大きい値で入力してください")
       .nullable()
       .default(null),
-    // 手打ち最終値（任意・未指定なら action が autoPriceTotalJpy を初期値に）。
-    finalPriceManualJpy: optionalNonNegativeNumber,
+    // 道A: 手打ち1枚単価（金額の正・整数円）。null なら PDF は自動参考単価にフォールバック。
+    // 旧 finalPriceManualJpy（総額手打ち）は道Aで廃止（schema 列は残置・読み書きしない）。
+    finalUnitPriceManualJpy: optionalNonNegativeIntYen,
     // 明細（1 行以上）
     items: z
       .array(roughEstimateItemInputSchema)
