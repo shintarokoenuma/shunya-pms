@@ -1,9 +1,11 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { ArrowDown, ArrowUp, ArrowUpDown, FileDown } from "lucide-react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import { downloadQuotationPdf } from "@/lib/quotations/download-quotation-pdf"
 import {
   Table,
   TableBody,
@@ -23,6 +25,7 @@ type SortDir = "asc" | "desc" | null
 export function QuotationsList({ rows }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sortDir, setSortDir] = useState<SortDir>(null)
+  const [pending, startTransition] = useTransition()
 
   // null=元順(issuedAt desc)。asc/desc は宛先(clientName)の日本語ロケール順。
   const sortedRows = useMemo(() => {
@@ -62,7 +65,12 @@ export function QuotationsList({ rows }: Props) {
   const mixed = selectedClientIds.size > 1
 
   function handleExport() {
-    // TODO(Part C): B-5 の共通 DL ハンドラに selected の ids を渡して配線する。
+    const ids = [...selected]
+    if (ids.length === 0) return
+    startTransition(async () => {
+      const r = await downloadQuotationPdf(ids)
+      if (!r.ok) toast.error(r.message)
+    })
   }
 
   if (rows.length === 0) {
@@ -78,7 +86,7 @@ export function QuotationsList({ rows }: Props) {
       <div className="flex items-center gap-3">
         <Button
           onClick={handleExport}
-          disabled={selected.size === 0 || mixed}
+          disabled={selected.size === 0 || mixed || pending}
         >
           <FileDown className="mr-1 h-4 w-4" />
           選択をPDF出力

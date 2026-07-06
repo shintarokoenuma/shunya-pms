@@ -11,7 +11,15 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Loader2, Plus, Pencil, Trash2, Search, AlertTriangle } from "lucide-react"
+import {
+  Loader2,
+  Plus,
+  Pencil,
+  Trash2,
+  Search,
+  AlertTriangle,
+  FileDown,
+} from "lucide-react"
 import {
   Currency,
   RoughEstimateCategory,
@@ -51,6 +59,7 @@ import {
   computePriceBreakdownFromTotals,
   type RoughEstimateLineForCalc,
 } from "@/lib/rough-estimate/calc"
+import { downloadQuotationPdf } from "@/lib/quotations/download-quotation-pdf"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -167,6 +176,8 @@ export function RoughEstimateSection({
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<RoughEstimateListRow | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [exporting, startExport] = useTransition()
 
   const openCreate = () => {
     setEditingId(null)
@@ -177,9 +188,41 @@ export function RoughEstimateSection({
     setDialogOpen(true)
   }
 
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+  const allSelected = rows.length > 0 && selectedIds.size === rows.length
+  const toggleAll = () => {
+    setSelectedIds(allSelected ? new Set() : new Set(rows.map((r) => r.id)))
+  }
+  // カルテ内は同一品番＝単一 client ゆえ混在チェック不要（サーバ側で担保）。
+  const handleExport = () => {
+    const ids = [...selectedIds]
+    if (ids.length === 0) return
+    startExport(async () => {
+      const r = await downloadQuotationPdf(ids)
+      if (!r.ok) toast.error(r.message)
+    })
+  }
+
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleExport}
+          disabled={selectedIds.size === 0 || exporting}
+        >
+          <FileDown className="mr-1 h-4 w-4" />
+          選択をPDF出力
+          {selectedIds.size > 0 && `（${selectedIds.size}）`}
+        </Button>
         <Button size="sm" variant="outline" onClick={openCreate}>
           <Plus className="mr-1 h-4 w-4" />
           概算見積を追加
@@ -195,6 +238,13 @@ export function RoughEstimateSection({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[40px]">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={toggleAll}
+                    aria-label="全選択"
+                  />
+                </TableHead>
                 <TableHead>見積番号</TableHead>
                 <TableHead>発行日</TableHead>
                 <TableHead className="text-right">提示MOQ</TableHead>
@@ -220,6 +270,13 @@ export function RoughEstimateSection({
                   r.initialCostBillingMode === InitialCostBillingMode.INCLUDED
                 return (
                   <TableRow key={r.id}>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(r.id)}
+                        onCheckedChange={() => toggleSelected(r.id)}
+                        aria-label={`${r.estimateNumber} を選択`}
+                      />
+                    </TableCell>
                     <TableCell className="font-mono text-xs">
                       {r.estimateNumber}
                       {included && (
