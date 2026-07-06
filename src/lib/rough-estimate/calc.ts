@@ -200,3 +200,76 @@ export function computePriceBreakdownFromTotals(
     perUnit,
   }
 }
+
+// =============================================================================
+// 道A（手打ち単価・2セクションPDF）: 客提示額の解決（実装ブリーフ §2）
+// ★丸め規則（確定）: 客に出す単価・提示額は整数円＝円未満切り上げ（Math.ceil）。
+//   金額＝表示された整数円単価 × 数量／合計＝表示金額の積み上げ（電卓一致を最優先）。
+// =============================================================================
+
+/** 客提示額の丸め＝円未満切り上げ（整数円・電卓一致優先）。 */
+function ceilYen(n: number): number {
+  return Math.ceil(n)
+}
+
+/**
+ * 初期費用行の自動提示額＝ subtotalJpy ×(1 + rate/100) を円未満切り上げ。
+ * subtotalJpy か rate が null なら null（導出不能）。
+ */
+export function computeInitialCostPresentedJpy(
+  subtotalJpy: number | null | undefined,
+  marginRatePercent: number | null | undefined,
+): number | null {
+  if (subtotalJpy == null || marginRatePercent == null) return null
+  return ceilYen(subtotalJpy * (1 + marginRatePercent / 100))
+}
+
+/** 製品行の1枚単価解決結果（道A）。 */
+export type ResolvedUnitPrice = {
+  /** 客に出す1枚単価（整数円）。 */
+  valueJpy: number
+  /** 手打ち値由来か（true=finalUnitPriceManualJpy）。 */
+  isManual: boolean
+  /** INCLUDED（初期費用込）表記を付けるか。 */
+  includedBadge: boolean
+}
+
+/**
+ * 製品行の1枚単価解決（道A・金額の正）。
+ * - finalUnitPriceManualJpy が非 null → それ（isManual=true・整数円入力前提でそのまま採用）。
+ * - null → 自動参考単価（SEPARATE=productionPricePerUnitJpy／INCLUDED=includedPerUnitPriceJpy）を
+ *   円未満切り上げ（isManual=false）。
+ * - perUnit が null（presentedMoq 未入力）→ null（単価不成立）。
+ * includedBadge は billingMode===INCLUDED（手打ち/自動を問わず）。
+ */
+export function resolveUnitPriceJpy(
+  finalUnitPriceManualJpy: number | null | undefined,
+  perUnit: RoughEstimatePriceBreakdown["perUnit"],
+  billingMode: InitialCostBillingMode,
+): ResolvedUnitPrice | null {
+  const includedBadge = billingMode === InitialCostBillingMode.INCLUDED
+  if (finalUnitPriceManualJpy != null) {
+    return { valueJpy: finalUnitPriceManualJpy, isManual: true, includedBadge }
+  }
+  if (perUnit == null) return null
+  const auto =
+    billingMode === InitialCostBillingMode.INCLUDED
+      ? perUnit.includedPerUnitPriceJpy
+      : perUnit.productionPricePerUnitJpy
+  return { valueJpy: ceilYen(auto), isManual: false, includedBadge }
+}
+
+/**
+ * 初期費用行の提示額解決（道A）。
+ * 手打ち presentedPriceManualJpy が非 null ならそれ（整数円入力前提でそのまま採用）、
+ * null なら自動提示額（computeInitialCostPresentedJpy＝subtotalJpy×(1+率)・切り上げ）。
+ * どちらも導出不能なら null。
+ */
+export function resolveInitialCostPresentedJpy(
+  presentedPriceManualJpy: number | null | undefined,
+  subtotalJpy: number | null | undefined,
+  marginRatePercent: number | null | undefined,
+): number | null {
+  if (presentedPriceManualJpy != null) return presentedPriceManualJpy
+  return computeInitialCostPresentedJpy(subtotalJpy, marginRatePercent)
+}
