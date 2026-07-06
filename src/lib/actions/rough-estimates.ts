@@ -741,6 +741,83 @@ export async function listRoughEstimatesByProduct(
 }
 
 // =============================================================================
+// 会社横断一覧（/quotations 用・原価/利益率は載せない）
+// productId → Product → Client を2段一括引きで宛先解決（N+1 回避）。
+// =============================================================================
+export type CompanyRoughEstimateRow = {
+  id: string
+  estimateNumber: string
+  productId: string
+  productName: string
+  productCode: string
+  clientId: string
+  clientName: string
+  title: string | null
+  presentedMoq: number | null
+  issuedAt: string // ISO
+}
+
+export async function listRoughEstimatesForCompany(): Promise<
+  CompanyRoughEstimateRow[]
+> {
+  const sess = await requireSession()
+  if (!sess.ok) return []
+
+  const estimates = await prisma.roughEstimate.findMany({
+    where: { companyId: sess.companyId, deletedAt: null },
+    orderBy: { issuedAt: "desc" },
+    select: {
+      id: true,
+      estimateNumber: true,
+      productId: true,
+      title: true,
+      presentedMoq: true,
+      issuedAt: true,
+    },
+  })
+
+  const productIds = [...new Set(estimates.map((e) => e.productId))]
+  const products = productIds.length
+    ? await prisma.product.findMany({
+        where: { companyId: sess.companyId, id: { in: productIds } },
+        select: {
+          id: true,
+          productName: true,
+          productCode: true,
+          clientId: true,
+        },
+      })
+    : []
+  const productById = new Map(products.map((p) => [p.id, p]))
+
+  const clientIds = [...new Set(products.map((p) => p.clientId))]
+  const clients = clientIds.length
+    ? await prisma.client.findMany({
+        where: { companyId: sess.companyId, id: { in: clientIds } },
+        select: { id: true, companyName: true },
+      })
+    : []
+  const clientById = new Map(clients.map((c) => [c.id, c]))
+
+  return estimates.map((e) => {
+    const product = productById.get(e.productId)
+    const client = product ? clientById.get(product.clientId) : undefined
+    return {
+      id: e.id,
+      estimateNumber: e.estimateNumber,
+      productId: e.productId,
+      productName: product?.productName ?? "—",
+      productCode: product?.productCode ?? "—",
+      clientId: product?.clientId ?? "",
+      clientName: client?.companyName ?? "—",
+      title: e.title,
+      presentedMoq: e.presentedMoq,
+      issuedAt: e.issuedAt.toISOString(),
+    }
+  })
+}
+
+// =============================================================================
 // 単票取得（明細同梱・P3 UI / smoke 用）
 // =============================================================================
 export type RoughEstimateDetail = RoughEstimate & {
