@@ -9545,7 +9545,9 @@ model RoughEstimate {
   // 金額の2層保存（自動値と手打ち最終値を別列で両方）
   autoCostTotalJpy    Decimal? @map("auto_cost_total_jpy") @db.Decimal(15, 2) // 自動集計原価（JPY 換算後合計）
   autoPriceTotalJpy   Decimal? @map("auto_price_total_jpy") @db.Decimal(15, 2) // 自動提示価格合計＝原価×(1+利益率)
-  finalPriceManualJpy Decimal? @map("final_price_manual_jpy") @db.Decimal(15, 2) // 手打ち最終値（客へ出した数字・正）
+  finalPriceManualJpy Decimal? @map("final_price_manual_jpy") @db.Decimal(15, 2) // 手打ち最終値（総額・道A で非推奨化＝列は残置・UI/読み書きから撤去）
+  // 手打ち1枚単価（道A・金額の正）。null なら自動参考単価にフォールバック
+  finalUnitPriceManualJpy Decimal? @map("final_unit_price_manual_jpy") @db.Decimal(15, 2)
 
   // 監査
   createdByUserId String? @map("created_by_user_id")
@@ -9591,6 +9593,8 @@ model RoughEstimateItem {
   currency    Currency @default(JPY)
   subtotal    Decimal? @db.Decimal(15, 2)
   subtotalJpy Decimal? @map("subtotal_jpy") @db.Decimal(15, 2) // JPY 換算（入力レート方式）
+  // 初期費用行の手打ち提示額（道A・INITIAL_COST 行のみ UI 露出・他費目は常に null）
+  presentedPriceManualJpy Decimal? @map("presented_price_manual_jpy") @db.Decimal(15, 2)
 
   notes String? @db.Text
 
