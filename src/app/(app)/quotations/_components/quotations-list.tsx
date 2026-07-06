@@ -22,6 +22,8 @@ type Props = {
 
 type SortDir = "asc" | "desc" | null
 
+// Part D の複製導線は品番カルテ内（rough-estimate-section.tsx）のみに置く。
+// 横断一覧からの複製は対象品番カルテへの遷移が要り複雑なため v0.1 ではスコープ外。
 export function QuotationsList({ rows }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sortDir, setSortDir] = useState<SortDir>(null)

@@ -19,6 +19,7 @@ import {
   Search,
   AlertTriangle,
   FileDown,
+  Copy,
 } from "lucide-react"
 import {
   Currency,
@@ -37,11 +38,13 @@ import {
   updateRoughEstimate,
   softDeleteRoughEstimate,
   getRoughEstimateForEdit,
+  duplicateRoughEstimate,
   listPastPoItemsBySupplier,
   listPastWoItemsByCostCategory,
   type RoughEstimateListRow,
   type PastPoItemCandidate,
   type PastWoItemCandidate,
+  type RoughEstimateDuplicateData,
 } from "@/lib/actions/rough-estimates"
 import type {
   MaterialOption,
@@ -175,16 +178,25 @@ export function RoughEstimateSection({
 }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
+  const [duplicateFromId, setDuplicateFromId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<RoughEstimateListRow | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [exporting, startExport] = useTransition()
 
+  // editingId と duplicateFromId は排他（同時に非null にしない）。
   const openCreate = () => {
     setEditingId(null)
+    setDuplicateFromId(null)
     setDialogOpen(true)
   }
   const openEdit = (id: string) => {
     setEditingId(id)
+    setDuplicateFromId(null)
+    setDialogOpen(true)
+  }
+  const openDuplicate = (id: string) => {
+    setEditingId(null)
+    setDuplicateFromId(id)
     setDialogOpen(true)
   }
 
@@ -344,6 +356,14 @@ export function RoughEstimateSection({
                         <Button
                           size="icon"
                           variant="ghost"
+                          className="h-7 w-7"
+                          onClick={() => openDuplicate(r.id)}
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
                           className="h-7 w-7 text-destructive"
                           onClick={() => setDeleting(r)}
                         >
@@ -363,11 +383,16 @@ export function RoughEstimateSection({
         <RoughEstimateFormDialog
           productId={productId}
           editingId={editingId}
+          duplicateFromId={duplicateFromId}
           brandDefaultMarginRate={brandDefaultMarginRate}
           materials={materials}
           costCategories={costCategories}
           suppliers={suppliers}
-          onClose={() => setDialogOpen(false)}
+          onClose={() => {
+            setDialogOpen(false)
+            setEditingId(null)
+            setDuplicateFromId(null)
+          }}
         />
       )}
 
@@ -451,9 +476,47 @@ function emptyItem(
   }
 }
 
+// 編集/複製プレフィルの共通変換（plain な取得データ → フォーム値・文字列化）。
+// 編集(RoughEstimateEditData) と複製(RoughEstimateDuplicateData) は id/estimateNumber
+// 以外同形なので、複製データ型を受ければ両方に使える。
+function toFormValues(
+  d: RoughEstimateDuplicateData,
+): RoughEstimateFormValues {
+  return {
+    productId: d.productId,
+    title: d.title ?? "",
+    notes: d.notes ?? "",
+    presentedMoq: d.presentedMoq != null ? String(d.presentedMoq) : "",
+    currency: d.currency,
+    validUntil: d.validUntil ?? "",
+    marginRate: d.marginRate != null ? String(d.marginRate) : "",
+    marginRateSource: d.marginRateSource,
+    initialCostBillingMode: d.initialCostBillingMode,
+    usdJpyRate: "",
+    finalPriceManualJpy:
+      d.finalPriceManualJpy != null ? String(d.finalPriceManualJpy) : "",
+    items: d.items.map((it) => ({
+      itemCategory: it.itemCategory,
+      itemName: it.itemName,
+      itemNameEn: it.itemNameEn ?? "",
+      materialId: it.materialId,
+      costCategoryId: it.costCategoryId,
+      source: it.source,
+      sourcePoItemId: it.sourcePoItemId,
+      sourceWoItemId: it.sourceWoItemId,
+      quantity: it.quantity != null ? String(it.quantity) : "",
+      unit: it.unit ?? "",
+      unitPrice: it.unitPrice != null ? String(it.unitPrice) : "",
+      currency: it.currency,
+      notes: it.notes ?? "",
+    })),
+  }
+}
+
 function RoughEstimateFormDialog({
   productId,
   editingId,
+  duplicateFromId,
   brandDefaultMarginRate,
   materials,
   costCategories,
@@ -462,6 +525,7 @@ function RoughEstimateFormDialog({
 }: {
   productId: string
   editingId: string | null
+  duplicateFromId: string | null
   brandDefaultMarginRate: number
   materials: MaterialOption[]
   costCategories: CostCategoryOption[]
@@ -470,7 +534,9 @@ function RoughEstimateFormDialog({
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [loading, setLoading] = useState(editingId !== null)
+  const [loading, setLoading] = useState(
+    editingId !== null || duplicateFromId !== null,
+  )
   // PAST_PO 引き当ての直近詳細（PO番号・品目名）を明細 index で保持。
   // ItemCard は useFieldArray の都合で apply 後に再マウントし得るため、
   // 再マウントしない親（FormDialog）側で保持する（編集で開き直すと空＝最小バッジにフォールバック）。
@@ -512,35 +578,7 @@ function RoughEstimateFormDialog({
         return
       }
       const d = r.data
-      form.reset({
-        productId: d.productId,
-        title: d.title ?? "",
-        notes: d.notes ?? "",
-        presentedMoq: d.presentedMoq != null ? String(d.presentedMoq) : "",
-        currency: d.currency,
-        validUntil: d.validUntil ?? "",
-        marginRate: d.marginRate != null ? String(d.marginRate) : "",
-        marginRateSource: d.marginRateSource,
-        initialCostBillingMode: d.initialCostBillingMode,
-        usdJpyRate: "",
-        finalPriceManualJpy:
-          d.finalPriceManualJpy != null ? String(d.finalPriceManualJpy) : "",
-        items: d.items.map((it) => ({
-          itemCategory: it.itemCategory,
-          itemName: it.itemName,
-          itemNameEn: it.itemNameEn ?? "",
-          materialId: it.materialId,
-          costCategoryId: it.costCategoryId,
-          source: it.source,
-          sourcePoItemId: it.sourcePoItemId,
-          sourceWoItemId: it.sourceWoItemId,
-          quantity: it.quantity != null ? String(it.quantity) : "",
-          unit: it.unit ?? "",
-          unitPrice: it.unitPrice != null ? String(it.unitPrice) : "",
-          currency: it.currency,
-          notes: it.notes ?? "",
-        })),
-      })
+      form.reset(toFormValues(d))
       if (d.hasUsdLine) {
         toast.info("USD 明細があります。保存にはレート（USD/JPY）の再入力が必要です。")
       }
@@ -551,6 +589,31 @@ function RoughEstimateFormDialog({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingId])
+
+  // 複製：既存見積を新規作成の初期値としてプレフィル（title に「のコピー」付き・
+  // finalPriceManualJpy は null リセット済み・editingId は null のまま＝保存は createRoughEstimate）。
+  useEffect(() => {
+    if (duplicateFromId === null) return
+    let cancelled = false
+    duplicateRoughEstimate(duplicateFromId).then((r) => {
+      if (cancelled) return
+      if (!r.ok) {
+        toast.error(r.error)
+        onClose()
+        return
+      }
+      const d = r.data
+      form.reset(toFormValues(d))
+      if (d.hasUsdLine) {
+        toast.info("USD 明細があります。保存にはレート（USD/JPY）の再入力が必要です。")
+      }
+      setLoading(false)
+    })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duplicateFromId])
 
   // ---- ライブ集計（useWatch で反応的に購読・A-3 修正：form.watch() 由来の派生値取りこぼしを解消） ----
   const watchedItems = useWatch({ control: form.control, name: "items" })
@@ -642,7 +705,11 @@ function RoughEstimateFormDialog({
       <DialogContent className="max-h-[92vh] sm:max-w-6xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {editingId ? "概算見積を編集" : "概算見積を作成"}
+            {editingId
+              ? "概算見積を編集"
+              : duplicateFromId
+                ? "概算見積を複製"
+                : "概算見積を作成"}
           </DialogTitle>
           <DialogDescription>
             量産軸の概算（提示価格）。初期費用は既定では別枠、チェックで1枚単価にインクルーズできます。

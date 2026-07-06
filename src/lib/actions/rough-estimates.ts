@@ -948,3 +948,38 @@ export async function getRoughEstimateForEdit(
     }
   }
 }
+
+// =============================================================================
+// 複製プレフィル用（Part D）：既存見積を「新規作成の初期値」として返す read only。
+// 書き込みは既存 createRoughEstimate に相乗り（採番・バリデーション・calc を二重実装しない）。
+// =============================================================================
+/** 複製プレフィル＝編集データから id/estimateNumber（採番は create 側）を落とした形。 */
+export type RoughEstimateDuplicateData = Omit<
+  RoughEstimateEditData,
+  "id" | "estimateNumber"
+>
+
+export async function duplicateRoughEstimate(
+  id: string,
+): Promise<ActionResult<RoughEstimateDuplicateData>> {
+  const r = await getRoughEstimateForEdit(id)
+  if (!r.ok) return r
+  const d = r.data
+  // id/estimateNumber は Omit で落とす（採番は create 側）。
+  const { id: _id, estimateNumber: _num, ...rest } = d
+  void _id
+  void _num
+  return {
+    ok: true,
+    data: {
+      ...rest,
+      // §6-4: タイトルに「のコピー」付与。
+      title: d.title ? `${d.title} のコピー` : "（コピー）",
+      // §6-4: 手打ち最終値は各発行に固有 → リセット。
+      finalPriceManualJpy: null,
+      // productId/notes/presentedMoq/currency/validUntil/marginRate/marginRateSource/
+      // initialCostBillingMode/hasUsdLine/items（source・sourcePoItemId・sourceWoItemId の
+      // 引き当て焼き込み含む）はそのまま引き継ぐ（rest 経由）。
+    },
+  }
+}
