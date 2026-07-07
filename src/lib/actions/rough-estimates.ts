@@ -5,8 +5,8 @@ import {
   Prisma,
   Currency,
   MarginRateSource,
+  RoughEstimateCategory,
   type RoughEstimate,
-  type RoughEstimateCategory,
   type RoughEstimateItemSource,
   type InitialCostBillingMode,
 } from "@prisma/client"
@@ -361,6 +361,12 @@ function buildItemRows(data: RoughEstimateInput): BuiltItem[] {
         currency: it.currency,
         subtotal: subtotal != null ? new Prisma.Decimal(subtotal) : null,
         subtotalJpy: subtotalJpy != null ? new Prisma.Decimal(subtotalJpy) : null,
+        // 道A: 初期費用行の手打ち提示額のみ保持。他費目に来たら null に落とす（サーバ側ガード）。
+        presentedPriceManualJpy:
+          it.itemCategory === RoughEstimateCategory.INITIAL_COST &&
+          it.presentedPriceManualJpy != null
+            ? new Prisma.Decimal(it.presentedPriceManualJpy)
+            : null,
         notes: it.notes || null,
       },
       calc: { itemCategory: it.itemCategory, subtotalJpy },
@@ -403,11 +409,8 @@ export async function createRoughEstimate(
     const lines = built.map((b) => b.calc)
     const autoCostTotalJpy = computeAutoCostTotalJpy(lines)
     const autoPriceTotalJpy = computeAutoPriceTotalJpy(lines, marginRate)
-    // 手打ち最終値の初期値＝自動提示価格（未指定時）。自動値は別列で常に保持。
-    const finalPriceManualJpy =
-      data.finalPriceManualJpy != null
-        ? data.finalPriceManualJpy
-        : autoPriceTotalJpy
+    // 道A: 手打ち1枚単価（任意）。旧 finalPriceManualJpy（総額手打ち）は書かない（列残置・非推奨）。
+    const finalUnitPriceManualJpy = data.finalUnitPriceManualJpy ?? null
 
     const prefix = estimateNumberPrefix(new Date().getFullYear())
     let created: { id: string; estimateNumber: string } | null = null
@@ -437,7 +440,11 @@ export async function createRoughEstimate(
                 initialCostBillingMode: data.initialCostBillingMode,
                 autoCostTotalJpy: new Prisma.Decimal(autoCostTotalJpy),
                 autoPriceTotalJpy: new Prisma.Decimal(autoPriceTotalJpy),
-                finalPriceManualJpy: new Prisma.Decimal(finalPriceManualJpy),
+                // 道A: 総額手打ち finalPriceManualJpy は書かない（列残置・null のまま）。
+                finalUnitPriceManualJpy:
+                  finalUnitPriceManualJpy != null
+                    ? new Prisma.Decimal(finalUnitPriceManualJpy)
+                    : null,
                 createdByUserId: sess.userId,
               },
               select: { id: true, estimateNumber: true },
@@ -491,7 +498,7 @@ export async function createRoughEstimate(
           initialCostBillingMode: data.initialCostBillingMode,
           autoCostTotalJpy,
           autoPriceTotalJpy,
-          finalPriceManualJpy,
+          finalUnitPriceManualJpy,
           itemCount: built.length,
         },
       },
@@ -549,10 +556,8 @@ export async function updateRoughEstimate(
     const lines = built.map((b) => b.calc)
     const autoCostTotalJpy = computeAutoCostTotalJpy(lines)
     const autoPriceTotalJpy = computeAutoPriceTotalJpy(lines, marginRate)
-    const finalPriceManualJpy =
-      data.finalPriceManualJpy != null
-        ? data.finalPriceManualJpy
-        : autoPriceTotalJpy
+    // 道A: 手打ち1枚単価のみ更新。旧 finalPriceManualJpy（総額手打ち）は触らない（既存値放置）。
+    const finalUnitPriceManualJpy = data.finalUnitPriceManualJpy ?? null
 
     const beforeSnapshot = {
       productId: existing.productId,
@@ -567,9 +572,9 @@ export async function updateRoughEstimate(
         existing.autoPriceTotalJpy != null
           ? Number(existing.autoPriceTotalJpy)
           : null,
-      finalPriceManualJpy:
-        existing.finalPriceManualJpy != null
-          ? Number(existing.finalPriceManualJpy)
+      finalUnitPriceManualJpy:
+        existing.finalUnitPriceManualJpy != null
+          ? Number(existing.finalUnitPriceManualJpy)
           : null,
     }
 
@@ -589,7 +594,11 @@ export async function updateRoughEstimate(
             initialCostBillingMode: data.initialCostBillingMode,
             autoCostTotalJpy: new Prisma.Decimal(autoCostTotalJpy),
             autoPriceTotalJpy: new Prisma.Decimal(autoPriceTotalJpy),
-            finalPriceManualJpy: new Prisma.Decimal(finalPriceManualJpy),
+            // 道A: finalPriceManualJpy（総額手打ち）は更新対象に含めない（既存値放置）。
+            finalUnitPriceManualJpy:
+              finalUnitPriceManualJpy != null
+                ? new Prisma.Decimal(finalUnitPriceManualJpy)
+                : null,
           },
         })
         // 明細は全削除→再作成（RoughEstimateItem は deletedAt を持たずヘッダ従属・Cascade）
@@ -617,7 +626,7 @@ export async function updateRoughEstimate(
           initialCostBillingMode: data.initialCostBillingMode,
           autoCostTotalJpy,
           autoPriceTotalJpy,
-          finalPriceManualJpy,
+          finalUnitPriceManualJpy,
           itemCount: built.length,
         },
       },
@@ -690,7 +699,7 @@ export type RoughEstimateListRow = {
   initialCostBillingMode: InitialCostBillingMode
   autoCostTotalJpy: number | null
   autoPriceTotalJpy: number | null
-  finalPriceManualJpy: number | null
+  finalUnitPriceManualJpy: number | null
   belowMarginWarning: boolean
 }
 
@@ -714,7 +723,7 @@ export async function listRoughEstimatesByProduct(
       initialCostBillingMode: true,
       autoCostTotalJpy: true,
       autoPriceTotalJpy: true,
-      finalPriceManualJpy: true,
+      finalUnitPriceManualJpy: true,
     },
   })
   return rows.map((r) => {
@@ -733,9 +742,88 @@ export async function listRoughEstimatesByProduct(
         r.autoCostTotalJpy != null ? Number(r.autoCostTotalJpy) : null,
       autoPriceTotalJpy:
         r.autoPriceTotalJpy != null ? Number(r.autoPriceTotalJpy) : null,
-      finalPriceManualJpy:
-        r.finalPriceManualJpy != null ? Number(r.finalPriceManualJpy) : null,
+      finalUnitPriceManualJpy:
+        r.finalUnitPriceManualJpy != null
+          ? Number(r.finalUnitPriceManualJpy)
+          : null,
       belowMarginWarning: isBelowMarginWarning(marginRate),
+    }
+  })
+}
+
+// =============================================================================
+// 会社横断一覧（/quotations 用・原価/利益率は載せない）
+// productId → Product → Client を2段一括引きで宛先解決（N+1 回避）。
+// =============================================================================
+export type CompanyRoughEstimateRow = {
+  id: string
+  estimateNumber: string
+  productId: string
+  productName: string
+  productCode: string
+  clientId: string
+  clientName: string
+  title: string | null
+  presentedMoq: number | null
+  issuedAt: string // ISO
+}
+
+export async function listRoughEstimatesForCompany(): Promise<
+  CompanyRoughEstimateRow[]
+> {
+  const sess = await requireSession()
+  if (!sess.ok) return []
+
+  const estimates = await prisma.roughEstimate.findMany({
+    where: { companyId: sess.companyId, deletedAt: null },
+    orderBy: { issuedAt: "desc" },
+    select: {
+      id: true,
+      estimateNumber: true,
+      productId: true,
+      title: true,
+      presentedMoq: true,
+      issuedAt: true,
+    },
+  })
+
+  const productIds = [...new Set(estimates.map((e) => e.productId))]
+  const products = productIds.length
+    ? await prisma.product.findMany({
+        where: { companyId: sess.companyId, id: { in: productIds } },
+        select: {
+          id: true,
+          productName: true,
+          productCode: true,
+          clientId: true,
+        },
+      })
+    : []
+  const productById = new Map(products.map((p) => [p.id, p]))
+
+  const clientIds = [...new Set(products.map((p) => p.clientId))]
+  const clients = clientIds.length
+    ? await prisma.client.findMany({
+        where: { companyId: sess.companyId, id: { in: clientIds } },
+        select: { id: true, companyName: true },
+      })
+    : []
+  const clientById = new Map(clients.map((c) => [c.id, c]))
+
+  return estimates.map((e) => {
+    const product = productById.get(e.productId)
+    const client = product ? clientById.get(product.clientId) : undefined
+    return {
+      id: e.id,
+      estimateNumber: e.estimateNumber,
+      productId: e.productId,
+      productName: product?.productName ?? "—",
+      productCode: product?.productCode ?? "—",
+      clientId: product?.clientId ?? "",
+      clientName: client?.companyName ?? "—",
+      title: e.title,
+      presentedMoq: e.presentedMoq,
+      issuedAt: e.issuedAt.toISOString(),
     }
   })
 }
@@ -788,6 +876,8 @@ export type RoughEstimateEditItem = {
   unit: string | null
   unitPrice: number | null
   currency: Currency
+  /** 道A: 初期費用行の手打ち提示額（INITIAL_COST 行のみ非null 想定）。 */
+  presentedPriceManualJpy: number | null
   notes: string | null
 }
 
@@ -803,7 +893,8 @@ export type RoughEstimateEditData = {
   marginRate: number | null
   marginRateSource: MarginRateSource
   initialCostBillingMode: InitialCostBillingMode
-  finalPriceManualJpy: number | null
+  /** 道A: 手打ち1枚単価（金額の正）。旧 finalPriceManualJpy（総額手打ち）は返さない。 */
+  finalUnitPriceManualJpy: number | null
   /** USD 行の subtotalJpy は保存済みだがレートは非保存（v1）。編集時は再入力を促す。 */
   hasUsdLine: boolean
   items: RoughEstimateEditItem[]
@@ -842,9 +933,9 @@ export async function getRoughEstimateForEdit(
         marginRate: header.marginRate != null ? Number(header.marginRate) : null,
         marginRateSource: header.marginRateSource,
         initialCostBillingMode: header.initialCostBillingMode,
-        finalPriceManualJpy:
-          header.finalPriceManualJpy != null
-            ? Number(header.finalPriceManualJpy)
+        finalUnitPriceManualJpy:
+          header.finalUnitPriceManualJpy != null
+            ? Number(header.finalUnitPriceManualJpy)
             : null,
         hasUsdLine: items.some((it) => it.currency === Currency.USD),
         items: items.map((it) => ({
@@ -860,6 +951,10 @@ export async function getRoughEstimateForEdit(
           unit: it.unit,
           unitPrice: it.unitPrice != null ? Number(it.unitPrice) : null,
           currency: it.currency,
+          presentedPriceManualJpy:
+            it.presentedPriceManualJpy != null
+              ? Number(it.presentedPriceManualJpy)
+              : null,
           notes: it.notes,
         })),
       },
@@ -869,5 +964,41 @@ export async function getRoughEstimateForEdit(
       ok: false,
       error: e instanceof Error ? e.message : "取得に失敗しました",
     }
+  }
+}
+
+// =============================================================================
+// 複製プレフィル用（Part D）：既存見積を「新規作成の初期値」として返す read only。
+// 書き込みは既存 createRoughEstimate に相乗り（採番・バリデーション・calc を二重実装しない）。
+// =============================================================================
+/** 複製プレフィル＝編集データから id/estimateNumber（採番は create 側）を落とした形。 */
+export type RoughEstimateDuplicateData = Omit<
+  RoughEstimateEditData,
+  "id" | "estimateNumber"
+>
+
+export async function duplicateRoughEstimate(
+  id: string,
+): Promise<ActionResult<RoughEstimateDuplicateData>> {
+  const r = await getRoughEstimateForEdit(id)
+  if (!r.ok) return r
+  const d = r.data
+  // id/estimateNumber は Omit で落とす（採番は create 側）。
+  const { id: _id, estimateNumber: _num, ...rest } = d
+  void _id
+  void _num
+  return {
+    ok: true,
+    data: {
+      ...rest,
+      // §6-4: タイトルに「のコピー」付与。
+      title: d.title ? `${d.title} のコピー` : "（コピー）",
+      // 道A §6: 手打ち値（1枚単価・初期費用提示額）は各発行に固有 → リセット。
+      finalUnitPriceManualJpy: null,
+      items: rest.items.map((it) => ({ ...it, presentedPriceManualJpy: null })),
+      // productId/notes/presentedMoq/currency/validUntil/marginRate/marginRateSource/
+      // initialCostBillingMode/hasUsdLine/items（source・sourcePoItemId・sourceWoItemId の
+      // 引き当て焼き込み含む）はそのまま引き継ぐ（rest 経由）。
+    },
   }
 }
