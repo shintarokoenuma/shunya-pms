@@ -49,7 +49,12 @@ export type QuotationPdfData = {
   productTotalJpy: number
   initialCostRows: QuotationPdfInitialCostRow[]
   initialCostTotalJpy: number
-  grandTotalJpy: number
+  /** 小計（税抜）＝製品合計＋初期費用合計（旧 grandTotalJpy）。 */
+  subtotalExTaxJpy: number
+  /** 消費税＝小計（税抜）×TAX_RATE を円未満切り捨て。 */
+  taxJpy: number
+  /** 御見積金額（税込）＝小計（税抜）＋消費税。 */
+  totalIncTaxJpy: number
   /** INCLUDED を含むか（脚注の出し分け）。 */
   hasIncluded: boolean
   notesRows: QuotationPdfNoteRow[]
@@ -60,6 +65,12 @@ export type QuotationPdfError = {
   /** MOQ_REQUIRED / UNIT_UNRESOLVED のとき対象 RE 番号。 */
   estimateNumbers?: string[]
 }
+
+/**
+ * 消費税率（表示層の定数・保存しない・スキーマ変更なし）。軽減税率は対象外。
+ * 税率変更時はここ1箇所。消費税は円未満切り捨て（Math.floor・一般慣行／単価の切上とは別）。
+ */
+const TAX_RATE = 0.1
 
 /** Decimal|number|null → number|null。 */
 function dec(v: Prisma.Decimal | number | null | undefined): number | null {
@@ -212,7 +223,9 @@ export async function getQuotationPdfData(
 
   const productTotalJpy = productRows.reduce((a, r) => a + r.amountJpy, 0)
   const initialCostTotalJpy = initialCostRows.reduce((a, r) => a + r.amountJpy, 0)
-  const grandTotalJpy = productTotalJpy + initialCostTotalJpy
+  const subtotalExTaxJpy = productTotalJpy + initialCostTotalJpy
+  const taxJpy = Math.floor(subtotalExTaxJpy * TAX_RATE) // 消費税＝円未満切り捨て。
+  const totalIncTaxJpy = subtotalExTaxJpy + taxJpy
 
   return {
     issuedAt: new Date(),
@@ -221,7 +234,9 @@ export async function getQuotationPdfData(
     productTotalJpy,
     initialCostRows,
     initialCostTotalJpy,
-    grandTotalJpy,
+    subtotalExTaxJpy,
+    taxJpy,
+    totalIncTaxJpy,
     hasIncluded,
     notesRows,
   }

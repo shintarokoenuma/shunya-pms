@@ -1134,7 +1134,7 @@ function RoughEstimateFormDialog({
                   name="finalUnitPriceManualJpy"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>1枚単価（手打ち・円）</FormLabel>
+                      <FormLabel>1枚単価（手打ち・税抜・円）</FormLabel>
                       <div className="flex gap-2">
                         <FormControl>
                           <Input
@@ -1182,7 +1182,7 @@ function RoughEstimateFormDialog({
                 <div className="rounded bg-muted p-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">
-                      提示総額（導出）
+                      提示総額（税抜・導出）
                     </span>
                     <span className="font-mono font-medium">
                       {derivedGrandTotal != null
@@ -1658,7 +1658,7 @@ function ItemCard({
           name={`items.${idx}.presentedPriceManualJpy`}
           render={({ field }) => (
             <FormItem>
-              <FormLabel className="text-xs">提示額（手打ち・円）</FormLabel>
+              <FormLabel className="text-xs">提示額（手打ち・税抜・円）</FormLabel>
               <div className="flex gap-2">
                 <FormControl>
                   <Input

@@ -77,15 +77,29 @@ const styles = StyleSheet.create({
   },
   totalLabelCell: { flexGrow: 1, paddingHorizontal: 4, textAlign: "right" },
   totalValueCell: { width: "18%", paddingHorizontal: 4, textAlign: "right", fontWeight: "bold" },
+  // 合計サマリ（小計税抜／消費税／税込）
+  summaryBox: {
+    marginTop: 14,
+    marginLeft: "auto",
+    width: "50%",
+  },
+  sumRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "baseline",
+    minHeight: 18,
+  },
+  sumLabel: { fontSize: 10 },
+  sumValue: { fontSize: 10, fontFamily: PDF_FONT_FAMILY },
   grandRow: {
     flexDirection: "row",
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
     alignItems: "baseline",
-    marginTop: 14,
-    paddingTop: 8,
+    marginTop: 6,
+    paddingTop: 6,
     borderTop: "2pt solid #333",
   },
-  grandLabel: { fontSize: 12, marginRight: 16 },
+  grandLabel: { fontSize: 12, fontWeight: "bold" },
   grandValue: { fontSize: 16, fontWeight: "bold" },
   footnote: { fontSize: 8, color: "#666", marginTop: 10 },
   notesBox: { marginTop: 14 },
@@ -136,8 +150,8 @@ export function QuotationDocument({ data }: { data: QuotationPdfData }) {
           <View style={styles.th} fixed>
             <Text style={styles.cName}>品名</Text>
             <Text style={styles.cQty}>数量</Text>
-            <Text style={styles.cUnit}>1枚単価</Text>
-            <Text style={styles.cAmount}>金額</Text>
+            <Text style={styles.cUnit}>1枚単価（税抜）</Text>
+            <Text style={styles.cAmount}>金額（税抜）</Text>
           </View>
           {data.productRows.map((r, i) => (
             <View style={styles.tr} key={i} wrap={false}>
@@ -167,7 +181,7 @@ export function QuotationDocument({ data }: { data: QuotationPdfData }) {
             <View style={styles.table}>
               <View style={styles.th} fixed>
                 <Text style={styles.icLabel}>項目</Text>
-                <Text style={styles.icAmount}>金額</Text>
+                <Text style={styles.icAmount}>金額（税抜）</Text>
               </View>
               {data.initialCostRows.map((r, i) => (
                 <View style={styles.tr} key={i} wrap={false}>
@@ -185,10 +199,20 @@ export function QuotationDocument({ data }: { data: QuotationPdfData }) {
           </>
         )}
 
-        {/* 【総合計】 */}
-        <View style={styles.grandRow}>
-          <Text style={styles.grandLabel}>総合計</Text>
-          <Text style={styles.grandValue}>{yen(data.grandTotalJpy)}</Text>
+        {/* 合計サマリ（小計税抜 → 消費税10% → 御見積金額税込・強調） */}
+        <View style={styles.summaryBox}>
+          <View style={styles.sumRow}>
+            <Text style={styles.sumLabel}>小計（税抜）</Text>
+            <Text style={styles.sumValue}>{yen(data.subtotalExTaxJpy)}</Text>
+          </View>
+          <View style={styles.sumRow}>
+            <Text style={styles.sumLabel}>消費税（10%）</Text>
+            <Text style={styles.sumValue}>{yen(data.taxJpy)}</Text>
+          </View>
+          <View style={styles.grandRow}>
+            <Text style={styles.grandLabel}>御見積金額（税込）</Text>
+            <Text style={styles.grandValue}>{yen(data.totalIncTaxJpy)}</Text>
+          </View>
         </View>
 
         {/* INCLUDED 脚注 */}
