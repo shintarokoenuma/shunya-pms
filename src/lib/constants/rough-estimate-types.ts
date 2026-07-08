@@ -13,18 +13,21 @@ import {
  * 仕様: docs/specs/quotation-rough-estimate-implementation-brief-2026-07-01.md §1-3
  */
 
+// enum 値 INITIAL_COST は残置（DB enum 破壊回避・型網羅の house rule）。
+// ただし別枠フラグ方式（isSeparateBilling）へ移行済みのため、旧ラベルは「（廃止）」表記。
 export const ROUGH_ESTIMATE_CATEGORY_LABELS: Record<RoughEstimateCategory, string> = {
   MATERIAL: "材料費",
   LABOR: "工賃",
-  INITIAL_COST: "初期費用（別枠）",
+  INITIAL_COST: "初期費用（廃止・別枠フラグへ移行）",
 }
 
+// フォームの費目区分 select は 2値運用（MATERIAL/LABOR のみ）。INITIAL_COST は選択肢から除外。
 export const ROUGH_ESTIMATE_CATEGORY_OPTIONS: Array<{
   value: RoughEstimateCategory
   label: string
-}> = (Object.keys(ROUGH_ESTIMATE_CATEGORY_LABELS) as RoughEstimateCategory[]).map(
-  (value) => ({ value, label: ROUGH_ESTIMATE_CATEGORY_LABELS[value] }),
-)
+}> = (Object.keys(ROUGH_ESTIMATE_CATEGORY_LABELS) as RoughEstimateCategory[])
+  .filter((value) => value !== RoughEstimateCategory.INITIAL_COST)
+  .map((value) => ({ value, label: ROUGH_ESTIMATE_CATEGORY_LABELS[value] }))
 
 export const ROUGH_ESTIMATE_ITEM_SOURCE_LABELS: Record<RoughEstimateItemSource, string> = {
   MANUAL: "直接入力",

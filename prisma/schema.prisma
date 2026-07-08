@@ -9570,8 +9570,10 @@ model RoughEstimateItem {
 
   itemOrder Int @map("item_order")
 
-  // 費目区分（MATERIAL/LABOR は原価分子・INITIAL_COST は別枠）
+  // 費目区分（行の性格：MATERIAL/LABOR の2値運用。旧 INITIAL_COST は廃止＝isSeparateBilling へ移行）
   itemCategory RoughEstimateCategory @map("item_category")
+  // 別枠計上（初期費用）。防衛線の判定基準＝true の行は1枚原価の分子に入れず別枠へ。
+  isSeparateBilling Boolean @default(false) @map("is_separate_billing")
 
   // 品目（日英）
   itemName   String  @map("item_name") @db.VarChar(255)
@@ -9593,7 +9595,7 @@ model RoughEstimateItem {
   currency    Currency @default(JPY)
   subtotal    Decimal? @db.Decimal(15, 2)
   subtotalJpy Decimal? @map("subtotal_jpy") @db.Decimal(15, 2) // JPY 換算（入力レート方式）
-  // 初期費用行の手打ち提示額（道A・INITIAL_COST 行のみ UI 露出・他費目は常に null）
+  // 初期費用行の手打ち提示額（道A・isSeparateBilling=true 行のみ UI 露出・フラグ OFF 行は常に null）
   presentedPriceManualJpy Decimal? @map("presented_price_manual_jpy") @db.Decimal(15, 2)
 
   notes String? @db.Text

@@ -83,7 +83,18 @@ const allowedCurrencyField = z
 // 明細
 // =============================================================================
 export const roughEstimateItemInputSchema = z.object({
-  itemCategory: z.nativeEnum(RoughEstimateCategory),
+  // 費目区分は 2値運用（MATERIAL/LABOR）。旧 INITIAL_COST は別枠フラグへ移行済み＝新規書き込み拒否。
+  itemCategory: z
+    .nativeEnum(RoughEstimateCategory)
+    .refine(
+      (c) =>
+        c === RoughEstimateCategory.MATERIAL ||
+        c === RoughEstimateCategory.LABOR,
+      {
+        message:
+          "費目区分は材料費/工賃のみです（初期費用は別枠計上フラグで指定してください）",
+      },
+    ),
   itemName: z.string().trim().min(1, "品目名は必須です").max(255, "255文字以内"),
   itemNameEn: optionalString(255),
   materialId: optionalRelationId,
@@ -96,7 +107,9 @@ export const roughEstimateItemInputSchema = z.object({
   unit: optionalString(20),
   unitPrice: optionalNonNegativeNumber, // スナップショット単価
   currency: allowedCurrencyField.default(Currency.JPY),
-  // 道A: 初期費用行の手打ち提示額（INITIAL_COST 行のみ・整数円）。他費目は action 側で null に落とす。
+  // 別枠計上（初期費用）フラグ。ON 行は原価分子から外れ別枠へ・手打ち提示額欄が露出。
+  isSeparateBilling: z.boolean().default(false),
+  // 道A: 初期費用行の手打ち提示額（isSeparateBilling=true 行のみ・整数円）。フラグ OFF は action 側で null 落とし。
   presentedPriceManualJpy: optionalNonNegativeIntYen,
   notes: optionalString(10000),
 })
