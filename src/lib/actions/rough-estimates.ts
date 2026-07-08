@@ -6,6 +6,7 @@ import {
   Currency,
   MarginRateSource,
   RoughEstimateCategory,
+  BillingClassification,
   type RoughEstimate,
   type RoughEstimateItemSource,
   type InitialCostBillingMode,
@@ -134,6 +135,9 @@ export type PastPoItemCandidate = {
   currency: Currency
   subtotal: number | null
   orderDate: string | null
+  // 別枠フラグ自動連動用（INDIVIDUAL_BILLING または現物資産なら初期費用として自動 ON）。
+  isIndividualBilling: boolean
+  isPhysicalAsset: boolean
 }
 
 export type PastWoItemCandidate = {
@@ -147,6 +151,8 @@ export type PastWoItemCandidate = {
   unitPrice: number
   currency: Currency
   subtotal: number | null
+  // 別枠フラグ自動連動用（INDIVIDUAL_BILLING なら初期費用として自動 ON）。
+  isIndividualBilling: boolean
 }
 
 /**
@@ -211,6 +217,9 @@ export async function listPastPoItemsBySupplier(
       currency: it.currency,
       subtotal: it.subtotal != null ? Number(it.subtotal) : null,
       orderDate: po?.orderDate ? po.orderDate.toISOString().slice(0, 10) : null,
+      isIndividualBilling:
+        it.billingClassification === BillingClassification.INDIVIDUAL_BILLING,
+      isPhysicalAsset: it.isPhysicalAsset === true,
     }
   })
 }
@@ -253,6 +262,8 @@ export async function listPastWoItemsByCostCategory(
     unitPrice: Number(it.unitPrice),
     currency: it.currency,
     subtotal: it.subtotal != null ? Number(it.subtotal) : null,
+    isIndividualBilling:
+      it.billingClassification === BillingClassification.INDIVIDUAL_BILLING,
     }
   })
 }
@@ -348,6 +359,7 @@ function buildItemRows(data: RoughEstimateInput): BuiltItem[] {
       row: {
         itemOrder: i,
         itemCategory: it.itemCategory,
+        isSeparateBilling: it.isSeparateBilling,
         itemName: it.itemName,
         itemNameEn: it.itemNameEn || null,
         materialId: it.materialId,
@@ -361,15 +373,14 @@ function buildItemRows(data: RoughEstimateInput): BuiltItem[] {
         currency: it.currency,
         subtotal: subtotal != null ? new Prisma.Decimal(subtotal) : null,
         subtotalJpy: subtotalJpy != null ? new Prisma.Decimal(subtotalJpy) : null,
-        // 道A: 初期費用行の手打ち提示額のみ保持。他費目に来たら null に落とす（サーバ側ガード）。
+        // 道A: 別枠計上（初期費用）行の手打ち提示額のみ保持。フラグ OFF 行は null に落とす（サーバ側ガード）。
         presentedPriceManualJpy:
-          it.itemCategory === RoughEstimateCategory.INITIAL_COST &&
-          it.presentedPriceManualJpy != null
+          it.isSeparateBilling && it.presentedPriceManualJpy != null
             ? new Prisma.Decimal(it.presentedPriceManualJpy)
             : null,
         notes: it.notes || null,
       },
-      calc: { itemCategory: it.itemCategory, subtotalJpy },
+      calc: { isSeparateBilling: it.isSeparateBilling, subtotalJpy },
     }
   })
 }
@@ -865,6 +876,8 @@ export async function getRoughEstimate(
 // =============================================================================
 export type RoughEstimateEditItem = {
   itemCategory: RoughEstimateCategory
+  /** 別枠計上（初期費用）フラグ。 */
+  isSeparateBilling: boolean
   itemName: string
   itemNameEn: string | null
   materialId: string | null
@@ -876,7 +889,7 @@ export type RoughEstimateEditItem = {
   unit: string | null
   unitPrice: number | null
   currency: Currency
-  /** 道A: 初期費用行の手打ち提示額（INITIAL_COST 行のみ非null 想定）。 */
+  /** 道A: 別枠計上（初期費用）行の手打ち提示額（フラグ ON 行のみ非null 想定）。 */
   presentedPriceManualJpy: number | null
   notes: string | null
 }
@@ -940,6 +953,7 @@ export async function getRoughEstimateForEdit(
         hasUsdLine: items.some((it) => it.currency === Currency.USD),
         items: items.map((it) => ({
           itemCategory: it.itemCategory,
+          isSeparateBilling: it.isSeparateBilling,
           itemName: it.itemName,
           itemNameEn: it.itemNameEn,
           materialId: it.materialId,

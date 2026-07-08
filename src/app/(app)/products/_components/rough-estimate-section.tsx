@@ -118,21 +118,19 @@ const SOURCE_OPTIONS = Object.values(RoughEstimateItemSource).map((v) => ({
 }))
 
 /**
- * 費目区分ごとに選べる出所（source）を制限する（確定仕様）:
- * - MATERIAL      → MANUAL / PAST_PO（PAST_WO は除外）
- * - LABOR         → MANUAL / PAST_WO（PAST_PO は除外）
- * - INITIAL_COST  → MANUAL のみ
+ * 費目区分ごとに選べる出所（source）を制限する（2値運用・確定仕様）:
+ * - MATERIAL → MANUAL / PAST_PO（PAST_WO は除外）
+ * - LABOR    → MANUAL / PAST_WO（PAST_PO は除外）
+ * ※別枠計上（初期費用）は isSeparateBilling フラグ独立管理。費目区分に応じて引き当て可。
  */
 function allowedSourcesFor(
   category: RoughEstimateCategory,
 ): RoughEstimateItemSource[] {
-  if (category === RoughEstimateCategory.MATERIAL) {
-    return [RoughEstimateItemSource.MANUAL, RoughEstimateItemSource.PAST_PO]
-  }
   if (category === RoughEstimateCategory.LABOR) {
     return [RoughEstimateItemSource.MANUAL, RoughEstimateItemSource.PAST_WO]
   }
-  return [RoughEstimateItemSource.MANUAL] // INITIAL_COST
+  // MATERIAL（および想定外値のフォールバック）
+  return [RoughEstimateItemSource.MANUAL, RoughEstimateItemSource.PAST_PO]
 }
 
 /**
@@ -474,9 +472,11 @@ function DeleteConfirmDialog({
 // =============================================================================
 function emptyItem(
   category: RoughEstimateCategory = RoughEstimateCategory.MATERIAL,
+  separateBilling = false,
 ): RoughEstimateFormValues["items"][number] {
   return {
     itemCategory: category,
+    isSeparateBilling: separateBilling,
     itemName: "",
     itemNameEn: "",
     materialId: null,
@@ -516,6 +516,7 @@ function toFormValues(
         : "",
     items: d.items.map((it) => ({
       itemCategory: it.itemCategory,
+      isSeparateBilling: it.isSeparateBilling,
       itemName: it.itemName,
       itemNameEn: it.itemNameEn ?? "",
       materialId: it.materialId,
@@ -657,7 +658,7 @@ function RoughEstimateFormDialog({
   // 各行の JPY 換算小計（単一ソース：ここで計算し行にも渡す）。
   const rowSubtotals = items.map((it) => lineSubtotalJpy(it, usdRateNum))
   const lines: RoughEstimateLineForCalc[] = items.map((it, i) => ({
-    itemCategory: it.itemCategory,
+    isSeparateBilling: it.isSeparateBilling ?? false,
     subtotalJpy: rowSubtotals[i],
   }))
   const summary = summarizeRoughEstimate(lines, marginNum)
@@ -684,11 +685,11 @@ function RoughEstimateFormDialog({
     breakdown.perUnit,
     billingMode,
   )
-  // 初期費用の提示合計（SEPARATE のときのみ・INITIAL_COST 行を提示額で積み上げ）。
+  // 初期費用の提示合計（SEPARATE のときのみ・別枠フラグ ON 行を提示額で積み上げ）。
   const initialPresentedSum = included
     ? 0
     : items.reduce((acc, it, i) => {
-        if (it.itemCategory !== RoughEstimateCategory.INITIAL_COST) return acc
+        if (!it.isSeparateBilling) return acc
         const v = resolveInitialCostPresentedJpy(
           toNumOrNull(it.presentedPriceManualJpy),
           rowSubtotals[i],
@@ -702,20 +703,20 @@ function RoughEstimateFormDialog({
       ? effectiveUnit.valueJpy * moqNum + initialPresentedSum
       : null
 
-  // INITIAL_COST 行で数量未入力（単価あり）を検出（集計から静かに消えるのを防ぐ・P2注意点）。
+  // 別枠フラグ ON 行で数量未入力（単価あり）を検出（集計から静かに消えるのを防ぐ・P2注意点）。
   const initialCostMissingQty = items.some(
     (it) =>
-      it.itemCategory === RoughEstimateCategory.INITIAL_COST &&
+      it.isSeparateBilling &&
       isBlank(it.quantity) &&
       !isBlank(it.unitPrice),
   )
 
   const onSubmit: SubmitHandler<RoughEstimateFormValues> = (values) => {
     startTransition(async () => {
-      // INITIAL_COST の数量未入力（単価あり）は 1 を補う（別枠から静かに落ちるのを防ぐ）。
+      // 別枠フラグ ON 行の数量未入力（単価あり）は 1 を補う（別枠から静かに落ちるのを防ぐ）。
       const normalizedItems = values.items.map((it) => {
         if (
-          it.itemCategory === RoughEstimateCategory.INITIAL_COST &&
+          it.isSeparateBilling &&
           isBlank(it.quantity) &&
           !isBlank(it.unitPrice)
         ) {
@@ -978,7 +979,9 @@ function RoughEstimateFormDialog({
                       size="sm"
                       variant="outline"
                       onClick={() =>
-                        append(emptyItem(RoughEstimateCategory.INITIAL_COST))
+                        append(
+                          emptyItem(RoughEstimateCategory.LABOR, true),
+                        )
                       }
                     >
                       <Plus className="mr-1 h-3.5 w-3.5" />
@@ -1022,7 +1025,7 @@ function RoughEstimateFormDialog({
               <div className="rounded-md border p-4 space-y-2 text-sm">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">
-                    原価小計（材料費＋工賃・INITIAL_COST 除外）
+                    原価小計（別枠計上を除外）
                   </span>
                   <span className="font-mono">{jpy(summary.autoCostTotalJpy)}</span>
                 </div>
@@ -1278,7 +1281,8 @@ function ItemCard({
 }) {
   const category = itemValue?.itemCategory ?? RoughEstimateCategory.MATERIAL
   const source = itemValue?.source ?? RoughEstimateItemSource.MANUAL
-  const isInitial = category === RoughEstimateCategory.INITIAL_COST
+  // 別枠計上（初期費用）フラグ。従来の isInitial（費目区分 INITIAL_COST）を置換。
+  const isSeparate = itemValue?.isSeparateBilling ?? false
   const isMaterial = category === RoughEstimateCategory.MATERIAL
   const isLabor = category === RoughEstimateCategory.LABOR
 
@@ -1330,25 +1334,25 @@ function ItemCard({
   return (
     <div
       className={`rounded-md border p-3 space-y-3 ${
-        isInitial ? "border-amber-300 bg-amber-50" : "bg-muted/30"
+        isSeparate ? "border-amber-300 bg-amber-50" : "bg-muted/30"
       }`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Badge variant={isInitial ? "outline" : "secondary"}>
+          <Badge variant={isSeparate ? "outline" : "secondary"}>
             {ROUGH_ESTIMATE_CATEGORY_LABELS[category]}
           </Badge>
+          {isSeparate && (
+            <Badge variant="outline" className="border-amber-300 text-amber-700">
+              別枠計上（初期費用）
+            </Badge>
+          )}
           {isAllocated && (
             <Badge variant="outline" className="border-emerald-300 text-emerald-700">
               {appliedInfo
                 ? `引き当て: ${appliedInfo.poNumber} / ${appliedInfo.displayName}`
                 : "引き当て済み（PAST_PO）"}
             </Badge>
-          )}
-          {isInitial && (
-            <span className="text-[11px] text-amber-700">
-              別枠・原価に含めない
-            </span>
           )}
         </div>
         <Button
@@ -1458,6 +1462,26 @@ function ItemCard({
           )}
         />
       </div>
+
+      {/* 別枠計上（初期費用）フラグ。ON で原価分子から外れ別枠へ・手打ち提示額欄が露出。 */}
+      <FormField
+        control={form.control}
+        name={`items.${idx}.isSeparateBilling`}
+        render={({ field }) => (
+          <FormItem>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={field.value === true}
+                onCheckedChange={(c) => field.onChange(c === true)}
+              />
+              別枠計上（初期費用）
+              <span className="text-[11px] text-muted-foreground">
+                ＝1枚原価に含めず別途請求
+              </span>
+            </label>
+          </FormItem>
+        )}
+      />
 
       {/* 2段目：マスタ選択（A-4・MATERIAL=素材 / LABOR=費目・MANUAL でも常時表示） */}
       {(isMaterial || isLabor) && (
@@ -1651,8 +1675,8 @@ function ItemCard({
         </FormItem>
       </div>
 
-      {/* 道A: 初期費用行のみ「提示額（手打ち・円）」。空なら 原価×(1+利益率) の自動提示額。 */}
-      {isInitial && (
+      {/* 道A: 別枠フラグ ON 行のみ「提示額（手打ち・税抜・円）」。空なら 原価×(1+利益率) の自動提示額。 */}
+      {isSeparate && (
         <FormField
           control={form.control}
           name={`items.${idx}.presentedPriceManualJpy`}
@@ -1745,6 +1769,10 @@ function PastPoSearch({
       // 素材マスター品目なら materialId を焼く。自由名品目なら null（sourcePoItemId で追跡）。
       form.setValue(`items.${idx}.materialId`, c.materialId)
       form.setValue(`items.${idx}.sourcePoItemId`, c.poItemId)
+      // 別枠フラグ自動連動: 個別売り立て or 現物資産の PoItem は初期費用として自動 ON（上書き可）。
+      if (c.isIndividualBilling || c.isPhysicalAsset) {
+        form.setValue(`items.${idx}.isSeparateBilling`, true)
+      }
       // 直近引き当ての詳細を行バッジへ（PO番号・品目名）。
       onApplied({ poNumber: c.poNumber, displayName: c.displayName })
       setCandidates(null)
@@ -1865,6 +1893,10 @@ function PastWoSearch({
       form.setValue(`items.${idx}.currency`, c.currency)
       form.setValue(`items.${idx}.costCategoryId`, c.costCategoryId)
       form.setValue(`items.${idx}.sourceWoItemId`, c.woItemId)
+      // 別枠フラグ自動連動: 個別売り立て（版代・パターン代等）の WoItem は初期費用として自動 ON（上書き可）。
+      if (c.isIndividualBilling) {
+        form.setValue(`items.${idx}.isSeparateBilling`, true)
+      }
       setCandidates(null)
       toast.success(`${c.woNumber} から引き当てました`)
     })

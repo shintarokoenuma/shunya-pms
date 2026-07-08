@@ -1,4 +1,4 @@
-import { RoughEstimateCategory, InitialCostBillingMode } from "@prisma/client"
+import { InitialCostBillingMode } from "@prisma/client"
 
 /**
  * QE-1R（概算量産見積）集計の純関数群。
@@ -9,13 +9,14 @@ import { RoughEstimateCategory, InitialCostBillingMode } from "@prisma/client"
  *   @prisma/client からは enum のみ import（値はビルド時にインライン化・engine を引かない）。
  * - 金額は number（JPY・小数2桁想定）。DB 保存時に action 側で Prisma.Decimal(15,2) へ変換する。
  *
- * ★絶対防衛線（v0.1 §6）: 原価分子は MATERIAL / LABOR のみ。INITIAL_COST は 1 枚原価に混ぜない。
- *   ここが検算の要（computeAutoCostTotalJpy 参照）。
+ * ★絶対防衛線（v0.1 §6）: 原価分子は「別枠計上でない行（isSeparateBilling=false）」のみ。
+ *   別枠フラグ ON の行（初期費用）は 1 枚原価に混ぜない。ここが検算の要（computeAutoCostTotalJpy 参照）。
  */
 
-/** 集計に必要な明細の最小形（費目区分と JPY 換算小計のみ）。 */
+/** 集計に必要な明細の最小形（別枠計上フラグと JPY 換算小計のみ）。 */
 export type RoughEstimateLineForCalc = {
-  itemCategory: RoughEstimateCategory
+  /** 別枠計上（初期費用）か。true の行は原価分子から除外し初期費用側へ。 */
+  isSeparateBilling: boolean
   /** JPY 換算済みの行小計。未定（単価未入力等）のときは null。 */
   subtotalJpy: number | null
 }
@@ -30,35 +31,29 @@ function sumSubtotalJpy(lines: RoughEstimateLineForCalc[]): number {
 }
 
 /**
- * 原価集計（autoCostTotalJpy）＝ itemCategory ∈ {MATERIAL, LABOR} の subtotalJpy 合算。
- * ★INITIAL_COST は分子に入れない（v0.1 §6 絶対防衛線）。
+ * 原価集計（autoCostTotalJpy）＝ 別枠計上でない行（isSeparateBilling=false）の subtotalJpy 合算。
+ * ★別枠フラグ ON 行（初期費用）は分子に入れない（v0.1 §6 絶対防衛線）。
  */
 export function computeAutoCostTotalJpy(lines: RoughEstimateLineForCalc[]): number {
-  const costLines = lines.filter(
-    (l) =>
-      l.itemCategory === RoughEstimateCategory.MATERIAL ||
-      l.itemCategory === RoughEstimateCategory.LABOR,
-  )
+  const costLines = lines.filter((l) => !l.isSeparateBilling)
   return round2(sumSubtotalJpy(costLines))
 }
 
 /**
  * 初期費用の別枠合計（autoCostTotalJpy とは別に保持する内訳・分子外）。
- * 提示価格には乗るが 1 枚原価には混ぜないことを可視化するための内訳値。
+ * ＝別枠計上フラグ ON 行の subtotalJpy 合算。提示価格には乗るが 1 枚原価には混ぜない。
  */
 export function computeInitialCostTotalJpy(
   lines: RoughEstimateLineForCalc[],
 ): number {
-  const initialLines = lines.filter(
-    (l) => l.itemCategory === RoughEstimateCategory.INITIAL_COST,
-  )
+  const initialLines = lines.filter((l) => l.isSeparateBilling)
   return round2(sumSubtotalJpy(initialLines))
 }
 
 /**
- * 提示価格（自動・autoPriceTotalJpy）＝ 全費目（MATERIAL/LABOR/INITIAL_COST すべて）の
+ * 提示価格（自動・autoPriceTotalJpy）＝ 全行（別枠フラグ ON/OFF 問わず）の
  * subtotalJpy に marginRate を適用 = Σ subtotalJpy ×(1 + marginRate/100)。
- * ※初期費用も価格化するが（v0.1 §5-1）、原価分子（computeAutoCostTotalJpy）には混ぜない。
+ * ※別枠計上（初期費用）も価格化するが（v0.1 §5-1）、原価分子（computeAutoCostTotalJpy）には混ぜない。
  */
 export function computeAutoPriceTotalJpy(
   lines: RoughEstimateLineForCalc[],

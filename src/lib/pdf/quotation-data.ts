@@ -1,4 +1,4 @@
-import { Prisma, RoughEstimateCategory, InitialCostBillingMode } from "@prisma/client"
+import { Prisma, InitialCostBillingMode } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { primaryProductCode } from "@/lib/utils/product-code"
 import {
@@ -29,7 +29,7 @@ export type QuotationPdfProductRow = {
   notes: string | null
 }
 
-/** 初期費用セクションの1行（SEPARATE の見積の INITIAL_COST 行のみ）。 */
+/** 初期費用セクションの1行（SEPARATE の見積の別枠フラグ ON 行のみ）。 */
 export type QuotationPdfInitialCostRow = {
   /** 項目名（itemName（productName 付記）＝どの製品か明示）。 */
   label: string
@@ -193,12 +193,12 @@ export async function getQuotationPdfData(
 
     if (e.notes) notesRows.push({ productLabel, notes: e.notes })
 
-    // 初期費用行: SEPARATE の RE の INITIAL_COST 行のみ（INCLUDED は単価に配賦済み＝出さない）。
+    // 初期費用行: SEPARATE の RE の別枠フラグ ON 行のみ（INCLUDED は単価に配賦済み＝出さない）。
     if (e.initialCostBillingMode === InitialCostBillingMode.SEPARATE) {
       const items = await prisma.roughEstimateItem.findMany({
         where: {
           roughEstimateId: e.id,
-          itemCategory: RoughEstimateCategory.INITIAL_COST,
+          isSeparateBilling: true,
         },
         orderBy: { itemOrder: "asc" },
       })
