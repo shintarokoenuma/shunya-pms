@@ -342,7 +342,12 @@ export function RoughEstimateSection({
                       )}
                     </TableCell>
                     <TableCell className="text-right text-amber-700">
-                      {jpy(bd.initialCostPriceTotalJpy)}
+                      {/* SEPARATE は手打ち提示額を反映（PDF/フォームと同式）。INCLUDED は配賦の逆算値。 */}
+                      {jpy(
+                        included
+                          ? bd.initialCostPriceTotalJpy
+                          : r.initialPresentedTotalJpy,
+                      )}
                       {included && (
                         <div className="text-[10px] text-muted-foreground">
                           1枚単価に配賦
@@ -1053,7 +1058,13 @@ function RoughEstimateFormDialog({
                     初期費用提示分（別途・価格化後）
                   </span>
                   <span className="font-mono text-amber-700">
-                    {jpy(breakdown.initialCostPriceTotalJpy)}
+                    {/* SEPARATE は手打ち提示額を反映（PDF/導出総額と同じ initialPresentedSum）。
+                        INCLUDED は単価配賦のため合計逆算値（breakdown）のまま。 */}
+                    {jpy(
+                      included
+                        ? breakdown.initialCostPriceTotalJpy
+                        : initialPresentedSum,
+                    )}
                   </span>
                 </div>
                 <div className="flex justify-between font-medium">
