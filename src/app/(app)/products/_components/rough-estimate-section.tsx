@@ -99,10 +99,16 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import {
+  EXTERNAL_COST_CATEGORY_LABELS,
+  EXTERNAL_COST_CATEGORY_ORDER,
+} from "@/lib/constants/cost-category-types"
 
 const NONE = "__none__"
 
@@ -1553,14 +1559,28 @@ function ItemCard({
                     </FormControl>
                     <SelectContent position="popper">
                       <SelectItem value={NONE}>（未選択）</SelectItem>
-                      {costCategories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          <span className="font-mono text-xs text-muted-foreground mr-2">
-                            {c.categoryCode}
-                          </span>
-                          {c.categoryName}
-                        </SelectItem>
-                      ))}
+                      {/* 大分類（材料→縫製→加工→諸経費）でグループ化・分類内は日本語名順（action で整列済み）。 */}
+                      {EXTERNAL_COST_CATEGORY_ORDER.map((ext) => {
+                        const group = costCategories.filter(
+                          (c) => c.externalCategory === ext,
+                        )
+                        if (group.length === 0) return null
+                        return (
+                          <SelectGroup key={ext}>
+                            <SelectLabel>
+                              {EXTERNAL_COST_CATEGORY_LABELS[ext]}
+                            </SelectLabel>
+                            {group.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                <span className="font-mono text-xs text-muted-foreground mr-2">
+                                  {c.categoryCode}
+                                </span>
+                                {c.categoryName}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        )
+                      })}
                     </SelectContent>
                   </Select>
                 </FormItem>
