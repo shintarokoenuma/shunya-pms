@@ -102,7 +102,14 @@ export async function listActiveCostCategoriesForPoSelect(): Promise<
   const sess = await requireSession()
   if (!sess.ok) return []
   const rows = await prisma.costCategory.findMany({
-    where: { companyId: sess.companyId, deletedAt: null, status: CostCategoryStatus.ACTIVE },
+    // level: 2 で Lv1 予約行（材料費/縫製費/加工費/諸経費の大分類そのもの）を選択肢から除外。
+    // 大分類はグループ見出し（EXTERNAL_COST_CATEGORY_ORDER 起点）で表示するため選択対象にしない。
+    where: {
+      companyId: sess.companyId,
+      deletedAt: null,
+      status: CostCategoryStatus.ACTIVE,
+      level: 2,
+    },
     select: {
       id: true,
       categoryCode: true,
