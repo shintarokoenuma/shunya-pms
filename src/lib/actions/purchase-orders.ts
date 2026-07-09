@@ -9,11 +9,13 @@ import {
   SupplierStatus,
   CostCategoryStatus,
   MaterialStatus,
+  ExternalCostCategory,
   type PurchaseOrder,
   type PoItem,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { EXTERNAL_COST_CATEGORY_ORDER } from "@/lib/constants/cost-category-types"
 import {
   purchaseOrderInputSchema,
   purchaseOrderListParamsSchema,
@@ -71,7 +73,12 @@ async function requireSession() {
 // 補助: フォーム select 用（発注先 / 費目 / 素材）
 // =============================================================================
 export type SupplierOption = { id: string; supplierCode: string; companyName: string }
-export type CostCategoryOption = { id: string; categoryCode: string; categoryName: string }
+export type CostCategoryOption = {
+  id: string
+  categoryCode: string
+  categoryName: string
+  externalCategory: ExternalCostCategory
+}
 export type MaterialOption = {
   id: string
   materialCode: string
@@ -94,10 +101,24 @@ export async function listActiveCostCategoriesForPoSelect(): Promise<
 > {
   const sess = await requireSession()
   if (!sess.ok) return []
-  return prisma.costCategory.findMany({
+  const rows = await prisma.costCategory.findMany({
     where: { companyId: sess.companyId, deletedAt: null, status: CostCategoryStatus.ACTIVE },
-    select: { id: true, categoryCode: true, categoryName: true },
-    orderBy: [{ level: "asc" }, { categoryCode: "asc" }],
+    select: {
+      id: true,
+      categoryCode: true,
+      categoryName: true,
+      externalCategory: true,
+    },
+  })
+  // 並び: 大分類を業務順（材料→縫製→加工→諸経費）→ 同一分類内は日本語名順。
+  // ※DB の orderBy は日本語照合が不安定なため取得後に localeCompare("ja") で整列。
+  return rows.sort((a, b) => {
+    const ea =
+      EXTERNAL_COST_CATEGORY_ORDER.indexOf(a.externalCategory)
+    const eb =
+      EXTERNAL_COST_CATEGORY_ORDER.indexOf(b.externalCategory)
+    if (ea !== eb) return ea - eb
+    return a.categoryName.localeCompare(b.categoryName, "ja")
   })
 }
 
@@ -127,7 +148,12 @@ async function fetchCostCategorySummaries(companyId: string, ids: string[]) {
   if (ids.length === 0) return new Map<string, CostCategoryOption>()
   const rows = await prisma.costCategory.findMany({
     where: { id: { in: ids }, companyId },
-    select: { id: true, categoryCode: true, categoryName: true },
+    select: {
+      id: true,
+      categoryCode: true,
+      categoryName: true,
+      externalCategory: true,
+    },
   })
   return new Map(rows.map((r) => [r.id, r]))
 }
