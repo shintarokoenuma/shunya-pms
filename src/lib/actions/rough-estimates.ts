@@ -21,6 +21,7 @@ import {
   computeAutoCostTotalJpy,
   computeAutoPriceTotalJpy,
   isBelowMarginWarning,
+  resolveInitialCostPresentedJpy,
   type RoughEstimateLineForCalc,
 } from "@/lib/rough-estimate/calc"
 
@@ -711,6 +712,8 @@ export type RoughEstimateListRow = {
   autoCostTotalJpy: number | null
   autoPriceTotalJpy: number | null
   finalUnitPriceManualJpy: number | null
+  /** 別枠フラグ ON 行の提示額合計（手打ち ?? 自動・SEPARATE 用・PDF/フォームと同式）。 */
+  initialPresentedTotalJpy: number
   belowMarginWarning: boolean
 }
 
@@ -735,10 +738,30 @@ export async function listRoughEstimatesByProduct(
       autoCostTotalJpy: true,
       autoPriceTotalJpy: true,
       finalUnitPriceManualJpy: true,
+      // 別枠フラグ ON 行の提示額（手打ち ?? 自動）を一覧でも集計するため items をネスト select（N+1 なし）。
+      items: {
+        select: {
+          isSeparateBilling: true,
+          presentedPriceManualJpy: true,
+          subtotalJpy: true,
+        },
+      },
     },
   })
   return rows.map((r) => {
     const marginRate = r.marginRate != null ? Number(r.marginRate) : null
+    // 別枠フラグ ON 行の提示額合計（PDF/フォーム導出総額と同一の resolve 積み上げ）。
+    const initialPresentedTotalJpy = r.items.reduce((acc, it) => {
+      if (!it.isSeparateBilling) return acc
+      const v = resolveInitialCostPresentedJpy(
+        it.presentedPriceManualJpy != null
+          ? Number(it.presentedPriceManualJpy)
+          : null,
+        it.subtotalJpy != null ? Number(it.subtotalJpy) : null,
+        marginRate,
+      )
+      return acc + (v ?? 0)
+    }, 0)
     return {
       id: r.id,
       estimateNumber: r.estimateNumber,
@@ -757,6 +780,7 @@ export async function listRoughEstimatesByProduct(
         r.finalUnitPriceManualJpy != null
           ? Number(r.finalUnitPriceManualJpy)
           : null,
+      initialPresentedTotalJpy,
       belowMarginWarning: isBelowMarginWarning(marginRate),
     }
   })
