@@ -1,61 +1,55 @@
-# shunya-pms セッション引き継ぎメモ（2026-07-07 / 道A＋消費税を本番反映（PR #97 マージ）・初期費用再設計（フラグ方式）の spec＋ブリーフ確定）
+# shunya-pms セッション引き継ぎメモ（2026-07-10 / QE-1R 初期費用フラグ方式を本番反映（PR #98/#99/#100）・migration履歴58の謎解消・費目プルダウン整理）
 
 ## ⓪ プロジェクト棲み分け（毎回先頭・要目視確認）
 対象: shunya-pms（repo: github.com/shintarokoenuma/shunya-pms / local: ~/shunya-production-system / 本番: shunya-pms-web-production.up.railway.app）。saagara-v2 とは別物。Claude Code 着手前に VS Code が ~/shunya-production-system を指しているか目視確認。
 
 ## 1. 本セッションの位置づけ
-道A（手打ち単価・2セクションPDF）を Part E〜I まで実装し PR #97 として本番反映まで完了。その直後の実運用確認で初期費用の構造問題（引き当て不可・工賃区分経由で防衛線を破れる）が判明し、慎太郎さん発案のチェックボックス（別枠フラグ）方式への再設計を確定。read-only 調査 → spec v0.1 → 実装ブリーフまで固めた。次セッションは実装から。
+初期費用再設計（別枠フラグ方式）を Part A〜E 実装 → PR #98 として本番反映（migration 41本目適用）。マージ後確認で発見した2件（サマリ「初期費用提示分」が手打ち非反映／費目プルダウンの並び）も PR #99・#100 で即日修正・本番反映。migration 履歴 58 vs 41 の謎も read-only 調査で解消（重複17件・対応不要と確定）。
 
-## 2. 本日 main にマージ/反映されたもの（時系列）
-- `e8d5bf3` docs: 道A実装ブリーフ（丸め＝円未満切り上げ）
-- `228571c` docs: 消費税追補 v0.1（税抜/10%/税込3段・切り捨て）
-- `d944e99` **PR #97 マージ（squash）**: QE-1R 見積書PDF・横断一覧・見積コピー＋道A＋消費税（Part A〜I・14 files・+1,358/−81 相当＋Part I）
-  - migration 40本目 `20260706000000_road_a_manual_price_columns`（純増2列）**本番適用済み**（デプロイログで確認・Next.js 正常起動・本番 smoke OK）
-- `18f25f6` docs: 初期費用再設計 spec v0.1（別枠フラグ方式）
-- `e745bd9` docs: 初期費用フラグ方式 実装ブリーフ ← **main 先頭**
-- 前日分: `4e79508`（PDF spec v0.2＋addendum）は前セッション末尾に保存済み
+## 2. 本日 main にマージされた PR（時系列）
+- PR #98（squash 4941f0e）: QE-1R 初期費用再設計（別枠フラグ方式）。migration 41本目 20260707000000_initial_cost_separate_billing_flag（ADD COLUMN is_separate_billing ＋ INITIAL_COST→LABOR+フラグON の決定的UPDATE）。本番適用成功・デプロイログ確認済み
+- PR #99（squash f3c52ee）: フォーム社内サマリ「初期費用提示分（別途・価格化後）」とカルテ内一覧の同名列が手打ち提示額（presentedPriceManualJpy）を反映するよう修正。SEPARATE=resolve積み上げ／INCLUDED=従来の配賦逆算。migration なし
+- PR #100（squash 61e5d5d・commit 9b774cc＋e49aedb）: 費目プルダウンを大分類グルーピング（材料費→縫製費→加工費→諸経費・SelectGroup見出し付き）＋分類内日本語名順（localeCompare ja）に。追加修正で Lv1 予約行を選択肢から除外（level:2 フィルタ）。RE/PO 両フォーム対象。共有定数 src/lib/constants/cost-category-types.ts 新設。migration なし
 
-## 3. 道A＋消費税の完成形（本番稼働中）
-- スキーマ: `RoughEstimate.finalUnitPriceManualJpy` / `RoughEstimateItem.presentedPriceManualJpy`（手打ち2列・旧 `finalPriceManualJpy` は非推奨化＝列残置・読み書き停止）
-- 丸め: 自動参考単価・初期費用自動提示額＝円未満**切り上げ**（Math.ceil）。手打ちは整数円そのまま
-- 税: 表示層のみ TAX_RATE=0.10。小計（税抜）→消費税（10%・**切り捨て** Math.floor）→御見積金額（税込）。列ヘッダ・フォームラベルに「税抜」付記
-- PDF: 製品セクション（1見積1行・単価×数量）＋初期費用セクション（項目別・INCLUDED 非表示＋脚注）＋税3段。原価・利益率・材料/工賃明細は非表示（型レベル遮断）
-- MOQ 未入力は出力不可（UI disable＋400）。複製は手打ち2列リセット
-- 検証済み実測: RE-2026-0001（手打ち 5,500/版代16,000）→ 566,000 / 56,600 / 622,600
+## 3. 本番の確認済み事実（read-only・2026-07-09〜10）
+- migration: _prisma_migrations 総数58・DISTINCT 41（ローカルと完全一致）・失敗/未完了行 0。flag migration 適用済み
+- ★58の内訳確定: 初期17 migration（2026-05-16〜05-28）が各2行の重複レコード。2026-05-29 の dev/本番並立再構成・リストア期の痕跡と推定。migrate deploy は name+checksum 判定のため実害なし → 掃除しない・記録のみ（意図的に残置。今後58+n という数字を見ても驚かない）
+- 本番 RE 件数（deleted_at IS NULL）= 1（初記録）。残 INITIAL_COST 行 = 0。is_separate_billing=true = 2行（版代 up=12000/presented=15600・パンチ代 up=20000/presented=26000・いずれも LABOR・金額保持）
+- 費目マスター3件（PLATE_FEE 版代／MOLD_FEE 型代／EMBROIDERY_PUNCH_FEE 刺繍パンチ代・OVERHEAD Lv2）を慎太郎さんが本番 UI から追加済み・プルダウン表示確認済み
+- PR #98/#99 の本番反映は smoke 確認済み（フォーム表示・サマリ手打ち反映）
 
-## 4. ★次フェーズ＝初期費用再設計（フラグ方式）— 実装待ち
-- **spec**: `docs/specs/qe1r-initial-cost-redesign-spec-confirmation-v0_1-2026-07-07.md`（18f25f6）
-- **ブリーフ**: `docs/specs/qe1r-initial-cost-flag-implementation-brief-2026-07-07.md`（e745bd9）
-- 核心: INITIAL_COST 区分廃止（2値運用）＋ `RoughEstimateItem.isSeparateBilling Boolean`。引き当ては既存2系統（PAST_PO/PAST_WO）流用で初期費用も引ける。引き当て元の INDIVIDUAL_BILLING / isPhysicalAsset からフラグ自動 ON（上書き可）
-- migration 41本目（列純増＋ INITIAL_COST→LABOR+フラグON の決定的 UPDATE）。enum 値は残置
-- 実装順: Part A（スキーマ）→B（置換23箇所/6ファイル）→C（フォーム UI）→D（自動連動）→E（費目マスター dev 追加＋検証）→ PR 1本
-- 移行回帰基準: RE-2026-0001 の PDF が migration 前後で完全一致（566,000/56,600/622,600）
-- 費目マスター: dev は Part E で追加（PLATE_FEE 版代/MOLD_FEE 型代/EMBROIDERY_PUNCH_FEE 刺繍パンチ代・OVERHEAD Lv2）。**本番はマージ後に慎太郎さんが原価費目画面から手動追加**
-- 経緯の要点: 現行 INITIAL_COST は source=MANUAL 固定で引き当て不可。工賃区分で引き当てる回避操作をすると初期費用が1枚原価に混入（防衛線破り）→ 現行方式は実用しない（慎太郎さん確定）
+## 4. ★未完了の残作業（次セッション冒頭で）
+1. 本番 RE-2026-0001「裁断、縫製、仕上げ」行の費目が SEWING（Lv1）保存済み → PR #100 の Lv1 除外により編集フォームで空表示（値は保持・silent消失なし）。REGULAR_SEWING 通常縫製など Lv2 に選び直して保存（慎太郎さんの手作業・1〜2分）。dev の同じ1行も同様
+2. PR #100 の本番③確認（RE/PO 費目プルダウンが見出し＋Lv2 のみか）が最終報告前にセッション終了 → 冒頭で目視確認
 
 ## 5. DB状態
-- dev（hopper.proxy.rlwy.net:12921）: RE-2026-0001 のみ（1件・検証データ後始末済み）。手打ち値入り（finalUnit 5,500・版代 presented 16,000・旧 finalPriceManualJpy 539,500 残置）。migration 40本目相当まで db push 済み
-- 本番（shuttle.proxy.rlwy.net:16099）: migration 40本目適用済み。**RE 件数は未確認**（次フェーズのマージ前 A方式チェックで記録・ブリーフ §5）
+- dev（hopper.proxy.rlwy.net:12921）: RE-2026-0001 のみ（版代行 LABOR+flag+up12000+presented16000）。migration 41本目相当まで適用（db push＋UPDATE手動同文）。費目 42件（39＋新3件）。裁断縫製行の Lv1 費目残置（上記4-1）
+- 本番（shuttle.proxy.rlwy.net:16099）: migration 41本目適用済み。RE 1件・費目3件追加済み。migration履歴の重複17行は意図的残置
 
-## 6. 次セッションで最初にやること（優先順）
-1. このメモで状態復元 → `git log origin/main -3`（先頭 e745bd9）確認
-2. design-reread: spec v0.1（18f25f6）＋ブリーフ（e745bd9）を読み直し
-3. 実装着手: `feat/qe1r-initial-cost-flag` を origin/main から新規作成 → Part A〜E（ブリーフどおり）。dev db push は UPDATE を流さないため既存1行へ手動 UPDATE 併用（ブリーフ §0-2）
-4. PR open → マージ前 A方式チェック（本番 RE 件数・INITIAL_COST 行数記録・41本目未適用確認）→ マージは慎太郎さん → マージ後に本番の INITIAL_COST 行 0 件確認＋費目3件を慎太郎さんが本番追加
-5. その後: ファイル整理（§7）
+## 6. 直近の spec・関連ファイル
+- docs/specs/qe1r-initial-cost-redesign-spec-confirmation-v0_1-2026-07-07.md（spec・18f25f6）
+- docs/specs/qe1r-initial-cost-flag-implementation-brief-2026-07-07.md（ブリーフ・e745bd9）
+- src/lib/constants/cost-category-types.ts（新設・EXTERNAL_COST_CATEGORY_LABELS/_ORDER）
 
-## 7. その他バックログ
-- **ファイル整理（次セッション以降・慎太郎さん承認制）**: 最優先＝`docs/full_backup_20260529_104452.sql/.dump`（DB実データ・未追跡）を repo 外 `~/shunya-backups/` へ退避。`.env.backup*` 同様。run-*.sh 6本は要否判定、未追跡 spec md 約30本は git 管理版との重複整理、files 9〜12/・zip 類は inventory 後に個別判定。2026-07-07 調査で「未追跡のみ・追跡ファイル無変更」確認済み＝マージへの影響なし
-- 引き当て検索の改善（status フィルタ・単価未定行の扱い）— 今回スコープ外とした宿題
-- WorkOrder DRAFT 時の編集許可／PO 作成後にカルテ内へ留まる／PO 明細行の複製（色/サイズ違い）／入力UX全般
-- enum 値 INITIAL_COST の物理削除（将来クリーンアップ）
+## 7. 次セッションで最初にやること（優先順）
+1. このメモで状態復元 → git log origin/main -5 で実態確認
+2. §4 の残作業2件（費目選び直し・PR #100 本番確認）
+3. ファイル整理（慎太郎さん承認制）: 最優先= docs/full_backup_20260529_104452.sql/.dump を repo 外 ~/shunya-backups/ へ退避。.env.backup* 同様。run-*.sh 6本の要否判定・未追跡 spec md 約30本の重複整理・files 9〜12/・zip 類
+4. QE-1 見積エンジン本体（BOM→原価自動集計・行別通貨 JPY/USD）の spec 着手、または B-065 再設計 — 慎太郎さんと相談して選択
 
-## 8. 本日の教訓
-- **実運用の初回タッチで構造問題が出る**: 道A完成直後の実操作で「引き当てできない・回避操作が防衛線を破る」が発覚。客向け成果物と同様、新機能は本番反映後すぐ実務操作で叩くのが正しい
-- **house style への回帰が最良の解になることがある**: PoItem/WoItem は既に「行の性格＋売り立て区分」の二軸。RE だけ第3区分で不整合だった。新発明より既存作法との整合を先に疑う
-- **ユーザー発案を spec の記録で検証する**: チェックボックス案に対し「過去に却下した記録があるか」を spec で確認→記録なし→実装段階の産物と判明。記憶で「決めたはず」と打ち返さない（design-reread の実践）
-- 単価未定（unitPrice null）の WO/PO 明細は引き当て検索に出ない（仕様）。「出てこない」問い合わせ時はまず引き当て元の単価入力を確認
-- dev の db push は migration.sql 内の UPDATE を実行しない。データ変換を含む migration は dev へ手動同文適用が必要
+## 8. その他バックログ（追加分含む）
+- ラベル定数の重複解消: cost-categories/_components/labels.ts の EXTERNAL_COST_CATEGORY_LABELS を lib/constants/cost-category-types.ts からの re-export に統合（低優先）
+- 引き当て検索の status フィルタ・単価未定行の扱い／WorkOrder DRAFT 編集／PO 作成後カルテ内留まり／PO 明細行複製／enum INITIAL_COST 物理削除（将来）
+- 過去分: B-048 リトライ拡張・hard-delete 監査(Q1c)・品番999上限(Q1b)・色違い=別品番の明文化・ベトナム免税輸出書類・仕入 invoice×PO 突合・B-023〜B-028
 
-## 9. 本日マージした PR
-- PR #97（squash `d944e99`）: QE-1R 見積書PDF・横断一覧・見積コピー＋道A（手打ち単価・2セクションPDF・消費税）。本番反映・migration 40本目適用・smoke 確認済み
+## 9. 本日の教訓
+- ★懸念・検証の穴・ブロッカーは応答の先頭に書く（慎太郎さん指摘 2026-07-09）。手順を出した後から「実は穴がある」と付け足さない
+- マージ前 A方式チェックをスキップしてマージが先行した（実害なし）→ 事後は is_separate_billing=true 件数から事前ベースラインを逆算可能だった。ただし本来はマージ前に挟む段取りを崩さない
+- 「期待と違う値で停止」ルールが機能した（migration 58）。停止→切り分け（git履歴→本番DISTINCT）の2段で原因確定。無害な痕跡は掃除せず記録して残置（enum INITIAL_COST 残置と同方針）
+- Lv1 予約行のような「見出しと同名の選択肢」は除外が正。ただし既存データが旧値を持つ場合の表示互換（空表示・値は保持）を必ず実測して報告する
+- read -rs -p による対話入力は Claude Code の非対話シェル（zsh）では機能しない。本番接続文字列は ~/prod-url-tmp.txt（chmod 600・repo 外）経由で受け渡し、使用後 rm が確立手順
+
+## 10. 本日マージした PR
+- PR #98（4941f0e）: 初期費用フラグ方式（migration 41本目）
+- PR #99（f3c52ee）: 初期費用提示分の手打ち反映修正
+- PR #100（61e5d5d）: 費目プルダウン分類グルーピング＋Lv1除外
