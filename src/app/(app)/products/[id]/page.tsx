@@ -32,6 +32,8 @@ import { ColorwaySection } from "../_components/colorway-section"
 import { BomSection, type BomItemView } from "../_components/bom-section"
 import { MaterialRequirementSection } from "../_components/material-requirement-section"
 import type { MaterialReqBomItem } from "@/lib/calc/material-requirement"
+import { ProductionCostSection } from "../_components/production-cost-section"
+import { getProductionCostInputs } from "@/lib/actions/production-cost"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
 import { RoughEstimateSection } from "../_components/rough-estimate-section"
 import {
@@ -184,6 +186,12 @@ export default async function ProductDetailPage({
   const brandDefaultMarginRate = marginDefaultResult.ok
     ? marginDefaultResult.data.marginRate
     : 0
+
+  // QE-1: 量産原価ビュー用の入力（ROLL 反情報・PRODUCTION WoItem。read-only）。
+  const productionCostResult = await getProductionCostInputs(id)
+  const productionCostInputs = productionCostResult.ok
+    ? productionCostResult.data
+    : { materials: [], labor: [] }
 
   // QE-0c: マーキング実測
   const markingResult = await getMarkingRecordsByProductId(id)
@@ -502,6 +510,13 @@ export default async function ProductDetailPage({
 
       {/* 資材所要量（B-067 D4ア・量産数×用尺の計算ビュー・read-only） */}
       <MaterialRequirementSection skus={skus} items={materialReqItems} />
+
+      {/* 量産原価（QE-1・材料費＋工賃→1枚原価の計算ビュー・read-only） */}
+      <ProductionCostSection
+        skus={skus}
+        materials={productionCostInputs.materials}
+        labor={productionCostInputs.labor}
+      />
 
       {/* マーキング実測（QE-0c・用尺入力系統B） */}
       <Card>
