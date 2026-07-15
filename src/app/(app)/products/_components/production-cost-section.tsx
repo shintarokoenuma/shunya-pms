@@ -22,10 +22,12 @@ import {
 } from "@/lib/calc/production-cost"
 
 /**
- * QE-1: 量産原価ビュー（read-only 計算ビュー・#93 資材所要量の直下）。
+ * QE-1: 量産実績原価ビュー（発注後の実績原価・read-only 計算ビュー・#93 資材所要量の直下）。
  *
- * - 材料費（ROLL 取り切り / METER ＋カット代）＋ 工賃（PRODUCTION WoItem）を混在通貨換算して
- *   1枚原価まで表示する。集計は純関数 computeProductionCost（追加クエリなし・書き込みなし）。
+ * - 発注済み伝票（BOM・量産WO）の実績を集計する請求突合用ビュー。材料費（ROLL 取り切り /
+ *   METER ＋カット代）＋ 工賃（PRODUCTION WoItem）を混在通貨換算して1枚原価まで表示する。
+ *   集計は純関数 computeProductionCost（追加クエリなし・書き込みなし）。
+ * - 量産見積もり時点の1枚単価は量産見積機能（設計中）で扱う。本ビューは発注後の実績。
  * - USD/JPY レートと METER 行のカット代は画面手入力（保存しない・v1）。
  * - 描画は QE-1 専用（sample 軸の CostBreakdown は伝票前提・JPY 固定のため共有しない）。
  * 仕様: docs/specs/qe-1-implementation-brief-2026-07-12.md §3
@@ -143,7 +145,7 @@ export function ProductionCostSection({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>量産原価（材料費＋工賃 → 1枚原価）</CardTitle>
+        <CardTitle>量産実績原価（発注後・材料費＋工賃）</CardTitle>
       </CardHeader>
       <CardContent>
         {empty ? (
@@ -261,7 +263,7 @@ export function ProductionCostSection({
               )}
               <div className="flex items-baseline justify-between border-t pt-2">
                 <span className="font-medium">
-                  1枚原価
+                  1枚原価（実績・参考）
                   <span className="ml-1 text-xs text-muted-foreground">
                     （量産数 {result.totalQuantity.toLocaleString("ja-JP")} 枚）
                   </span>
@@ -282,6 +284,8 @@ export function ProductionCostSection({
             <p className="text-[11px] text-muted-foreground">
               ※ 計算ビュー（保存しません）。CNY/VND/EUR 行と金額未定行は集計対象外として表示します。
               初期費用（別途請求項目）は1枚原価に含めません。
+              <br />
+              本セクションは発注済み伝票（BOM・量産WO）の実績集計です（請求突合用）。量産見積もり時点の1枚単価は量産見積機能（設計中）で扱います。
             </p>
           </div>
         )}
