@@ -32,6 +32,8 @@ import { ColorwaySection } from "../_components/colorway-section"
 import { BomSection, type BomItemView } from "../_components/bom-section"
 import { MaterialRequirementSection } from "../_components/material-requirement-section"
 import type { MaterialReqBomItem } from "@/lib/calc/material-requirement"
+import { ProductionCostSection } from "../_components/production-cost-section"
+import { getProductionCostInputs } from "@/lib/actions/production-cost"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
 import { RoughEstimateSection } from "../_components/rough-estimate-section"
 import {
@@ -184,6 +186,12 @@ export default async function ProductDetailPage({
   const brandDefaultMarginRate = marginDefaultResult.ok
     ? marginDefaultResult.data.marginRate
     : 0
+
+  // QE-1: 量産原価ビュー用の入力（ROLL 反情報・PRODUCTION WoItem。read-only）。
+  const productionCostResult = await getProductionCostInputs(id)
+  const productionCostInputs = productionCostResult.ok
+    ? productionCostResult.data
+    : { materials: [], labor: [] }
 
   // QE-0c: マーキング実測
   const markingResult = await getMarkingRecordsByProductId(id)
@@ -464,6 +472,23 @@ export default async function ProductDetailPage({
         categoryId={item.category?.id ?? null}
       />
 
+      {/* 概算量産見積（QE-1R・量産軸の提示価格。業務フロー順で見積を上流に配置） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">概算量産見積（提示価格）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RoughEstimateSection
+            productId={item.id}
+            rows={roughEstimateRows}
+            brandDefaultMarginRate={brandDefaultMarginRate}
+            materials={qeMaterials}
+            costCategories={qeCostCategories}
+            suppliers={qeSuppliers}
+          />
+        </CardContent>
+      </Card>
+
       {/* サンプル製作セット（S-2） */}
       <Card>
         <CardHeader>
@@ -500,9 +525,6 @@ export default async function ProductDetailPage({
         </CardContent>
       </Card>
 
-      {/* 資材所要量（B-067 D4ア・量産数×用尺の計算ビュー・read-only） */}
-      <MaterialRequirementSection skus={skus} items={materialReqItems} />
-
       {/* マーキング実測（QE-0c・用尺入力系統B） */}
       <Card>
         <CardHeader>
@@ -517,22 +539,15 @@ export default async function ProductDetailPage({
         </CardContent>
       </Card>
 
-      {/* 概算量産見積（QE-1R・量産軸の提示価格。原価基盤の下＝原価から価格を出す流れ） */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">概算量産見積（提示価格）</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <RoughEstimateSection
-            productId={item.id}
-            rows={roughEstimateRows}
-            brandDefaultMarginRate={brandDefaultMarginRate}
-            materials={qeMaterials}
-            costCategories={qeCostCategories}
-            suppliers={qeSuppliers}
-          />
-        </CardContent>
-      </Card>
+      {/* 資材所要量（B-067 D4ア・量産数×用尺の計算ビュー・read-only） */}
+      <MaterialRequirementSection skus={skus} items={materialReqItems} />
+
+      {/* 量産実績原価（QE-1・発注後の実績原価＝材料費＋工賃・請求突合用・read-only） */}
+      <ProductionCostSection
+        skus={skus}
+        materials={productionCostInputs.materials}
+        labor={productionCostInputs.labor}
+      />
 
       {/* メタ情報 */}
       <Card>
