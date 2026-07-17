@@ -513,6 +513,14 @@ export async function createPurchaseOrder(
       })
       primaryProductId = sp?.productId ?? null
     }
+    // 直アクセス作成: sample 経由で導出できなければ、フォームで選んだ品番を使う（§4-1(d)）。
+    if (!primaryProductId && data.productId) {
+      const p = await prisma.product.findFirst({
+        where: { id: data.productId, companyId: sess.companyId, deletedAt: null },
+        select: { id: true },
+      })
+      primaryProductId = p?.id ?? null
+    }
 
     const deliveryDate = data.expectedDeliveryDate
       ? new Date(data.expectedDeliveryDate)

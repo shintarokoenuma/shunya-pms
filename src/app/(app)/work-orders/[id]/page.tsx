@@ -6,6 +6,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getWorkOrder } from "@/lib/actions/work-orders"
+import { getNavRefs } from "@/lib/actions/nav-refs"
+import { buildDocBreadcrumb } from "@/lib/nav/breadcrumb"
+import { EntityBreadcrumb } from "../../_components/entity-breadcrumb"
 import { WorkOrderDeleteButton } from "../_components/work-order-delete-button"
 import { WorkOrderStatusControl } from "../_components/work-order-status-control"
 import { WORK_ORDER_TYPE_LABELS } from "@/lib/constants/work-order-types"
@@ -49,8 +52,18 @@ export default async function WorkOrderDetailPage({
       ? `${wo.contractor.contractorCode} ${wo.contractor.contractorName}（外注先）`
       : "—"
 
+  const nav = await getNavRefs(wo.productId, wo.samplProductionId)
+  const crumbs = buildDocBreadcrumb({
+    product: nav.product,
+    sample: nav.sample,
+    currentLabel: wo.woNumber,
+    listLabel: "発注（作業 WO）",
+    listHref: "/work-orders",
+  })
+
   return (
     <div className="space-y-6 p-6">
+      <EntityBreadcrumb segments={crumbs} />
       <div className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href="/work-orders">

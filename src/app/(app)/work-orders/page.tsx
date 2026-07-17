@@ -1,5 +1,8 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
+import { Plus } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { Button } from "@/components/ui/button"
 import { listWorkOrders } from "@/lib/actions/work-orders"
 import { WorkOrdersTable } from "./_components/work-orders-table"
 import { WorkOrdersPagination } from "./_components/work-orders-pagination"
@@ -40,13 +43,21 @@ export default async function WorkOrdersPage({
 
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          発注（作業 WO）
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          工場・外注先への作業発注。サンプル製作の進行チェックリスト（パターン/縫製/加工/グレーディング）から起票します。
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            発注（作業 WO）
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            工場・外注先への作業発注。サンプル製作の進行チェックリスト（パターン/縫製/加工/グレーディング）から起票します。
+          </p>
+        </div>
+        <Button asChild size="sm">
+          <Link href="/work-orders/new">
+            <Plus className="mr-1 h-4 w-4" />
+            新規作成
+          </Link>
+        </Button>
       </div>
       <WorkOrdersTable items={items} />
       <WorkOrdersPagination

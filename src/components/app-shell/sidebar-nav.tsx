@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { NAV_SECTIONS } from "./nav-items"
+import { SECTION_ACCENTS } from "@/lib/constants/section-accents"
 
 export function SidebarNav() {
   const pathname = usePathname()
@@ -13,7 +14,14 @@ export function SidebarNav() {
       {NAV_SECTIONS.map((section, idx) => (
         <div key={idx}>
           {section.label && (
-            <h3 className="px-3 mb-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+            <h3
+              className={cn(
+                "px-3 mb-2 text-xs font-semibold uppercase tracking-wider",
+                section.accent
+                  ? SECTION_ACCENTS[section.accent].heading
+                  : "text-muted-foreground",
+              )}
+            >
               {section.label}
             </h3>
           )}

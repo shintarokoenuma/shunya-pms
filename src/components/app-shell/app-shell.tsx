@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Header } from "./header"
 import { Sidebar } from "./sidebar"
+import { PageAccentBar } from "./page-accent-bar"
 
 export async function AppShell({ children }: { children: React.ReactNode }) {
   const session = await auth()
@@ -30,6 +31,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0">
         <Header user={user} />
+        <PageAccentBar />
         <main className="flex-1 overflow-auto">
           <div className="max-w-7xl mx-auto px-6 py-8">{children}</div>
         </main>

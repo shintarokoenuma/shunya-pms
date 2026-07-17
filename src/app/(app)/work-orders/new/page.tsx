@@ -12,6 +12,8 @@ import {
 } from "@/lib/actions/work-orders"
 import { getSampleProduction } from "@/lib/actions/sample-productions"
 import { WorkOrderForm, type WoContext } from "../_components/work-order-form"
+import { getOrderLinkOptions } from "@/lib/actions/order-link"
+import { EntityBreadcrumb } from "../../_components/entity-breadcrumb"
 import { PROGRESS_TASK_TYPE_LABELS } from "../../samples/_components/progress-task-labels"
 
 type SearchParams = Promise<{
@@ -40,6 +42,9 @@ export default async function NewWorkOrderPage({
     suggestedWorkType: WorkOrderType.OTHER,
     suggestedWorkCategory: WorkOrderCategory.SAMPLE,
   }
+
+  // B-078-4: 直アクセス（progressTaskId なし）のときだけ品番ピッカー候補を供給。
+  const linkOptions = sp.progressTaskId ? undefined : await getOrderLinkOptions()
 
   if (sp.progressTaskId) {
     const [ctxRes, spRes] = await Promise.all([
@@ -78,6 +83,12 @@ export default async function NewWorkOrderPage({
 
   return (
     <div className="space-y-6 p-6">
+      <EntityBreadcrumb
+        segments={[
+          { label: "発注（作業 WO）", href: "/work-orders" },
+          { label: "新規作成" },
+        ]}
+      />
       <div className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href={backHref}>
@@ -93,6 +104,7 @@ export default async function NewWorkOrderPage({
         contractors={contractors}
         costCategories={costCategories}
         context={context}
+        linkOptions={linkOptions}
       />
     </div>
   )

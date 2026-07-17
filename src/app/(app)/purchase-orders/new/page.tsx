@@ -11,6 +11,8 @@ import {
 import { getSampleProduction } from "@/lib/actions/sample-productions"
 import { getTask } from "@/lib/actions/progress-tasks"
 import { PurchaseOrderForm, type PoContext } from "../_components/purchase-order-form"
+import { getOrderLinkOptions } from "@/lib/actions/order-link"
+import { EntityBreadcrumb } from "../../_components/entity-breadcrumb"
 import { PROGRESS_TASK_TYPE_LABELS } from "../../samples/_components/progress-task-labels"
 
 type SearchParams = Promise<{ progressTaskId?: string; sampleProductionId?: string }>
@@ -48,12 +50,24 @@ export default async function NewPurchaseOrderPage({
     }
   }
 
+  // B-078-4: 直アクセス（sample/progress 起点でない）のときだけ品番ピッカー候補を供給。
+  const linkOptions =
+    sp.sampleProductionId || sp.progressTaskId
+      ? undefined
+      : await getOrderLinkOptions()
+
   const backHref = sp.sampleProductionId
     ? `/samples/${sp.sampleProductionId}`
     : "/purchase-orders"
 
   return (
     <div className="space-y-6 p-6">
+      <EntityBreadcrumb
+        segments={[
+          { label: "発注（仕入 PO）", href: "/purchase-orders" },
+          { label: "新規作成" },
+        ]}
+      />
       <div className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href={backHref}>
@@ -69,6 +83,7 @@ export default async function NewPurchaseOrderPage({
         costCategories={costCategories}
         materials={materials}
         context={context}
+        linkOptions={linkOptions}
       />
     </div>
   )

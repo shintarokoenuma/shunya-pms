@@ -45,6 +45,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { CURRENCY_OPTIONS } from "@/lib/constants/currencies"
+import type { OrderLinkProduct, OrderLinkSample } from "@/lib/actions/order-link"
+import { primaryProductCode } from "@/lib/utils/product-code"
 import { WORK_ORDER_TYPE_OPTIONS } from "@/lib/constants/work-order-types"
 import { WORK_ORDER_CATEGORY_OPTIONS, BILLING_CLASSIFICATION_OPTIONS } from "./labels"
 
@@ -69,6 +71,11 @@ type Props = {
   contractors: ContractorOption[]
   costCategories: CostCategoryOption[]
   context: WoContext
+  /** B-078-4: 直アクセス作成時の品番→サンプル紐付けピッカー候補（sample 経由導線では未指定）。 */
+  linkOptions?: {
+    products: OrderLinkProduct[]
+    samples: OrderLinkSample[]
+  }
 }
 
 function emptyItem(
@@ -111,6 +118,7 @@ export function WorkOrderForm(props: Props) {
     progressTaskId: context.progressTaskId ?? null,
     sampleProductionId: context.sampleProductionId ?? null,
     processingTypeId: context.processingTypeId ?? null,
+    productId: null,
     items: [emptyItem(Currency.JPY)],
   }
 
@@ -134,6 +142,14 @@ export function WorkOrderForm(props: Props) {
     })
     prevHeaderCurrency.current = headerCurrency
   }, [headerCurrency, form])
+
+  // B-078-4: 直アクセス作成（sample 経由でない）は品番選択を必須にする（§4-1(d)）。
+  const directMode = !context.sampleProductionId && !!props.linkOptions
+  const linkProducts = props.linkOptions?.products ?? []
+  const selectedProductId = useWatch({ control: form.control, name: "productId" })
+  const linkSamples = (props.linkOptions?.samples ?? []).filter(
+    (s) => s.productId === selectedProductId,
+  )
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -182,6 +198,83 @@ export function WorkOrderForm(props: Props) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* B-078-4: 品番紐付け（直アクセス作成時・§4-1(d) 案件化強制） */}
+        {directMode && (
+          <Card>
+            <CardHeader>
+              <CardTitle>紐付け（品番）</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="productId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>品番 *</FormLabel>
+                    <Select
+                      value={field.value ?? undefined}
+                      onValueChange={(v) => {
+                        field.onChange(v)
+                        // 品番を変えたら選択済みサンプルを一旦解除（別品番のサンプル混入防止）
+                        form.setValue("sampleProductionId", null)
+                      }}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="品番を選択" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {linkProducts.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            <span className="font-mono text-xs text-muted-foreground mr-2">
+                              {primaryProductCode(p)}
+                            </span>
+                            {p.productName}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="sampleProductionId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>サンプル（任意）</FormLabel>
+                    <Select
+                      value={field.value ?? NONE}
+                      onValueChange={(v) => field.onChange(v === NONE ? null : v)}
+                      disabled={!selectedProductId}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="紐付けなし" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value={NONE}>紐付けなし</SelectItem>
+                        {linkSamples.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            <span className="font-mono text-xs text-muted-foreground mr-2">
+                              {s.sampleNumber}
+                            </span>
+                            {s.title ?? ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+        )}
+
         {/* 発注先 */}
         <Card>
           <CardHeader>

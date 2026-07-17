@@ -26,6 +26,7 @@ import {
   UserCog,
   type LucideIcon,
 } from "lucide-react"
+import type { SectionAccentKey } from "@/lib/constants/section-accents"
 
 export type NavItem = {
   label: string
@@ -43,6 +44,8 @@ export type NavItem = {
 
 export type NavSection = {
   label?: string
+  /** B-078-3: セクション別アクセント（見出し色）。 */
+  accent?: SectionAccentKey
   items: NavItem[]
 }
 
@@ -59,6 +62,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     label: "マスター",
+    accent: "master",
     items: [
       { label: "クライアント", href: "/clients", icon: Building2, enabled: true },
       { label: "ブランド", href: "/brands", icon: Tag, enabled: true },
@@ -89,6 +93,7 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     label: "案件",
+    accent: "project",
     items: [
       { label: "品番カルテ", href: "/products", icon: Package, enabled: true },
       { label: "サンプル製作", href: "/samples", icon: Shirt, enabled: true },
@@ -96,6 +101,7 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    accent: "trade",
     items: [
       { label: "見積もり", href: "/quotations", icon: Calculator, enabled: true },
       { label: "発注（仕入 PO）", href: "/purchase-orders", icon: ShoppingCart, enabled: true },
