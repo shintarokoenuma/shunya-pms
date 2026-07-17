@@ -67,6 +67,8 @@ export default async function EditPurchaseOrderPage({
       unit: it.unit,
       // v1.1: 単価未定（null）は空欄に
       unitPrice: it.unitPrice == null ? "" : toNum(it.unitPrice),
+      // 行通貨（T-0 / B-071）: 既存の行通貨をフォームに読み込む
+      currency: it.currency,
       costCategoryId: it.costCategoryId,
       billingClassification: it.billingClassification,
       isPhysicalAsset: it.isPhysicalAsset,

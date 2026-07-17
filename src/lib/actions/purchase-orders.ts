@@ -457,6 +457,8 @@ function buildItemRows(
       quantity: new Prisma.Decimal(it.quantity),
       unit: it.unit,
       unitPrice: hasPrice ? new Prisma.Decimal(Number(it.unitPrice)) : null,
+      // 行通貨（T-0 / B-071）。未指定はヘッダ（PurchaseOrder.currency）へフォールバック。
+      currency: it.currency ?? data.currency,
       subtotal: hasPrice
         ? new Prisma.Decimal(Number(it.quantity) * Number(it.unitPrice))
         : null,

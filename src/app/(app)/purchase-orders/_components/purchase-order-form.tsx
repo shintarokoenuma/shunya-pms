@@ -1,7 +1,12 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
-import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form"
+import { useEffect, useRef, useState, useTransition } from "react"
+import {
+  useForm,
+  useFieldArray,
+  useWatch,
+  type SubmitHandler,
+} from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -76,7 +81,9 @@ type Props =
       currentPoNumber: string
     }
 
-function emptyItem(): PurchaseOrderFormValues["items"][number] {
+function emptyItem(
+  currency: Currency = Currency.JPY,
+): PurchaseOrderFormValues["items"][number] {
   return {
     materialId: null,
     customItemName: "",
@@ -91,6 +98,8 @@ function emptyItem(): PurchaseOrderFormValues["items"][number] {
     quantity: "",
     unit: "",
     unitPrice: "",
+    // 行通貨（T-0 / B-071）。新規行はヘッダ通貨を引き継ぐ。
+    currency,
     costCategoryId: null,
     billingClassification: null,
     isPhysicalAsset: false,
@@ -114,13 +123,30 @@ export function PurchaseOrderForm(props: Props) {
           expectedDeliveryDate: "",
           progressTaskId: props.context?.progressTaskId ?? null,
           sampleProductionId: props.context?.sampleProductionId ?? null,
-          items: [emptyItem()],
+          items: [emptyItem(Currency.JPY)],
         }
 
   const form = useForm<PurchaseOrderFormValues>({
     resolver: zodResolver(purchaseOrderInputSchema),
     defaultValues,
   })
+
+  // 行通貨（T-0 / B-071）: ヘッダ通貨を変更したら「未タッチの行」だけ追従させる。
+  // 判定は「行通貨＝直前のヘッダ通貨（＝継承状態）」。人が変えた行は上書きしない。
+  const headerCurrency = useWatch({ control: form.control, name: "currency" })
+  const prevHeaderCurrency = useRef<Currency>(defaultValues.currency)
+  useEffect(() => {
+    if (!headerCurrency) return
+    const prev = prevHeaderCurrency.current
+    if (headerCurrency === prev) return
+    form.getValues("items").forEach((it, i) => {
+      if (it.currency == null || it.currency === prev) {
+        form.setValue(`items.${i}.currency`, headerCurrency)
+      }
+    })
+    prevHeaderCurrency.current = headerCurrency
+  }, [headerCurrency, form])
+
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "items",
@@ -315,7 +341,7 @@ export function PurchaseOrderForm(props: Props) {
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => append(emptyItem())}
+                onClick={() => append(emptyItem(form.getValues("currency")))}
               >
                 <Plus className="mr-1 h-4 w-4" />
                 行を追加
@@ -632,6 +658,33 @@ function ItemRow({
                   ref={field.ref}
                 />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name={`${base}.currency`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>通貨</FormLabel>
+              <Select
+                value={field.value ?? Currency.JPY}
+                onValueChange={field.onChange}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {CURRENCY_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}

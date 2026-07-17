@@ -176,11 +176,19 @@ export default async function PurchaseOrderDetailPage({
                 <Cell label="数量" value={`${fmt(it.quantity)} ${it.unit}`} />
                 <Cell
                   label="単価"
-                  value={it.unitPrice == null ? "未定" : fmt(it.unitPrice)}
+                  value={
+                    it.unitPrice == null
+                      ? "未定"
+                      : `${fmt(it.unitPrice)} ${it.currency}`
+                  }
                 />
                 <Cell
                   label="小計"
-                  value={it.subtotal == null ? "未定" : fmt(it.subtotal)}
+                  value={
+                    it.subtotal == null
+                      ? "未定"
+                      : `${fmt(it.subtotal)} ${it.currency}`
+                  }
                 />
                 <Cell
                   label="費目"

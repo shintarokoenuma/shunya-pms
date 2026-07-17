@@ -68,6 +68,9 @@ export const woItemInputSchema = z.object({
   quantity: quantityField,
   unit: z.string().trim().min(1, "単位は必須です").max(20, "20文字以内"),
   unitPrice: unitPriceField,
+  // 行通貨（T-0 / B-071）。未指定はヘッダ通貨にフォールバック（action の buildItemRows）。
+  // enum 5値をそのまま許容（JPY/USD 以外を弾くのは集計層・qe-1 v1.0 §5）。
+  currency: z.nativeEnum(Currency).optional(),
   costCategoryId: optionalRelationId,
   billingClassification: z
     .nativeEnum(BillingClassification)

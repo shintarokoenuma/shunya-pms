@@ -1,7 +1,12 @@
 "use client"
 
-import { useEffect, useState, useTransition } from "react"
-import { useForm, useFieldArray, type SubmitHandler } from "react-hook-form"
+import { useEffect, useRef, useState, useTransition } from "react"
+import {
+  useForm,
+  useFieldArray,
+  useWatch,
+  type SubmitHandler,
+} from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
@@ -66,7 +71,9 @@ type Props = {
   context: WoContext
 }
 
-function emptyItem(): WorkOrderFormValues["items"][number] {
+function emptyItem(
+  currency: Currency = Currency.JPY,
+): WorkOrderFormValues["items"][number] {
   return {
     workDescription: "",
     colorCode: "",
@@ -74,6 +81,8 @@ function emptyItem(): WorkOrderFormValues["items"][number] {
     quantity: "",
     unit: "",
     unitPrice: "",
+    // 行通貨（T-0 / B-071）。新規行はヘッダ通貨を引き継ぐ。
+    currency,
     costCategoryId: null,
     billingClassification: null,
     notes: "",
@@ -102,13 +111,30 @@ export function WorkOrderForm(props: Props) {
     progressTaskId: context.progressTaskId ?? null,
     sampleProductionId: context.sampleProductionId ?? null,
     processingTypeId: context.processingTypeId ?? null,
-    items: [emptyItem()],
+    items: [emptyItem(Currency.JPY)],
   }
 
   const form = useForm<WorkOrderFormValues>({
     resolver: zodResolver(workOrderInputSchema),
     defaultValues,
   })
+
+  // 行通貨（T-0 / B-071）: ヘッダ通貨を変更したら「未タッチの行」だけ追従させる。
+  // 判定は「行通貨＝直前のヘッダ通貨（＝継承状態）」。人が行単位で変えた行は上書きしない。
+  const headerCurrency = useWatch({ control: form.control, name: "currency" })
+  const prevHeaderCurrency = useRef<Currency>(Currency.JPY)
+  useEffect(() => {
+    if (!headerCurrency) return
+    const prev = prevHeaderCurrency.current
+    if (headerCurrency === prev) return
+    form.getValues("items").forEach((it, i) => {
+      if (it.currency == null || it.currency === prev) {
+        form.setValue(`items.${i}.currency`, headerCurrency)
+      }
+    })
+    prevHeaderCurrency.current = headerCurrency
+  }, [headerCurrency, form])
+
   const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "items",
@@ -439,7 +465,7 @@ export function WorkOrderForm(props: Props) {
                 type="button"
                 size="sm"
                 variant="outline"
-                onClick={() => append(emptyItem())}
+                onClick={() => append(emptyItem(form.getValues("currency")))}
               >
                 <Plus className="mr-1 h-4 w-4" />
                 行を追加
@@ -535,7 +561,7 @@ function ItemRow({
         )}
       />
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <FormField
           control={form.control}
           name={`${base}.quantity`}
@@ -601,6 +627,33 @@ function ItemRow({
                   ref={field.ref}
                 />
               </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name={`${base}.currency`}
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>通貨</FormLabel>
+              <Select
+                value={field.value ?? Currency.JPY}
+                onValueChange={field.onChange}
+              >
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {CURRENCY_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>
+                      {o.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <FormMessage />
             </FormItem>
           )}
