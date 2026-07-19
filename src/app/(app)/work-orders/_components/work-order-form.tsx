@@ -19,6 +19,7 @@ import {
 } from "@/lib/validators/work-order"
 import {
   createWorkOrder,
+  updateWorkOrder,
   generateNextWoNumberPreview,
   type FactoryOption,
   type ContractorOption,
@@ -66,18 +67,29 @@ export type WoContext = {
   isProcessing?: boolean
 }
 
-type Props = {
-  mode: "create"
-  factories: FactoryOption[]
-  contractors: ContractorOption[]
-  costCategories: CostCategoryOption[]
-  context: WoContext
-  /** B-078-4: 直アクセス作成時の品番→サンプル紐付けピッカー候補（sample 経由導線では未指定）。 */
-  linkOptions?: {
-    products: OrderLinkProduct[]
-    samples: OrderLinkSample[]
-  }
-}
+type Props =
+  | {
+      mode: "create"
+      factories: FactoryOption[]
+      contractors: ContractorOption[]
+      costCategories: CostCategoryOption[]
+      context: WoContext
+      /** B-078-4: 直アクセス作成時の品番→サンプル紐付けピッカー候補（sample 経由導線では未指定）。 */
+      linkOptions?: {
+        products: OrderLinkProduct[]
+        samples: OrderLinkSample[]
+      }
+    }
+  | {
+      // B-079: WO 編集（DRAFT のみ・PO edit と同型）
+      mode: "edit"
+      id: string
+      factories: FactoryOption[]
+      contractors: ContractorOption[]
+      costCategories: CostCategoryOption[]
+      defaultValues: WorkOrderFormValues
+      currentWoNumber: string
+    }
 
 function emptyItem(
   currency: Currency = Currency.JPY,
@@ -100,28 +112,48 @@ function emptyItem(
 export function WorkOrderForm(props: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const { context } = props
+  const isEdit = props.mode === "edit"
 
-  // 発注先トグル（either のとき factory/contractor を切替）
+  // 編集時は発注先種別を固定しない合成 context（トグルは either 扱い）。作成時は props.context。
+  const context: WoContext =
+    props.mode === "edit"
+      ? {
+          orderToKind: "either",
+          suggestedWorkType: props.defaultValues.workType,
+          suggestedWorkCategory: props.defaultValues.workCategory,
+        }
+      : props.context
+  const linkOptions = props.mode === "create" ? props.linkOptions : undefined
+
+  // 発注先トグル（either のとき factory/contractor を切替）。編集時は既存値から初期化。
   const [orderTo, setOrderTo] = useState<"factory" | "contractor">(
-    context.orderToKind === "contractor" ? "contractor" : "factory",
+    props.mode === "edit"
+      ? props.defaultValues.contractorId
+        ? "contractor"
+        : "factory"
+      : context.orderToKind === "contractor"
+        ? "contractor"
+        : "factory",
   )
 
-  const defaultValues: WorkOrderFormValues = {
-    factoryId: null,
-    contractorId: null,
-    workType: context.suggestedWorkType,
-    workCategory: context.suggestedWorkCategory,
-    title: "",
-    description: "",
-    currency: Currency.JPY,
-    expectedDeliveryDate: "",
-    progressTaskId: context.progressTaskId ?? null,
-    sampleProductionId: context.sampleProductionId ?? null,
-    processingTypeId: context.processingTypeId ?? null,
-    productId: null,
-    items: [emptyItem(Currency.JPY)],
-  }
+  const defaultValues: WorkOrderFormValues =
+    props.mode === "edit"
+      ? props.defaultValues
+      : {
+          factoryId: null,
+          contractorId: null,
+          workType: context.suggestedWorkType,
+          workCategory: context.suggestedWorkCategory,
+          title: "",
+          description: "",
+          currency: Currency.JPY,
+          expectedDeliveryDate: "",
+          progressTaskId: context.progressTaskId ?? null,
+          sampleProductionId: context.sampleProductionId ?? null,
+          processingTypeId: context.processingTypeId ?? null,
+          productId: null,
+          items: [emptyItem(Currency.JPY)],
+        }
 
   const form = useForm<WorkOrderFormValues>({
     resolver: zodResolver(workOrderInputSchema),
@@ -144,11 +176,11 @@ export function WorkOrderForm(props: Props) {
     prevHeaderCurrency.current = headerCurrency
   }, [headerCurrency, form])
 
-  // B-078-4: 直アクセス作成（sample 経由でない）は品番選択を必須にする（§4-1(d)）。
-  const directMode = !context.sampleProductionId && !!props.linkOptions
-  const linkProducts = props.linkOptions?.products ?? []
+  // B-078-4: 直アクセス作成（sample 経由でない）は品番選択を必須にする（§4-1(d)）。編集時は非表示。
+  const directMode = !context.sampleProductionId && !!linkOptions
+  const linkProducts = linkOptions?.products ?? []
   const selectedProductId = useWatch({ control: form.control, name: "productId" })
-  const linkSamples = (props.linkOptions?.samples ?? []).filter(
+  const linkSamples = (linkOptions?.samples ?? []).filter(
     (s) => s.productId === selectedProductId,
   )
 
@@ -157,10 +189,13 @@ export function WorkOrderForm(props: Props) {
     name: "items",
   })
 
-  const [preview, setPreview] = useState("")
-  const [previewLoading, setPreviewLoading] = useState(true)
+  const [preview, setPreview] = useState(
+    props.mode === "edit" ? props.currentWoNumber : "",
+  )
+  const [previewLoading, setPreviewLoading] = useState(!isEdit)
 
   useEffect(() => {
+    if (isEdit) return // 編集時は既存 WO 番号を表示（採番プレビュー不要）
     let cancelled = false
     generateNextWoNumberPreview()
       .then((r) => {
@@ -172,17 +207,28 @@ export function WorkOrderForm(props: Props) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [isEdit])
 
   const onSubmit: SubmitHandler<WorkOrderFormValues> = (values) => {
     startTransition(async () => {
-      const r = await createWorkOrder(values as WorkOrderInput)
-      if (!r.ok) {
-        toast.error(r.error)
-        return
+      const payload = values as WorkOrderInput
+      if (props.mode === "edit") {
+        const r = await updateWorkOrder(props.id, payload)
+        if (!r.ok) {
+          toast.error(r.error)
+          return
+        }
+        toast.success("作業発注を更新しました")
+        router.push(`/work-orders/${r.data.id}`)
+      } else {
+        const r = await createWorkOrder(payload)
+        if (!r.ok) {
+          toast.error(r.error)
+          return
+        }
+        toast.success(`作業発注を作成しました（${r.data.woNumber}）`)
+        router.push(`/work-orders/${r.data.id}`)
       }
-      toast.success(`作業発注を作成しました（${r.data.woNumber}）`)
-      router.push(`/work-orders/${r.data.id}`)
       router.refresh()
     })
   }
@@ -607,7 +653,7 @@ export function WorkOrderForm(props: Props) {
           </Button>
           <Button type="submit" disabled={isPending}>
             {isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-            作成する
+            {isEdit ? "更新する" : "作成する"}
           </Button>
         </div>
       </form>
