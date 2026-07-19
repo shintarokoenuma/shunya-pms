@@ -51,6 +51,7 @@ import {
 import { CURRENCY_OPTIONS } from "@/lib/constants/currencies"
 import type { OrderLinkProduct, OrderLinkSample } from "@/lib/actions/order-link"
 import { primaryProductCode } from "@/lib/utils/product-code"
+import { SearchableSelect } from "../../_components/searchable-select"
 import {
   EXTERNAL_COST_CATEGORY_LABELS,
   EXTERNAL_COST_CATEGORY_ORDER,
@@ -232,29 +233,31 @@ export function PurchaseOrderForm(props: Props) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>品番 *</FormLabel>
-                    <Select
-                      value={field.value ?? undefined}
-                      onValueChange={(v) => {
-                        field.onChange(v)
-                        form.setValue("sampleProductionId", null)
-                      }}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="品番を選択" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {linkProducts.map((p) => (
-                          <SelectItem key={p.id} value={p.id}>
-                            <span className="font-mono text-xs text-muted-foreground mr-2">
-                              {primaryProductCode(p)}
-                            </span>
-                            {p.productName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <SearchableSelect
+                        options={linkProducts.map((p) => ({
+                          value: p.id,
+                          label: `${primaryProductCode(p)}  ${p.productName}`,
+                          keywords: `${p.productCode} ${p.clientProductCode ?? ""} ${p.productName}`,
+                          node: (
+                            <>
+                              <span className="font-mono text-xs text-muted-foreground mr-2">
+                                {primaryProductCode(p)}
+                              </span>
+                              {p.productName}
+                            </>
+                          ),
+                        }))}
+                        value={field.value ?? null}
+                        onChange={(v) => {
+                          field.onChange(v)
+                          form.setValue("sampleProductionId", null)
+                        }}
+                        placeholder="品番を選択"
+                        searchPlaceholder="品番コード・品名で検索"
+                        ariaLabel="品番"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -265,28 +268,32 @@ export function PurchaseOrderForm(props: Props) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>サンプル（任意）</FormLabel>
-                    <Select
-                      value={field.value ?? NONE}
-                      onValueChange={(v) => field.onChange(v === NONE ? null : v)}
-                      disabled={!selectedProductId}
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="紐付けなし" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={NONE}>紐付けなし</SelectItem>
-                        {linkSamples.map((s) => (
-                          <SelectItem key={s.id} value={s.id}>
-                            <span className="font-mono text-xs text-muted-foreground mr-2">
-                              {s.sampleNumber}
-                            </span>
-                            {s.title ?? ""}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <SearchableSelect
+                        options={[
+                          { value: NONE, label: "紐付けなし" },
+                          ...linkSamples.map((s) => ({
+                            value: s.id,
+                            label: `${s.sampleNumber} ${s.title ?? ""}`,
+                            keywords: `${s.sampleNumber} ${s.title ?? ""}`,
+                            node: (
+                              <>
+                                <span className="font-mono text-xs text-muted-foreground mr-2">
+                                  {s.sampleNumber}
+                                </span>
+                                {s.title ?? ""}
+                              </>
+                            ),
+                          })),
+                        ]}
+                        value={field.value ?? NONE}
+                        onChange={(v) => field.onChange(v === NONE ? null : v)}
+                        disabled={!selectedProductId}
+                        placeholder="紐付けなし"
+                        searchPlaceholder="SP番号・タイトルで検索"
+                        ariaLabel="サンプル"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
