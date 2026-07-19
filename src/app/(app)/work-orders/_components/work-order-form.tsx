@@ -328,29 +328,32 @@ export function WorkOrderForm(props: Props) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>工場 *</FormLabel>
-                    <Select
-                      value={field.value ?? ""}
-                      onValueChange={(v) => {
-                        field.onChange(v)
-                        form.setValue("contractorId", null)
-                      }}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="md:w-[480px]">
-                          <SelectValue placeholder="工場を選択" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {props.factories.map((f) => (
-                          <SelectItem key={f.id} value={f.id}>
-                            <span className="font-mono text-xs text-muted-foreground mr-2">
-                              {f.factoryCode}
-                            </span>
-                            {f.factoryName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <SearchableSelect
+                        options={props.factories.map((f) => ({
+                          value: f.id,
+                          label: `${f.factoryCode} ${f.factoryName}`,
+                          keywords: `${f.factoryCode} ${f.factoryName}`,
+                          node: (
+                            <>
+                              <span className="font-mono text-xs text-muted-foreground mr-2">
+                                {f.factoryCode}
+                              </span>
+                              {f.factoryName}
+                            </>
+                          ),
+                        }))}
+                        value={field.value ?? null}
+                        onChange={(v) => {
+                          field.onChange(v)
+                          form.setValue("contractorId", null)
+                        }}
+                        placeholder="工場を選択"
+                        searchPlaceholder="工場コード・名称で検索"
+                        ariaLabel="工場"
+                        className="md:w-[480px]"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -364,29 +367,32 @@ export function WorkOrderForm(props: Props) {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>外注先 *</FormLabel>
-                    <Select
-                      value={field.value ?? ""}
-                      onValueChange={(v) => {
-                        field.onChange(v)
-                        form.setValue("factoryId", null)
-                      }}
-                    >
-                      <FormControl>
-                        <SelectTrigger className="md:w-[480px]">
-                          <SelectValue placeholder="外注先を選択" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {props.contractors.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            <span className="font-mono text-xs text-muted-foreground mr-2">
-                              {c.contractorCode}
-                            </span>
-                            {c.contractorName}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <SearchableSelect
+                        options={props.contractors.map((c) => ({
+                          value: c.id,
+                          label: `${c.contractorCode} ${c.contractorName}`,
+                          keywords: `${c.contractorCode} ${c.contractorName}`,
+                          node: (
+                            <>
+                              <span className="font-mono text-xs text-muted-foreground mr-2">
+                                {c.contractorCode}
+                              </span>
+                              {c.contractorName}
+                            </>
+                          ),
+                        }))}
+                        value={field.value ?? null}
+                        onChange={(v) => {
+                          field.onChange(v)
+                          form.setValue("factoryId", null)
+                        }}
+                        placeholder="外注先を選択"
+                        searchPlaceholder="外注先コード・名称で検索"
+                        ariaLabel="外注先"
+                        className="md:w-[480px]"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

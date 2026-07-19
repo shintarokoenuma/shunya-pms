@@ -333,23 +333,29 @@ export function PurchaseOrderForm(props: Props) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>発注先 *</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="md:w-[480px]">
-                        <SelectValue placeholder="仕入先を選択" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {props.suppliers.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          <span className="font-mono text-xs text-muted-foreground mr-2">
-                            {s.supplierCode}
-                          </span>
-                          {s.companyName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      options={props.suppliers.map((s) => ({
+                        value: s.id,
+                        label: `${s.supplierCode} ${s.companyName}`,
+                        keywords: `${s.supplierCode} ${s.companyName}`,
+                        node: (
+                          <>
+                            <span className="font-mono text-xs text-muted-foreground mr-2">
+                              {s.supplierCode}
+                            </span>
+                            {s.companyName}
+                          </>
+                        ),
+                      }))}
+                      value={field.value ?? null}
+                      onChange={field.onChange}
+                      placeholder="仕入先を選択"
+                      searchPlaceholder="仕入先コード・名称で検索"
+                      ariaLabel="仕入先"
+                      className="md:w-[480px]"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
