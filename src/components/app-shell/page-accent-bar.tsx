@@ -15,7 +15,11 @@ export function PageAccentBar() {
   return (
     <div
       aria-hidden
-      className={cn("h-1 w-full shrink-0", SECTION_ACCENTS[key].bar)}
+      // Header（h-16・sticky top-0）直下にスクロール固定。帯が常に Header 下に貼り付く。
+      className={cn(
+        "sticky top-16 z-10 h-1 w-full shrink-0",
+        SECTION_ACCENTS[key].bar,
+      )}
     />
   )
 }
