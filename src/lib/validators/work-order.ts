@@ -97,6 +97,8 @@ export const workOrderInputSchema = z
     description: optionalString(10000),
     currency: z.nativeEnum(Currency).default(Currency.JPY),
     expectedDeliveryDate: optionalDateString,
+    // 品番（直アクセス作成時に選択・§4-1(d) 案件化強制）。sample 経由なら省略可（action で導出）。
+    productId: optionalRelationId,
     // 起点（進行チェックリスト）からの引き継ぎ
     progressTaskId: optionalRelationId,
     sampleProductionId: optionalRelationId,
@@ -116,6 +118,11 @@ export const workOrderInputSchema = z
       path: ["factoryId"],
     },
   )
+  .refine((d) => !!d.productId || !!d.sampleProductionId, {
+    // §4-1(d): 案件（品番）に紐づかない野良伝票を作らせない。
+    message: "品番を選択してください（案件に紐づかない発注は作成できません）",
+    path: ["productId"],
+  })
 
 export type WorkOrderFormValues = z.input<typeof workOrderInputSchema>
 export type WorkOrderInput = z.infer<typeof workOrderInputSchema>

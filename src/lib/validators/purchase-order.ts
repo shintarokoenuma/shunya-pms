@@ -103,18 +103,26 @@ export type PoItemInput = z.infer<typeof poItemInputSchema>
 // =============================================================================
 // ヘッダ + 明細
 // =============================================================================
-export const purchaseOrderInputSchema = z.object({
-  supplierId: z.string().min(1, "発注先は必須です"),
-  title: optionalString(255),
-  description: optionalString(10000),
-  currency: z.nativeEnum(Currency).default(Currency.JPY),
-  expectedDeliveryDate: optionalDateString,
-  // 起点（進行チェックリスト）からの引き継ぎ
-  progressTaskId: optionalRelationId,
-  sampleProductionId: optionalRelationId,
-  // 明細（1 行以上）
-  items: z.array(poItemInputSchema).min(1, "明細を1行以上入力してください"),
-})
+export const purchaseOrderInputSchema = z
+  .object({
+    supplierId: z.string().min(1, "発注先は必須です"),
+    title: optionalString(255),
+    description: optionalString(10000),
+    currency: z.nativeEnum(Currency).default(Currency.JPY),
+    expectedDeliveryDate: optionalDateString,
+    // 品番（直アクセス作成時に選択・§4-1(d) 案件化強制）。sample 経由なら省略可（action で導出）。
+    productId: optionalRelationId,
+    // 起点（進行チェックリスト）からの引き継ぎ
+    progressTaskId: optionalRelationId,
+    sampleProductionId: optionalRelationId,
+    // 明細（1 行以上）
+    items: z.array(poItemInputSchema).min(1, "明細を1行以上入力してください"),
+  })
+  .refine((d) => !!d.productId || !!d.sampleProductionId, {
+    // §4-1(d): 案件（品番）に紐づかない野良発注を作らせない。
+    message: "品番を選択してください（案件に紐づかない発注は作成できません）",
+    path: ["productId"],
+  })
 
 export type PurchaseOrderFormValues = z.input<typeof purchaseOrderInputSchema>
 export type PurchaseOrderInput = z.infer<typeof purchaseOrderInputSchema>

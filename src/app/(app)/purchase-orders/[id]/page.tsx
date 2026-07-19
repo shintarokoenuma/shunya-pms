@@ -6,6 +6,9 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { getPurchaseOrder } from "@/lib/actions/purchase-orders"
+import { getNavRefs } from "@/lib/actions/nav-refs"
+import { buildDocBreadcrumb } from "@/lib/nav/breadcrumb"
+import { EntityBreadcrumb } from "../../_components/entity-breadcrumb"
 import { PurchaseOrderDeleteButton } from "../_components/purchase-order-delete-button"
 import { PurchaseOrderStatusControl } from "../_components/purchase-order-status-control"
 import {
@@ -41,8 +44,18 @@ export default async function PurchaseOrderDetailPage({
   if (!result.ok) notFound()
   const po = result.data
 
+  const nav = await getNavRefs(po.primaryProductId, po.sampleProductionId)
+  const crumbs = buildDocBreadcrumb({
+    product: nav.product,
+    sample: nav.sample,
+    currentLabel: po.poNumber,
+    listLabel: "発注（仕入 PO）",
+    listHref: "/purchase-orders",
+  })
+
   return (
     <div className="space-y-6 p-6">
+      <EntityBreadcrumb segments={crumbs} />
       <div className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href="/purchase-orders">

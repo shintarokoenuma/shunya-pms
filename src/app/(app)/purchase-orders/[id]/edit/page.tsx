@@ -51,6 +51,8 @@ export default async function EditPurchaseOrderPage({
     expectedDeliveryDate: toDateInput(po.expectedDeliveryDate),
     progressTaskId: po.progressTaskId,
     sampleProductionId: po.sampleProductionId,
+    // 行必須 refine（productId || sampleProductionId）を満たすため既存の品番を載せる（B-078-4）
+    productId: po.primaryProductId,
     items: po.items.map((it) => ({
       materialId: it.materialId,
       customItemName: it.customItemName ?? "",

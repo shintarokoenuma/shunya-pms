@@ -1,5 +1,8 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
+import { Plus } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { Button } from "@/components/ui/button"
 import {
   listPurchaseOrders,
   listActiveSuppliersForPoSelect,
@@ -49,11 +52,19 @@ export default async function PurchaseOrdersPage({
 
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">発注（仕入先 PO）</h1>
-        <p className="text-sm text-muted-foreground">
-          仕入先への発注。サンプル製作の進行チェックリスト（生地/付属/ボディ）から起票します。
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">発注（仕入先 PO）</h1>
+          <p className="text-sm text-muted-foreground">
+            仕入先への発注。サンプル製作の進行チェックリスト（生地/付属/ボディ）から起票します。
+          </p>
+        </div>
+        <Button asChild size="sm">
+          <Link href="/purchase-orders/new">
+            <Plus className="mr-1 h-4 w-4" />
+            新規作成
+          </Link>
+        </Button>
       </div>
       <PurchaseOrdersSearch suppliers={suppliers} />
       <PurchaseOrdersTable items={items} />

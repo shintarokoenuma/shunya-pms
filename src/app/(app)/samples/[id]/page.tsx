@@ -26,6 +26,7 @@ import {
 import { getSampleProductionCostBreakdown } from "@/lib/actions/sample-production-costs"
 import { CostBreakdown } from "../_components/cost-breakdown"
 import { primaryProductCode } from "@/lib/utils/product-code"
+import { EntityBreadcrumb } from "../../_components/entity-breadcrumb"
 import { SampleProductionActions } from "../_components/sample-production-delete-button"
 import { SampleStatusControl } from "../_components/sample-status-control"
 import { SampleGenealogy } from "../_components/sample-genealogy"
@@ -90,6 +91,20 @@ export default async function SampleProductionDetailPage({
 
   return (
     <div className="space-y-6 p-6">
+      <EntityBreadcrumb
+        segments={[
+          { label: "品番カルテ", href: "/products" },
+          ...(item.product
+            ? [
+                {
+                  label: primaryProductCode(item.product),
+                  href: `/products/${item.product.id}`,
+                },
+              ]
+            : []),
+          { label: `サンプル ${item.sampleNumber}` },
+        ]}
+      />
       {/* ヘッダー */}
       <div className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">

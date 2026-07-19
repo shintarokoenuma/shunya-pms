@@ -675,6 +675,14 @@ async function resolveOrderTargets(
     })
     productId = sp?.productId ?? null
   }
+  // 直アクセス作成: sample 経由で導出できなければ、フォームで選んだ品番を使う（§4-1(d)）。
+  if (!productId && data.productId) {
+    const p = await prisma.product.findFirst({
+      where: { id: data.productId, companyId, deletedAt: null },
+      select: { id: true },
+    })
+    productId = p?.id ?? null
+  }
 
   return { ok: true, workType, processingTypeId, productId }
 }

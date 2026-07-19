@@ -49,6 +49,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { CURRENCY_OPTIONS } from "@/lib/constants/currencies"
+import type { OrderLinkProduct, OrderLinkSample } from "@/lib/actions/order-link"
+import { primaryProductCode } from "@/lib/utils/product-code"
+import { SearchableSelect } from "../../_components/searchable-select"
 import {
   EXTERNAL_COST_CATEGORY_LABELS,
   EXTERNAL_COST_CATEGORY_ORDER,
@@ -70,6 +73,11 @@ type Props =
       costCategories: CostCategoryOption[]
       materials: MaterialOption[]
       context?: PoContext
+      /** B-078-4: 直アクセス作成時の品番→サンプル紐付けピッカー候補。 */
+      linkOptions?: {
+        products: OrderLinkProduct[]
+        samples: OrderLinkSample[]
+      }
     }
   | {
       mode: "edit"
@@ -123,6 +131,7 @@ export function PurchaseOrderForm(props: Props) {
           expectedDeliveryDate: "",
           progressTaskId: props.context?.progressTaskId ?? null,
           sampleProductionId: props.context?.sampleProductionId ?? null,
+          productId: null,
           items: [emptyItem(Currency.JPY)],
         }
 
@@ -146,6 +155,17 @@ export function PurchaseOrderForm(props: Props) {
     })
     prevHeaderCurrency.current = headerCurrency
   }, [headerCurrency, form])
+
+  // B-078-4: 直アクセス作成（sample 経由でない）は品番選択を必須にする（§4-1(d)）。
+  const poLinkOptions = props.mode === "create" ? props.linkOptions : undefined
+  const poSampleCtx =
+    props.mode === "create" ? props.context?.sampleProductionId : undefined
+  const directMode = !poSampleCtx && !!poLinkOptions
+  const linkProducts = poLinkOptions?.products ?? []
+  const selectedProductId = useWatch({ control: form.control, name: "productId" })
+  const linkSamples = (poLinkOptions?.samples ?? []).filter(
+    (s) => s.productId === selectedProductId,
+  )
 
   const { fields, append, remove } = useFieldArray({
     control: form.control,
@@ -200,6 +220,88 @@ export function PurchaseOrderForm(props: Props) {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        {/* B-078-4: 品番紐付け（直アクセス作成時・§4-1(d) 案件化強制） */}
+        {directMode && (
+          <Card>
+            <CardHeader>
+              <CardTitle>紐付け（品番）</CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="productId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>品番 *</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        options={linkProducts.map((p) => ({
+                          value: p.id,
+                          label: `${primaryProductCode(p)}  ${p.productName}`,
+                          keywords: `${p.productCode} ${p.clientProductCode ?? ""} ${p.productName}`,
+                          node: (
+                            <>
+                              <span className="font-mono text-xs text-muted-foreground mr-2">
+                                {primaryProductCode(p)}
+                              </span>
+                              {p.productName}
+                            </>
+                          ),
+                        }))}
+                        value={field.value ?? null}
+                        onChange={(v) => {
+                          field.onChange(v)
+                          form.setValue("sampleProductionId", null)
+                        }}
+                        placeholder="品番を選択"
+                        searchPlaceholder="品番コード・品名で検索"
+                        ariaLabel="品番"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="sampleProductionId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>サンプル（任意）</FormLabel>
+                    <FormControl>
+                      <SearchableSelect
+                        options={[
+                          { value: NONE, label: "紐付けなし" },
+                          ...linkSamples.map((s) => ({
+                            value: s.id,
+                            label: `${s.sampleNumber} ${s.title ?? ""}`,
+                            keywords: `${s.sampleNumber} ${s.title ?? ""}`,
+                            node: (
+                              <>
+                                <span className="font-mono text-xs text-muted-foreground mr-2">
+                                  {s.sampleNumber}
+                                </span>
+                                {s.title ?? ""}
+                              </>
+                            ),
+                          })),
+                        ]}
+                        value={field.value ?? NONE}
+                        onChange={(v) => field.onChange(v === NONE ? null : v)}
+                        disabled={!selectedProductId}
+                        placeholder="紐付けなし"
+                        searchPlaceholder="SP番号・タイトルで検索"
+                        ariaLabel="サンプル"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </CardContent>
+          </Card>
+        )}
+
         {/* 基本情報 */}
         <Card>
           <CardHeader>
@@ -231,23 +333,29 @@ export function PurchaseOrderForm(props: Props) {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>発注先 *</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
-                    <FormControl>
-                      <SelectTrigger className="md:w-[480px]">
-                        <SelectValue placeholder="仕入先を選択" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {props.suppliers.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          <span className="font-mono text-xs text-muted-foreground mr-2">
-                            {s.supplierCode}
-                          </span>
-                          {s.companyName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <FormControl>
+                    <SearchableSelect
+                      options={props.suppliers.map((s) => ({
+                        value: s.id,
+                        label: `${s.supplierCode} ${s.companyName}`,
+                        keywords: `${s.supplierCode} ${s.companyName}`,
+                        node: (
+                          <>
+                            <span className="font-mono text-xs text-muted-foreground mr-2">
+                              {s.supplierCode}
+                            </span>
+                            {s.companyName}
+                          </>
+                        ),
+                      }))}
+                      value={field.value ?? null}
+                      onChange={field.onChange}
+                      placeholder="仕入先を選択"
+                      searchPlaceholder="仕入先コード・名称で検索"
+                      ariaLabel="仕入先"
+                      className="md:w-[480px]"
+                    />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}

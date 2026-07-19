@@ -51,6 +51,7 @@ import {
   isClientCodePrimary,
 } from "@/lib/utils/product-code"
 import { ProductActions } from "../_components/product-delete-button"
+import { EntityBreadcrumb } from "../../_components/entity-breadcrumb"
 import {
   PRODUCT_STATUS_LABELS,
   PRODUCT_STATUS_BADGE_VARIANT,
@@ -216,6 +217,12 @@ export default async function ProductDetailPage({
 
   return (
     <div className="space-y-6 p-6">
+      <EntityBreadcrumb
+        segments={[
+          { label: "品番カルテ", href: "/products" },
+          { label: primary },
+        ]}
+      />
       {/* ヘッダー */}
       <div className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
