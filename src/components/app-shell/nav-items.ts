@@ -101,6 +101,7 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: "取引",
     accent: "trade",
     items: [
       { label: "見積もり", href: "/quotations", icon: Calculator, enabled: true },
