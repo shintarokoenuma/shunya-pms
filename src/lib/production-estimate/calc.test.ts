@@ -5,10 +5,12 @@
  * 純粋な assert（throw）で書く。tsc が通ること＝最低限の型/ロジック健全性の担保。
  * 手動実行: `npx tsx src/lib/production-estimate/calc.test.ts`
  *
- * ブリーフ §3 の 7 ケース:
+ * ブリーフ §3 の 7 ケース＋PR-2 追加修正の 2 ケース:
  * ① サンプルコピー行の単価×量産数量の再計算　② ROLL 端数（反数 ceil）
  * ③ METER＋カット代　④ INDIVIDUAL_BILLING 由来行が分子除外・別枠表示
  * ⑤ USD 換算　⑥ estimateQuantity=0 ガード　⑦ 手打ち単価が自動値より優先される導出
+ * ⑧ 付属 usagePerUnit=1 行の所要量=見積数量・perUnitJpy=単価×(1+ロス)
+ * ⑨ materialPerUnitJpy + laborPerUnitJpy = autoUnitCostJpy
  */
 
 import {
@@ -164,4 +166,40 @@ let passed = 0
   passed++
 })()
 
-console.log(`✓ production-estimate calc: ${passed}/7 ケース PASS`)
+// ⑧ 付属 usagePerUnit=1 行（案A）: 所要量=見積数量×(1+ロス)・perUnitJpy=単価×(1+ロス)
+;(() => {
+  // ロス 0: 所要量=見積数量（100）・単価100 → 行小計 10,000・perUnitJpy 100
+  const flat = [
+    line({ id: "acc", itemCategory: "MATERIAL", usagePerUnit: 1, lossRate: 0, unitPrice: 100 }),
+  ]
+  const r0 = computeProductionEstimate(flat, 100, null, null)
+  assert(approx(r0.rows[0].subtotalJpy ?? -1, 10000), "⑧所要量=見積数量（100×¥100）")
+  assert(approx(r0.rows[0].perUnitJpy ?? -1, 100), "⑧perUnitJpy=単価（ロス0）")
+  assert(r0.rows[0].isRequirementRow, "⑧付属も所要量ベース")
+  // ロス 10: perUnitJpy=単価×1.1
+  const loss = [
+    line({ id: "acc", itemCategory: "MATERIAL", usagePerUnit: 1, lossRate: 10, unitPrice: 100 }),
+  ]
+  const r1 = computeProductionEstimate(loss, 100, null, null)
+  assert(approx(r1.rows[0].perUnitJpy ?? -1, 110), "⑧perUnitJpy=単価×(1+ロス)=110")
+  passed++
+})()
+
+// ⑨ materialPerUnitJpy + laborPerUnitJpy = autoUnitCostJpy
+;(() => {
+  const lines = [
+    line({ id: "fab", itemCategory: "MATERIAL", usagePerUnit: 1, lossRate: 0, procurementMode: "METER", unitPrice: 1500 }),
+    line({ id: "sew", unitPrice: 500, quantity: 100 }),
+  ]
+  const r = computeProductionEstimate(lines, 100, null, null)
+  assert(approx(r.materialPerUnitJpy ?? -1, 1500), "⑨材料費/枚=1500")
+  assert(approx(r.laborPerUnitJpy ?? -1, 500), "⑨工賃/枚=500")
+  assert(
+    approx((r.materialPerUnitJpy ?? 0) + (r.laborPerUnitJpy ?? 0), r.autoUnitCostJpy ?? -1),
+    "⑨材料/枚+工賃/枚=1枚原価",
+  )
+  assert(approx(r.autoUnitCostJpy ?? -1, 2000), "⑨1枚原価=2000")
+  passed++
+})()
+
+console.log(`✓ production-estimate calc: ${passed}/9 ケース PASS`)

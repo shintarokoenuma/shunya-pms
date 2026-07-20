@@ -128,7 +128,9 @@ function toFormValues(
 function emptyItem(
   category: ProductionEstimateCategory,
   separate = false,
+  defaultQuantity: number | null = null,
 ): PEFormItem {
+  const isMaterial = category === ProductionEstimateCategory.MATERIAL
   return {
     itemCategory: category,
     itemName: "",
@@ -141,19 +143,42 @@ function emptyItem(
     sourceBomItemId: null,
     unitPrice: "",
     currency: Currency.JPY,
-    usagePerUnit: "",
+    // 案A: MATERIAL 行は所要量ベース。新規行は usagePerUnit=1 既定（単価×見積数量）。
+    usagePerUnit: isMaterial ? 1 : "",
     lossRate: 0,
     procurementMode: null,
     rollLength: "",
     rollPrice: "",
     rollCurrency: null,
     cutFee: "",
-    quantity: "",
+    // LABOR 行は追加時に見積数量を既定（工程による例外は編集可）。
+    quantity: defaultQuantity != null ? defaultQuantity : "",
     unit: "",
     isSeparateBilling: separate,
     presentedPriceManualJpy: "",
     notes: "",
   }
+}
+
+/** 除外理由 → PE UI の文言（AMOUNT_UNDECIDED は「計上外（単価未入力）」＝支給/在庫引き当て運用）。 */
+function excludeLabel(reason: string): string {
+  if (reason === "AMOUNT_UNDECIDED") return "計上外（単価未入力）"
+  if (reason === "NON_TARGET_CURRENCY") return "計算除外（対象外通貨）"
+  return "計算除外"
+}
+
+/** MATERIAL 行の所要量 = 使用量/枚 × 見積数量 × (1+ロス率/100)。 */
+function requirementOf(
+  usagePerUnit: number | null,
+  lossRate: number,
+  estimateQuantity: number,
+): number | null {
+  if (usagePerUnit === null) return null
+  return usagePerUnit * estimateQuantity * (1 + lossRate / 100)
+}
+
+function fmtNum(n: number | null): string {
+  return n === null ? "—" : n.toLocaleString("ja-JP", { maximumFractionDigits: 4 })
 }
 
 type Props = {
@@ -378,7 +403,13 @@ export function ProductionEstimateForm({
                 size="sm"
                 variant="outline"
                 onClick={() =>
-                  append(emptyItem(ProductionEstimateCategory.LABOR))
+                  append(
+                    emptyItem(
+                      ProductionEstimateCategory.LABOR,
+                      false,
+                      estimateQuantity,
+                    ),
+                  )
                 }
               >
                 <Plus className="mr-1 h-3.5 w-3.5" />
@@ -443,7 +474,7 @@ export function ProductionEstimateForm({
                         variant="outline"
                         className="border-destructive/40 text-destructive text-[10px]"
                       >
-                        計算除外（{rowResult.excludeReason}）
+                        {excludeLabel(rowResult.excludeReason ?? "")}
                       </Badge>
                     )}
                   </div>
@@ -472,7 +503,7 @@ export function ProductionEstimateForm({
                   )}
                 />
 
-                <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
                   <FormField
                     control={form.control}
                     name={`items.${idx}.unitPrice`}
@@ -494,39 +525,58 @@ export function ProductionEstimateForm({
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name={`items.${idx}.quantity`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">数量</FormLabel>
-                        <FormControl>
-                          <Input
-                            autoComplete="off"
-                            type="number"
-                            step="0.0001"
-                            value={field.value ?? ""}
-                            onChange={field.onChange}
-                            onBlur={field.onBlur}
-                            name={field.name}
-                            ref={field.ref}
-                          />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name={`items.${idx}.unit`}
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs">単位</FormLabel>
-                        <FormControl>
-                          <Input autoComplete="off" {...field} />
-                        </FormControl>
-                      </FormItem>
-                    )}
-                  />
+                  {isMaterial ? (
+                    // 案A: MATERIAL は数量・単位入力を撤去し所要量（自動）を read-only 表示。
+                    <FormItem className="md:col-span-2">
+                      <FormLabel className="text-xs">所要量（自動）</FormLabel>
+                      <div className="flex h-9 items-center font-mono text-xs">
+                        {fmtNum(
+                          requirementOf(
+                            toNum(it?.usagePerUnit),
+                            toNum(it?.lossRate) ?? 0,
+                            estimateQuantity,
+                          ),
+                        )}{" "}
+                        {it?.unit || ""}
+                      </div>
+                    </FormItem>
+                  ) : (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name={`items.${idx}.quantity`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">数量</FormLabel>
+                            <FormControl>
+                              <Input
+                                autoComplete="off"
+                                type="number"
+                                step="0.0001"
+                                value={field.value ?? ""}
+                                onChange={field.onChange}
+                                onBlur={field.onBlur}
+                                name={field.name}
+                                ref={field.ref}
+                              />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name={`items.${idx}.unit`}
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="text-xs">単位</FormLabel>
+                            <FormControl>
+                              <Input autoComplete="off" {...field} />
+                            </FormControl>
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
                   <FormField
                     control={form.control}
                     name={`items.${idx}.currency`}
@@ -554,6 +604,12 @@ export function ProductionEstimateForm({
                     )}
                   />
                   <FormItem>
+                    <FormLabel className="text-xs">1枚あたり</FormLabel>
+                    <div className="flex h-9 items-center font-mono text-xs font-medium">
+                      {jpy(rowResult?.perUnitJpy ?? null)}
+                    </div>
+                  </FormItem>
+                  <FormItem>
                     <FormLabel className="text-xs">行小計(JPY)</FormLabel>
                     <div className="flex h-9 items-center font-mono text-xs">
                       {jpy(rowResult?.subtotalJpy ?? null)}
@@ -569,7 +625,7 @@ export function ProductionEstimateForm({
                       name={`items.${idx}.usagePerUnit`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel className="text-xs">用尺/枚</FormLabel>
+                          <FormLabel className="text-xs">使用量/枚</FormLabel>
                           <FormControl>
                             <Input
                               autoComplete="off"
@@ -654,6 +710,19 @@ export function ProductionEstimateForm({
                               ref={field.ref}
                             />
                           </FormControl>
+                          {toNum(it?.cutFee) !== null &&
+                            estimateQuantity > 0 && (
+                              <p className="text-[10px] text-muted-foreground">
+                                → ¥
+                                {(
+                                  (toNum(it?.cutFee) as number) /
+                                  estimateQuantity
+                                ).toLocaleString("ja-JP", {
+                                  maximumFractionDigits: 2,
+                                })}
+                                /枚
+                              </p>
+                            )}
                         </FormItem>
                       )}
                     />
@@ -789,11 +858,21 @@ export function ProductionEstimateForm({
         {/* 集計 */}
         <div className="space-y-2 rounded-md border p-4 text-sm">
           <div className="flex justify-between">
-            <span className="text-muted-foreground">材料費Σ（計上）</span>
+            <span className="text-muted-foreground">
+              材料費Σ（計上）
+              <span className="ml-1 text-xs">
+                （{jpy(calc.materialPerUnitJpy)}/枚）
+              </span>
+            </span>
             <span className="font-mono">{jpy(calc.materialNumeratorJpy)}</span>
           </div>
           <div className="flex justify-between">
-            <span className="text-muted-foreground">工賃・付属Σ（計上）</span>
+            <span className="text-muted-foreground">
+              工賃・付属Σ（計上）
+              <span className="ml-1 text-xs">
+                （{jpy(calc.laborPerUnitJpy)}/枚）
+              </span>
+            </span>
             <span className="font-mono">{jpy(calc.laborNumeratorJpy)}</span>
           </div>
           <div className="flex justify-between">

@@ -139,7 +139,13 @@ export default async function ProductionEstimateDetailPage({
           {costItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">対象明細はありません。</p>
           ) : (
-            costItems.map((it) => <ItemRow key={it.id} it={it} />)
+            costItems.map((it) => (
+              <ItemRow
+                key={it.id}
+                it={it}
+                estimateQuantity={pe.estimateQuantity}
+              />
+            ))
           )}
         </CardContent>
       </Card>
@@ -190,26 +196,57 @@ export default async function ProductionEstimateDetailPage({
   )
 }
 
-function ItemRow({ it }: { it: ProductionEstimateItemDTO }) {
+function ItemRow({
+  it,
+  estimateQuantity,
+}: {
+  it: ProductionEstimateItemDTO
+  estimateQuantity: number
+}) {
+  const isMaterial = it.itemCategory === "MATERIAL"
+  const requirement =
+    it.usagePerUnit === null
+      ? null
+      : it.usagePerUnit * estimateQuantity * (1 + it.lossRate / 100)
+  const perUnitJpy =
+    it.subtotalJpy !== null && estimateQuantity > 0
+      ? it.subtotalJpy / estimateQuantity
+      : null
   return (
     <div className="rounded-md border p-3 text-sm">
-      <div className="flex items-center gap-2">
-        <Badge variant="secondary">
-          {PRODUCTION_ESTIMATE_CATEGORY_LABELS[it.itemCategory]}
-        </Badge>
-        <Badge variant="outline" className="text-[10px]">
-          {PRODUCTION_ESTIMATE_SOURCE_LABELS[it.source]}
-        </Badge>
-        <span className="font-medium">{it.itemName}</span>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Badge variant="secondary">
+            {PRODUCTION_ESTIMATE_CATEGORY_LABELS[it.itemCategory]}
+          </Badge>
+          <Badge variant="outline" className="text-[10px]">
+            {PRODUCTION_ESTIMATE_SOURCE_LABELS[it.source]}
+          </Badge>
+          <span className="font-medium">{it.itemName}</span>
+        </div>
+        <span className="font-mono text-xs font-medium">
+          {jpy(perUnitJpy)}/枚
+        </span>
       </div>
       <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 md:grid-cols-4">
         <Cell label="単価" value={`${num(it.unitPrice)} ${it.currency}`} />
-        <Cell label="数量" value={`${num(it.quantity)} ${it.unit ?? ""}`} />
+        {isMaterial ? (
+          <Cell
+            label="所要量（自動）"
+            value={
+              requirement === null
+                ? "—"
+                : `${num(requirement)} ${it.unit ?? ""}`
+            }
+          />
+        ) : (
+          <Cell label="数量" value={`${num(it.quantity)} ${it.unit ?? ""}`} />
+        )}
         <Cell
-          label="用尺/枚"
+          label="使用量/枚"
           value={it.usagePerUnit === null ? "—" : num(it.usagePerUnit)}
         />
-        <Cell label="販売モード" value={it.procurementMode ?? "—"} />
+        <Cell label="1枚あたり(JPY)" value={jpy(perUnitJpy)} />
         <Cell label="行小計" value={`${num(it.subtotal)} ${it.currency}`} />
         <Cell label="行小計(JPY)" value={jpy(it.subtotalJpy)} />
       </div>

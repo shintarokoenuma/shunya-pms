@@ -460,8 +460,10 @@ export async function createProductionEstimateFromSample(
         p.billingClassification === BillingClassification.INDIVIDUAL_BILLING
       const bomDef = p.materialId ? bomByMaterial.get(p.materialId) : undefined
       const mat = p.materialId ? materialById.get(p.materialId) : undefined
+      // 案A（PR-2 追加修正）: MATERIAL 行はすべて所要量ベース。BOM 既定があれば優先、
+      // 無ければ付属既定 usagePerUnit=1・lossRate=0（＝単価×見積数量）を焼き込む。
       const usagePerUnit =
-        bomDef?.usagePerUnit != null ? Number(bomDef.usagePerUnit) : null
+        bomDef?.usagePerUnit != null ? Number(bomDef.usagePerUnit) : 1
       const lossRate = bomDef?.lossRate != null ? Number(bomDef.lossRate) : 0
       const procurementMode = bomDef?.procurementMode ?? null
       const isRoll = procurementMode === FabricProcurementMode.ROLL

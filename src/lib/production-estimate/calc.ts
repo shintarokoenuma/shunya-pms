@@ -65,6 +65,8 @@ export type ProductionEstimateRowResult = {
   excludeReason: ProductionCostExcludeReason | null
   /** 1枚原価の分子に計上されたか（isSeparateBilling=false かつ換算成立）。 */
   counted: boolean
+  /** 1枚あたり JPY = counted 行の subtotalJpy ÷ estimateQuantity（0 なら null・非 counted も null）。 */
+  perUnitJpy: number | null
   isSeparateBilling: boolean
   /** 所要量ベース（生地行）か。false は unitPrice × quantity 行。 */
   isRequirementRow: boolean
@@ -79,7 +81,11 @@ export type ProductionEstimateCalcResult = {
   laborNumeratorJpy: number
   /** 分子 = 材料費Σ + 工賃・付属Σ（isSeparateBilling=false・換算成立行のみ）。 */
   numeratorJpy: number
-  /** 自動 1枚原価 = 分子 ÷ estimateQuantity（0 なら null）。 */
+  /** 材料費の1枚あたり = materialNumeratorJpy ÷ estimateQuantity（0 なら null）。 */
+  materialPerUnitJpy: number | null
+  /** 工賃・付属の1枚あたり = laborNumeratorJpy ÷ estimateQuantity（0 なら null）。 */
+  laborPerUnitJpy: number | null
+  /** 自動 1枚原価 = 分子 ÷ estimateQuantity（0 なら null・= materialPerUnitJpy + laborPerUnitJpy）。 */
   autoUnitCostJpy: number | null
   /** 自動 1枚単価 = autoUnitCostJpy ×(1 + marginRate/100)（どちらか null なら null）。 */
   autoUnitPriceJpy: number | null
@@ -200,6 +206,11 @@ export function computeProductionEstimate(
       separateTotalJpy += line.presentedPriceManualJpy
     }
 
+    const perUnitJpy =
+      counted && estimateQuantity > 0 && subtotalJpy !== null
+        ? round2(subtotalJpy / estimateQuantity)
+        : null
+
     rows.push({
       itemId: line.id,
       subtotal,
@@ -208,6 +219,7 @@ export function computeProductionEstimate(
       excluded,
       excludeReason,
       counted,
+      perUnitJpy,
       isSeparateBilling: line.isSeparateBilling,
       isRequirementRow: requirement,
     })
@@ -216,6 +228,10 @@ export function computeProductionEstimate(
   materialNumeratorJpy = round2(materialNumeratorJpy)
   laborNumeratorJpy = round2(laborNumeratorJpy)
   const numeratorJpy = round2(materialNumeratorJpy + laborNumeratorJpy)
+  const materialPerUnitJpy =
+    estimateQuantity > 0 ? round2(materialNumeratorJpy / estimateQuantity) : null
+  const laborPerUnitJpy =
+    estimateQuantity > 0 ? round2(laborNumeratorJpy / estimateQuantity) : null
   const autoUnitCostJpy =
     estimateQuantity > 0 ? round2(numeratorJpy / estimateQuantity) : null
   const autoUnitPriceJpy =
@@ -229,6 +245,8 @@ export function computeProductionEstimate(
     materialNumeratorJpy,
     laborNumeratorJpy,
     numeratorJpy,
+    materialPerUnitJpy,
+    laborPerUnitJpy,
     autoUnitCostJpy,
     autoUnitPriceJpy,
     separateTotalJpy: round2(separateTotalJpy),
