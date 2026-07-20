@@ -39,6 +39,20 @@ export const PE_CURRENCY_OPTIONS: Array<{ value: Currency; label: string }> = [
 /** JPY 換算対象（他は計算除外＝除外表示）。 */
 export const PE_CONVERTIBLE_CURRENCIES: Currency[] = [Currency.JPY, Currency.USD]
 
+/** PE 明細の単位候補（プルダウン・末尾に「その他…」自由入力フォールバック）。 */
+export const PE_UNIT_OPTIONS: string[] = [
+  "m",
+  "yd",
+  "個",
+  "枚",
+  "組",
+  "式",
+  "巻",
+  "反",
+  "㎏",
+  "cm",
+]
+
 export const PE_PROCUREMENT_MODE_OPTIONS: Array<{
   value: FabricProcurementMode
   label: string

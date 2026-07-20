@@ -11,6 +11,7 @@
  * ⑤ USD 換算　⑥ estimateQuantity=0 ガード　⑦ 手打ち単価が自動値より優先される導出
  * ⑧ 付属 usagePerUnit=1 行の所要量=見積数量・perUnitJpy=単価×(1+ロス)
  * ⑨ materialPerUnitJpy + laborPerUnitJpy = autoUnitCostJpy
+ * ⑩ procurementMode≠METER の行では cutFee を計算に含めない
  */
 
 import {
@@ -202,4 +203,21 @@ let passed = 0
   passed++
 })()
 
-console.log(`✓ production-estimate calc: ${passed}/9 ケース PASS`)
+// ⑩ procurementMode≠METER（付属/ROLL）の cutFee は計算に含めない
+;(() => {
+  // 付属（procurementMode=null）に cutFee を渡しても行小計は 単価×所要量 のみ（カット代 無視）
+  const acc = [
+    line({ id: "acc", itemCategory: "MATERIAL", usagePerUnit: 1, lossRate: 0, unitPrice: 100, cutFee: 9999 }),
+  ]
+  const r = computeProductionEstimate(acc, 100, null, null)
+  assert(approx(r.rows[0].subtotalJpy ?? -1, 10000), "⑩付属の cutFee は無視（¥10,000）")
+  // METER 行なら cutFee 加算される（対照）
+  const meter = [
+    line({ id: "m", itemCategory: "MATERIAL", usagePerUnit: 1, lossRate: 0, procurementMode: "METER", unitPrice: 100, cutFee: 5000 }),
+  ]
+  const rm = computeProductionEstimate(meter, 100, null, null)
+  assert(approx(rm.rows[0].subtotalJpy ?? -1, 15000), "⑩METER は cutFee 加算（対照・¥15,000）")
+  passed++
+})()
+
+console.log(`✓ production-estimate calc: ${passed}/10 ケース PASS`)

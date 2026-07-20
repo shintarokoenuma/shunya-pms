@@ -229,7 +229,9 @@ function fromInputItem(
     rollLength: it.rollLength,
     rollPrice: it.rollPrice,
     rollCurrency: it.rollCurrency,
-    cutFee: it.cutFee,
+    // 保存側ガード: カット代は METER 行のみ有効（それ以外は null に正規化・保存データを汚さない）。
+    cutFee:
+      it.procurementMode === FabricProcurementMode.METER ? it.cutFee : null,
     quantity: it.quantity,
     unit: it.unit || null,
     presentedPriceManualJpy: it.isSeparateBilling
@@ -943,4 +945,68 @@ export async function getProductionEstimateSection(productId: string): Promise<{
   })
 
   return { rows, hasBaseSample: baseCount > 0 }
+}
+
+// =============================================================================
+// 会社横断一覧（/quotations 用・listRoughEstimatesForCompany の house style 踏襲）
+// productId → Product を in 句一括結合で解決（N+1 回避）。
+// =============================================================================
+export type CompanyProductionEstimateRow = {
+  id: string
+  estimateNumber: string
+  productId: string
+  productName: string
+  productCode: string
+  title: string | null
+  issuedAt: string // ISO
+  estimateQuantity: number
+  /** 最終1枚単価 = finalUnitPriceManualJpy ?? autoUnitPriceJpy。 */
+  finalUnitPriceJpy: number | null
+}
+
+export async function listProductionEstimatesForCompany(): Promise<
+  CompanyProductionEstimateRow[]
+> {
+  const sess = await requireSession()
+  if (!sess.ok) return []
+
+  const estimates = await prisma.productionEstimate.findMany({
+    where: { companyId: sess.companyId, deletedAt: null },
+    orderBy: { issuedAt: "desc" },
+    select: {
+      id: true,
+      estimateNumber: true,
+      productId: true,
+      title: true,
+      issuedAt: true,
+      estimateQuantity: true,
+      finalUnitPriceManualJpy: true,
+      autoUnitPriceJpy: true,
+    },
+  })
+
+  const productIds = [...new Set(estimates.map((e) => e.productId))]
+  const products = productIds.length
+    ? await prisma.product.findMany({
+        where: { companyId: sess.companyId, id: { in: productIds } },
+        select: { id: true, productName: true, productCode: true },
+      })
+    : []
+  const productById = new Map(products.map((p) => [p.id, p]))
+
+  return estimates.map((e) => {
+    const product = productById.get(e.productId)
+    return {
+      id: e.id,
+      estimateNumber: e.estimateNumber,
+      productId: e.productId,
+      productName: product?.productName ?? "—",
+      productCode: product?.productCode ?? "—",
+      title: e.title,
+      issuedAt: e.issuedAt.toISOString(),
+      estimateQuantity: e.estimateQuantity,
+      finalUnitPriceJpy:
+        dnum(e.finalUnitPriceManualJpy) ?? dnum(e.autoUnitPriceJpy),
+    }
+  })
 }

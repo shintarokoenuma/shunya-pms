@@ -154,7 +154,8 @@ export function computeProductionEstimate(
         rollLength: line.rollLength,
         rollPrice: line.rollPrice,
         rollCurrency: line.rollCurrency,
-        cutFee: line.cutFee,
+        // カット代は METER 行のみ有効（ROLL/付属では計算に含めない・二重ガードの1段目）。
+        cutFee: line.procurementMode === "METER" ? line.cutFee : null,
       })
     } else {
       labor.push({

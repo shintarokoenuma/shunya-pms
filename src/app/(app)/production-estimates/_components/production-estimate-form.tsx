@@ -69,6 +69,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { UnitSelect } from "./unit-select"
 
 const PROC_NONE = "__none__"
 
@@ -201,6 +202,8 @@ export function ProductionEstimateForm({
 }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+  // 作成直後 Σ SKU=0 → 分母未入力。入力を促す（autoFocus・案内）。
+  const initialQtyZero = estimate.estimateQuantity === 0
 
   const form = useForm<ProductionEstimateFormValues>({
     resolver: zodResolver(productionEstimateInputSchema),
@@ -382,16 +385,24 @@ export function ProductionEstimateForm({
                     autoComplete="off"
                     type="number"
                     step="1"
-                    value={field.value ?? ""}
+                    autoFocus={initialQtyZero}
+                    // 0（未設定）は空欄表示にして入力を促す。
+                    value={field.value ? field.value : ""}
                     onChange={field.onChange}
                     onBlur={field.onBlur}
                     name={field.name}
                     ref={field.ref}
                   />
                 </FormControl>
-                <p className="text-[10px] text-muted-foreground">
-                  Σ SKU 量産数を既定値に。受注前の想定数量。
-                </p>
+                {estimateQuantity <= 0 ? (
+                  <p className="text-[10px] text-amber-600">
+                    SKU 量産数が未入力のため、想定数量を入力してください
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-muted-foreground">
+                    Σ SKU 量産数を既定値に。受注前の想定数量。
+                  </p>
+                )}
                 <FormMessage />
               </FormItem>
             )}
@@ -697,9 +708,10 @@ export function ProductionEstimateForm({
                         render={({ field }) => (
                           <FormItem>
                             <FormLabel className="text-xs">単位</FormLabel>
-                            <FormControl>
-                              <Input autoComplete="off" {...field} />
-                            </FormControl>
+                            <UnitSelect
+                              value={(field.value as string) ?? ""}
+                              onChange={field.onChange}
+                            />
                           </FormItem>
                         )}
                       />
@@ -775,13 +787,10 @@ export function ProductionEstimateForm({
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="text-xs">単位</FormLabel>
-                          <FormControl>
-                            <Input
-                              autoComplete="off"
-                              placeholder="m / 個 等"
-                              {...field}
-                            />
-                          </FormControl>
+                          <UnitSelect
+                            value={(field.value as string) ?? ""}
+                            onChange={field.onChange}
+                          />
                         </FormItem>
                       )}
                     />
@@ -814,9 +823,14 @@ export function ProductionEstimateForm({
                           <FormLabel className="text-xs">販売モード</FormLabel>
                           <Select
                             value={field.value ?? PROC_NONE}
-                            onValueChange={(v) =>
-                              field.onChange(v === PROC_NONE ? null : v)
-                            }
+                            onValueChange={(v) => {
+                              const next = v === PROC_NONE ? null : v
+                              field.onChange(next)
+                              // METER 以外へ切替時はカット代をクリア（バグ修正・二重ガードの2段目）。
+                              if (next !== FabricProcurementMode.METER) {
+                                form.setValue(`items.${idx}.cutFee`, "")
+                              }
+                            }}
                           >
                             <FormControl>
                               <SelectTrigger className="w-full">
@@ -846,7 +860,16 @@ export function ProductionEstimateForm({
                               autoComplete="off"
                               type="number"
                               step="0.01"
-                              placeholder="METER のみ"
+                              placeholder={
+                                it?.procurementMode ===
+                                FabricProcurementMode.METER
+                                  ? "総額"
+                                  : "METER のみ"
+                              }
+                              disabled={
+                                it?.procurementMode !==
+                                FabricProcurementMode.METER
+                              }
                               value={field.value ?? ""}
                               onChange={field.onChange}
                               onBlur={field.onBlur}
@@ -854,7 +877,9 @@ export function ProductionEstimateForm({
                               ref={field.ref}
                             />
                           </FormControl>
-                          {toNum(it?.cutFee) !== null &&
+                          {it?.procurementMode ===
+                            FabricProcurementMode.METER &&
+                            toNum(it?.cutFee) !== null &&
                             estimateQuantity > 0 && (
                               <p className="text-[10px] text-muted-foreground">
                                 → ¥
@@ -1001,34 +1026,49 @@ export function ProductionEstimateForm({
 
         {/* 集計 */}
         <div className="space-y-2 rounded-md border p-4 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">
-              材料費Σ（計上）
-              <span className="ml-1 text-xs">
-                （{jpy(calc.materialPerUnitJpy)}/枚）
-              </span>
-            </span>
-            <span className="font-mono">{jpy(calc.materialNumeratorJpy)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">
-              工賃・付属Σ（計上）
-              <span className="ml-1 text-xs">
-                （{jpy(calc.laborPerUnitJpy)}/枚）
-              </span>
-            </span>
-            <span className="font-mono">{jpy(calc.laborNumeratorJpy)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">
-              1枚原価（自動＝分子÷{estimateQuantity.toLocaleString("ja-JP")}）
-            </span>
-            <span className="font-mono">{jpy(calc.autoUnitCostJpy)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">1枚単価（自動＝×利益率）</span>
-            <span className="font-mono">{jpy(calc.autoUnitPriceJpy)}</span>
-          </div>
+          {estimateQuantity <= 0 ? (
+            <div className="rounded-md bg-amber-50 p-3 text-xs text-amber-700">
+              見積数量（分母）を入力すると計算されます
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  材料費Σ（計上）
+                  <span className="ml-1 text-xs">
+                    （{jpy(calc.materialPerUnitJpy)}/枚）
+                  </span>
+                </span>
+                <span className="font-mono">
+                  {jpy(calc.materialNumeratorJpy)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  工賃・付属Σ（計上）
+                  <span className="ml-1 text-xs">
+                    （{jpy(calc.laborPerUnitJpy)}/枚）
+                  </span>
+                </span>
+                <span className="font-mono">
+                  {jpy(calc.laborNumeratorJpy)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  1枚原価（自動＝分子÷
+                  {estimateQuantity.toLocaleString("ja-JP")}）
+                </span>
+                <span className="font-mono">{jpy(calc.autoUnitCostJpy)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  1枚単価（自動＝×利益率）
+                </span>
+                <span className="font-mono">{jpy(calc.autoUnitPriceJpy)}</span>
+              </div>
+            </>
+          )}
 
           <FormField
             control={form.control}
