@@ -1,37 +1,72 @@
-# shunya-pms セッション引き継ぎメモ（2026-07-12 / プロジェクトナレッジ全件同期（QE系15本）・session-handoverスキル鉄則4追加・後回し禁止原則の恒久化）
+# SESSION_HANDOVER.md（2026-07-20 締め / T-0クローズ・B-078/B-079 本番リリース）
 
 ## ⓪ プロジェクト棲み分け（毎回先頭・要目視確認）
-対象: shunya-pms（repo: github.com/shintarokoenuma/shunya-pms / local: ~/shunya-production-system / 本番: shunya-pms-web-production.up.railway.app）。saagara-v2 とは別物。Claude Code 着手前に VS Code が ~/shunya-production-system を指しているか目視確認。
+対象: shunya-pms（github.com/shintarokoenuma/shunya-pms / ~/shunya-production-system /
+本番 shunya-pms-web-production.up.railway.app）。saagara-v2 とは完全に別物。
+★localhost:3000 は saagara-rebuild が使用中。shunya-pms の dev は PORT=3001。
+ポートの正体は lsof -nP -iTCP:3001 -sTCP:LISTEN → PID の cwd で確認（HTTP応答だけで判断しない）。
 
-## 1. 本セッションの位置づけ
-2026-07-10 handover（a34fb1a）の続き。QE-1 spec 着手時に「repo には tracked 済みだがプロジェクトナレッジ未登録の spec 群」が発覚し design-reread がブロックされたため、本セッションは claude.ai 側の整備に専念した。repo へのコード変更・PR・migration・DB 接続は一切なし（repo 側は a34fb1a のまま）。QE-1 の設計本体は別チャット「QE-1見積エンジン仕様設計の着手」で並行進行中。
+## ① 現在フェーズと完了状態
+- フェーズ: 業務トランザクション期・量産軸。spec v1.0 確定済み（07-16・f5c7e38）。
+- 今セッション（07-17〜20）の完了事項（すべて main マージ・本番リリース済み）:
+  - **T-0（B-071）完全クローズ**: PR #102（21eb16e）＝ WoItem/PoItem 行通貨保存修正
+    （Zod＋明細ビルダ＋行通貨UI＋詳細表示・migration なし）。本番監査
+    （Railway GUI・shuttle:16099）でヘッダ USD の WO/PO とも 0 件＝本番実害ゼロ確定。
+  - **B-078 ナビ改善**: PR #103（97203bd）＝共有パンくず entity-breadcrumb・
+    サイドバー現在地ハイライト・セクション別アクセント（master=sky/project=emerald/
+    trade=violet・section-accents.ts 集約）・WO/PO 一覧の新規作成＋品番必須ピッカー
+    （§4-1(d) 野良伝票禁止）＋検索付きコンボボックス searchable-select.tsx
+    （cmdk 導入・品番/サンプル/仕入先/工場/外注先の5種）。
+  - **B-078 follow-up**: PR #104（ef258cb）＝サイドバー「取引」見出し追加＋
+    アクセント帯 sticky top-16 固定。
+  - **B-079 WO 編集画面**: PR #105（9d35005）＝ /work-orders/[id]/edit 新設・
+    WorkOrderForm create/edit union・DRAFT のみ編集可（production-axis §2-1 の解消）・
+    非 DRAFT は編集ボタン非表示＋/edit 直アクセスは詳細へ redirect・明細行通貨読込。
 
-## 2. 完了事項（すべて claude.ai 側）
-1. **プロジェクトナレッジ同期（QE 系15本・全件完了）**: qe-0 v1.0／qe-0d v1.0／qe-1 v1.0／qe1r 系5本（allocation-key・initial-cost-flag・initial-cost-redesign・road-a・tax-addendum）／quotation-pdf-and-list 3本（v0.1・v0.2・brief）／quotation-rough-estimate 3本（v0.1・addendum v0.2・brief）／sample-quotation-concept v0.1。全件を検索で実体検収済み。重複（quotation-rough-estimate v0.1 の二重登録）は1枚削除で解消。
-2. **shunya-session-handover スキル更新（鉄則4追加）**: handover 作成時に「セッション中に確定した spec/addendum のナレッジ登録案内（ファイル名明示・全件一括・後回し禁止・検索で実体検収）」を必須化。claude.ai に置き換えアップロード済み。
-3. **メモリー恒久ルール追加**:「一部だけ対応して残りは後回し」を提案しない（全プロジェクト共通・同期/登録/修正は対象全件を即時完了・部分対応は理由明示＋承認必須）。
+## ② 未マージ PR
+- なし（PR #105 マージ済み 9d35005・ブランチ削除済み・作業ツリークリーン）。
 
-## 3. 本日 main にマージされた PR / コミット
-なし（repo 無変更。origin/main 先頭 = a34fb1a のはず。※並行の QE-1 チャットが push していれば先頭が変わっている可能性あり→STEP 0 で確認）。
+## ③ dev DB の状態
+- VERIFY 系（T0/QE1/B78/B79）物理残存 0・完全原状。
+- 実データ WO-2026-0004（量産・JPY・50枚×3,000・行通貨 JPY）無傷を生出力確認済み。
+- 接続先 dev = hopper.proxy.rlwy.net:12921（railway）。本番 = shuttle:16099（ab6d）。
 
-## 4. DB状態（本日接続なし・2026-07-10 から不変）
-- dev（hopper.proxy.rlwy.net:12921）: RE-2026-0001（版代行 LABOR+flag、裁断縫製仕上げ行=CMT_FEE）。費目 43件。migration 41本目相当
-- 本番（shuttle.proxy.rlwy.net:16099）: RE-2026-0001（is_separate_billing=true 2行・提示額15600/26000）。費目 43件。migration 41本目・重複17行は意図的残置
+## ④ ナレッジ登録状況（鉄則4）
+- production-axis-spec-confirmation-v1_0-2026-07-16.md 登録済み（検索で現物確認済み）。
+- 今セッションの新規 spec/addendum なし（実装セッション）。未同期ゼロ。
 
-## 5. 未マージ PR
-- PR #94（feat/b-065-po-import-colorway）: open/pause 継続（QE-1/B-069 設計に吸収見込み）
+## ⑤ 次セッションで最初にやること（優先順）
+1. **量産軸 (A) seed① 実装ブリーフ（本丸復帰）**: ProductionEstimate/Item 列定義
+   （語彙は RoughEstimate 踏襲）・確定サンプル指定フラグ（新設・1品番1点制約・
+   APPROVED を既定候補）・コピー導線（SampleProduction.patternWoId/sewingWoId＋
+   PurchaseOrder.sampleProductionId＋WorkOrder.samplProductionId 綴りミス温存）・
+   INDIVIDUAL_BILLING は参考表示非計上・migration あり＝triple-gate。
+   着手時 design-reread: production-axis v1.0 §1・QE-1R 一式・live schema。
+2. B-080: 既存 Select の検索対応（素材ほか・searchable-select.tsx を展開）。
 
-## 6. ナレッジ登録状況（鉄則4・本セッションから必須記載）
-- QE 系15本: 全件登録済み・検索検収済み・重複なし。未登録の確定 spec なし
-- 残宿題: QE 系以外の docs/specs/（tracked 56本）とナレッジの全量突き合わせは未実施。git ls-files docs/specs/ docs/reference/ の出力を Claude.ai に渡せば残りの未登録全リストを提示できる（QE-1 作業には影響しないため優先度低・ただし後回しでなく次の区切りで実施）
+## ⑥ 申し送り・バックログ
+- B-065 は PR #94 クローズ済み・(B) に吸収（production-axis §2-5）。
+- バックログ: B-072（BOM 行通貨 UI）/B-073（PoAllocation 按分・当面手動）/
+  B-074（量産WO明細数量=SKU量産数チェック常時化）/B-075（rollLength 乱）/
+  B-076（通貨ソースWO単位化検討）/B-077（初期費用インクルーズ切替）/
+  B-080（Select 検索展開・優先度は (A) の後）。
+- 編集フォームの通貨追従（ヘッダ一致行のみ追従・手動変更行は保持）は
+  慎太郎さん確認済みの意図的仕様。
 
-## 7. 次セッションで最初にやること（優先順）
-1. このメモで状態復元 → git log origin/main -5 で実態確認（QE-1 チャットの push 有無を含む）
-2. **QE-1 見積エンジン spec 設計の継続**（別チャットで進行中ならそちらを継続）: design-reread は qe-0 v1.0・qe-1 v1.0 の原文＋live schema（Bom/BomItem/CostCategory/RoughEstimate/WoItem/PoItem・enum Currency）読み直しから。制約: v1=JPY/USD・指定数モードのカット代欠落（qe-1 §4 の宿題）・初期費用別枠（絶対防衛線）・引き当てキー再検討（材料側 supplierId 化済みの現状確認）
-3. QE 系以外の specs のナレッジ全量突き合わせ（§6 残宿題）
+## ⑦ 本日マージした PR
+- PR #102: fix/t0-line-item-currency（T-0 行通貨修正）→ 21eb16e
+- PR #103: feat/b078-navigation-improvements（ナビ4点＋検索ピッカー）→ 97203bd
+- PR #104: fix/b078-accent-followup（取引見出し＋帯固定）→ ef258cb
+- PR #105: feat/b079-wo-edit-page（WO 編集画面）→ 9d35005
+※ PR #101（QE-1 量産実績原価・a70f890）は前セッション 07-15 のマージ。
 
-## 8. 本日の教訓
-- **repo とプロジェクトナレッジは自動同期されない別の保管庫**。spec 確定のたびにナレッジ追加案内を handover に組み込む（鉄則4としてスキル化済み）
-- **「一部だけ・後回し」は将来のエラーの温床**。同期系タスクは全件即時完了が原則（メモリー恒久化済み）
-- 登録状況は記憶やファイル名一覧でなく検索で実体確認する（重複・欠落は名前だけでは見えない）
-- claude.ai と Claude Code（VS Code）は別アプリ。コンテキスト操作は claude.ai 側・repo 操作は Claude Code 側、と迷ったら入口を確認する
+## ⑧ 運用の教訓（恒久ルール化）
+- **WO/PO 番号は物理削除で再利用される**（実測: B78VERIFY が削除済み WO-2026-0005 を
+  再取得）。→ **本番は物理削除禁止（論理削除のみ）**。物理削除は dev のテストデータ
+  後始末に限る。削除対象の特定は番号でなく **title ガード（VERIFY プレフィックス）を正**。
+- **UI 削除＝論理削除**。WoItem/PoItem は物理残存する。dev 完全原状は物理削除まで。
+- **T-0 以後「行通貨≠ヘッダ通貨」は正当な仕様**。監査クエリ item.currency <>
+  header.currency はバグ検出器ではない。今後の監査は生存データ限定＋文脈判断で設計。
+- 同一指示の再送は盲目的に再実行せず冪等確認で対応（07-20 実践済み・これを正とする）。
+- npm install が未宣言パッケージ（playwright）を prune することがある。検証ツールは
+  --no-save で導入し、package.json/lock へのノイズ混入を毎回 diff で確認する。
