@@ -490,7 +490,9 @@ export async function createProductionEstimateFromSample(
         rollCurrency: isRoll ? mat?.currency ?? null : null,
         cutFee: null,
         quantity: Number(p.quantity),
-        unit: p.unit,
+        // 単位は所要量表示の基準（使用量/枚 の単位）。BOM 既定があれば BomItem.unit、
+        // 無ければ PoItem.unit（購入単位）を焼き込む（PR-2 追加修正2・§1）。
+        unit: bomDef?.unit ?? p.unit,
         presentedPriceManualJpy: null,
         notes: null,
       })

@@ -213,10 +213,19 @@ function ItemRow({
       ? it.subtotalJpy / estimateQuantity
       : null
   return (
-    <div className="rounded-md border p-3 text-sm">
+    <div
+      className={`rounded-md border p-3 text-sm ${
+        isMaterial ? "border-sky-200 bg-sky-50/50" : "bg-muted/30"
+      }`}
+    >
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <Badge variant="secondary">
+          <Badge
+            variant="secondary"
+            className={
+              isMaterial ? "border-sky-300 bg-sky-100 text-sky-700" : undefined
+            }
+          >
             {PRODUCTION_ESTIMATE_CATEGORY_LABELS[it.itemCategory]}
           </Badge>
           <Badge variant="outline" className="text-[10px]">

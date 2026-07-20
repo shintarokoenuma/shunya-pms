@@ -1,6 +1,6 @@
 "use client"
 
-import { useTransition } from "react"
+import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import {
@@ -11,7 +11,15 @@ import {
 } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2, ChevronLeft } from "lucide-react"
+import {
+  Loader2,
+  Plus,
+  Trash2,
+  ChevronLeft,
+  ArrowUp,
+  ArrowDown,
+  RotateCcw,
+} from "lucide-react"
 import {
   Currency,
   ProductionEstimateCategory,
@@ -198,10 +206,52 @@ export function ProductionEstimateForm({
     resolver: zodResolver(productionEstimateInputSchema),
     defaultValues: toFormValues(estimate),
   })
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove, move } = useFieldArray({
     control: form.control,
     name: "items",
   })
+
+  // LABOR 行の数量が見積数量に「追従解除（手入力）」された行の field id 集合。
+  // 追従中 = LABOR・非別枠・未 released。数量編集で release、「戻す」で再追従。
+  const [releasedIds, setReleasedIds] = useState<Set<string>>(new Set())
+  const initedRef = useRef(false)
+  useEffect(() => {
+    if (initedRef.current || fields.length === 0) return
+    initedRef.current = true
+    const s = new Set<string>()
+    fields.forEach((f, i) => {
+      const it = estimate.items[i]
+      // コピー値が見積数量と不一致の LABOR 非別枠行は追従解除状態で開始（コピー値を潰さない）。
+      if (
+        it &&
+        it.itemCategory === "LABOR" &&
+        !it.isSeparateBilling &&
+        it.quantity !== estimate.estimateQuantity
+      ) {
+        s.add(f.id)
+      }
+    })
+    setReleasedIds(s)
+  }, [fields, estimate.items, estimate.estimateQuantity])
+
+  const isFollowing = (
+    fieldId: string,
+    it: PEFormItem | undefined,
+  ): boolean =>
+    it?.itemCategory === ProductionEstimateCategory.LABOR &&
+    !(it?.isSeparateBilling ?? false) &&
+    !releasedIds.has(fieldId)
+
+  const releaseFollow = (fieldId: string) =>
+    setReleasedIds((prev) => new Set(prev).add(fieldId))
+  const restoreFollow = (fieldId: string, idx: number) => {
+    setReleasedIds((prev) => {
+      const n = new Set(prev)
+      n.delete(fieldId)
+      return n
+    })
+    form.setValue(`items.${idx}.quantity`, estimateQuantity)
+  }
 
   const watchedItems = useWatch({ control: form.control, name: "items" })
   const watchedQty = useWatch({ control: form.control, name: "estimateQuantity" })
@@ -236,7 +286,10 @@ export function ProductionEstimateForm({
     cutFee: toNum(it.cutFee),
     unitPrice: toNum(it.unitPrice),
     currency: (it.currency ?? Currency.JPY) as ProductionCostCurrency,
-    quantity: toNum(it.quantity),
+    // 追従中の LABOR 行は見積数量を有効数量として計算に使う。
+    quantity: isFollowing(fields[i]?.id ?? String(i), it)
+      ? estimateQuantity
+      : toNum(it.quantity),
     unit: (it.unit as string) || null,
     presentedPriceManualJpy: toNum(it.presentedPriceManualJpy),
   }))
@@ -265,8 +318,16 @@ export function ProductionEstimateForm({
           : brandDefaultMarginRate !== null && mr === brandDefaultMarginRate
             ? "BRAND_DEFAULT"
             : "MANUAL_OVERRIDE"
+      const estQty = toNum(values.estimateQuantity) ?? 0
+      // 追従中の LABOR 行は数量を見積数量で確定保存する。
+      const normalizedItems = (values.items ?? []).map((it, i) =>
+        isFollowing(fields[i]?.id ?? String(i), it as PEFormItem)
+          ? { ...it, quantity: estQty }
+          : it,
+      )
       const payload = {
         ...values,
+        items: normalizedItems,
         marginRateSource,
       } as unknown as ProductionEstimateInput
       const r = await updateProductionEstimate(estimate.id, payload)
@@ -445,12 +506,24 @@ export function ProductionEstimateForm({
               <div
                 key={f.id}
                 className={`space-y-3 rounded-md border p-3 ${
-                  isSeparate ? "border-amber-300 bg-amber-50" : "bg-muted/30"
+                  // 別枠アンバー最優先 > 費目色（MATERIAL=sky / LABOR=グレー）。
+                  isSeparate
+                    ? "border-amber-300 bg-amber-50"
+                    : isMaterial
+                      ? "border-sky-200 bg-sky-50/50"
+                      : "bg-muted/30"
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Badge variant={isSeparate ? "outline" : "secondary"}>
+                    <Badge
+                      variant={isSeparate ? "outline" : "secondary"}
+                      className={
+                        isMaterial && !isSeparate
+                          ? "border-sky-300 bg-sky-100 text-sky-700"
+                          : undefined
+                      }
+                    >
                       {PRODUCTION_ESTIMATE_CATEGORY_LABELS[
                         (it?.itemCategory as ProductionEstimateCategory) ??
                           ProductionEstimateCategory.MATERIAL
@@ -478,15 +551,40 @@ export function ProductionEstimateForm({
                       </Badge>
                     )}
                   </div>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    className="h-7 w-7 text-destructive"
-                    onClick={() => remove(idx)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <div className="flex items-center gap-0.5">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      disabled={idx === 0}
+                      onClick={() => move(idx, idx - 1)}
+                      aria-label="上へ"
+                    >
+                      <ArrowUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7"
+                      disabled={idx === fields.length - 1}
+                      onClick={() => move(idx, idx + 1)}
+                      aria-label="下へ"
+                    >
+                      <ArrowDown className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => remove(idx)}
+                      aria-label="削除"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
 
                 <FormField
@@ -545,23 +643,53 @@ export function ProductionEstimateForm({
                       <FormField
                         control={form.control}
                         name={`items.${idx}.quantity`}
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-xs">数量</FormLabel>
-                            <FormControl>
-                              <Input
-                                autoComplete="off"
-                                type="number"
-                                step="0.0001"
-                                value={field.value ?? ""}
-                                onChange={field.onChange}
-                                onBlur={field.onBlur}
-                                name={field.name}
-                                ref={field.ref}
-                              />
-                            </FormControl>
-                          </FormItem>
-                        )}
+                        render={({ field }) => {
+                          const following = isFollowing(f.id, it)
+                          return (
+                            <FormItem>
+                              <FormLabel className="flex items-center justify-between text-xs">
+                                <span>数量</span>
+                                {!following && !isSeparate && (
+                                  <button
+                                    type="button"
+                                    onClick={() => restoreFollow(f.id, idx)}
+                                    className="inline-flex items-center gap-0.5 text-[10px] text-primary hover:underline"
+                                  >
+                                    <RotateCcw className="h-3 w-3" />
+                                    見積数量に戻す
+                                  </button>
+                                )}
+                              </FormLabel>
+                              <FormControl>
+                                <Input
+                                  autoComplete="off"
+                                  type="number"
+                                  step="0.0001"
+                                  value={
+                                    following ? estimateQuantity : field.value ?? ""
+                                  }
+                                  className={
+                                    following
+                                      ? "bg-muted text-muted-foreground"
+                                      : undefined
+                                  }
+                                  onChange={(e) => {
+                                    if (following) releaseFollow(f.id)
+                                    field.onChange(e)
+                                  }}
+                                  onBlur={field.onBlur}
+                                  name={field.name}
+                                  ref={field.ref}
+                                />
+                              </FormControl>
+                              {following && (
+                                <p className="text-[10px] text-muted-foreground">
+                                  見積数量に追従中
+                                </p>
+                              )}
+                            </FormItem>
+                          )
+                        }}
                       />
                       <FormField
                         control={form.control}
@@ -619,7 +747,7 @@ export function ProductionEstimateForm({
 
                 {/* 生地行の量計算材料 */}
                 {isMaterial && (
-                  <div className="grid grid-cols-2 gap-2 rounded-md border border-dashed p-2 md:grid-cols-4">
+                  <div className="grid grid-cols-2 gap-2 rounded-md border border-dashed p-2 md:grid-cols-5">
                     <FormField
                       control={form.control}
                       name={`items.${idx}.usagePerUnit`}
@@ -636,6 +764,22 @@ export function ProductionEstimateForm({
                               onBlur={field.onBlur}
                               name={field.name}
                               ref={field.ref}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`items.${idx}.unit`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">単位</FormLabel>
+                          <FormControl>
+                            <Input
+                              autoComplete="off"
+                              placeholder="m / 個 等"
+                              {...field}
                             />
                           </FormControl>
                         </FormItem>
