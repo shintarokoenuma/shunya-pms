@@ -596,6 +596,8 @@ export async function updateSampleProduction(
       clientApproved: r.clientApproved,
       clientApprovedAt: r.clientApprovedAt,
       clientFeedback: r.clientFeedback,
+      // A-seed1 PR-1: 新列を監査 snapshot に載せる（網羅 Record を満たすための必須追加）
+      isProductionEstimateBase: r.isProductionEstimateBase,
       shippedAt: r.shippedAt,
       shippingMethod: r.shippingMethod,
       trackingNumber: r.trackingNumber,
