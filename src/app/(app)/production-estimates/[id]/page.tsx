@@ -164,19 +164,29 @@ export default async function ProductionEstimateDetailPage({
                 className="flex items-center justify-between rounded-md border border-amber-200 bg-amber-50 p-2 text-sm"
               >
                 <span>{it.itemName}</span>
-                <span className="font-mono">
-                  {it.presentedPriceManualJpy === null ? (
+                {it.presentedPriceManualJpy === null ? (
+                  <span className="flex flex-col items-end">
                     <span className="text-muted-foreground">非計上</span>
-                  ) : (
-                    jpy(it.presentedPriceManualJpy)
-                  )}
-                </span>
+                    <span className="text-[10px] text-muted-foreground">
+                      （編集で提示額を入力すると計上されます）
+                    </span>
+                  </span>
+                ) : (
+                  <span className="font-mono">
+                    {jpy(it.presentedPriceManualJpy)}
+                  </span>
+                )}
               </div>
             ))}
             <div className="flex justify-between border-t pt-2 text-sm">
               <span className="text-muted-foreground">別枠合計</span>
               <span className="font-mono text-amber-700">{jpy(separateTotalJpy)}</span>
             </div>
+            {separateItems.every((it) => it.presentedPriceManualJpy === null) && (
+              <p className="text-[10px] text-muted-foreground">
+                すべて非計上です。編集で各項目の提示額を入力すると別枠合計に計上されます。
+              </p>
+            )}
           </CardContent>
         </Card>
       )}
