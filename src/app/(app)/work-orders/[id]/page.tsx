@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ChevronLeft, FileText } from "lucide-react"
+import { ChevronLeft, FileText, Pencil } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -87,6 +87,15 @@ export default async function WorkOrderDetailPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <WorkOrderStatusControl id={wo.id} status={wo.status} />
+            {/* B-079: DRAFT のみ編集可（production-axis §2-1） */}
+            {wo.status === "DRAFT" && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/work-orders/${wo.id}/edit`}>
+                  <Pencil className="mr-1 h-4 w-4" />
+                  編集
+                </Link>
+              </Button>
+            )}
             <Button asChild variant="outline" size="sm">
               <a href={`/api/work-orders/${wo.id}/pdf`} target="_blank" rel="noopener">
                 <FileText className="mr-1 h-4 w-4" />
