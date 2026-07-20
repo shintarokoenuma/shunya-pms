@@ -1,72 +1,79 @@
-# SESSION_HANDOVER.md（2026-07-20 締め / T-0クローズ・B-078/B-079 本番リリース）
+# SESSION_HANDOVER.md（2026-07-20 締め その2 / 量産軸(A) seed① 本番リリース完了）
 
 ## ⓪ プロジェクト棲み分け（毎回先頭・要目視確認）
 対象: shunya-pms（github.com/shintarokoenuma/shunya-pms / ~/shunya-production-system /
 本番 shunya-pms-web-production.up.railway.app）。saagara-v2 とは完全に別物。
 ★localhost:3000 は saagara-rebuild が使用中。shunya-pms の dev は PORT=3001。
-ポートの正体は lsof -nP -iTCP:3001 -sTCP:LISTEN → PID の cwd で確認（HTTP応答だけで判断しない）。
+ポートの正体は lsof -nP -iTCP:3001 -sTCP:LISTEN → PID の cwd で確認。
 
 ## ① 現在フェーズと完了状態
-- フェーズ: 業務トランザクション期・量産軸。spec v1.0 確定済み（07-16・f5c7e38）。
-- 今セッション（07-17〜20）の完了事項（すべて main マージ・本番リリース済み）:
-  - **T-0（B-071）完全クローズ**: PR #102（21eb16e）＝ WoItem/PoItem 行通貨保存修正
-    （Zod＋明細ビルダ＋行通貨UI＋詳細表示・migration なし）。本番監査
-    （Railway GUI・shuttle:16099）でヘッダ USD の WO/PO とも 0 件＝本番実害ゼロ確定。
-  - **B-078 ナビ改善**: PR #103（97203bd）＝共有パンくず entity-breadcrumb・
-    サイドバー現在地ハイライト・セクション別アクセント（master=sky/project=emerald/
-    trade=violet・section-accents.ts 集約）・WO/PO 一覧の新規作成＋品番必須ピッカー
-    （§4-1(d) 野良伝票禁止）＋検索付きコンボボックス searchable-select.tsx
-    （cmdk 導入・品番/サンプル/仕入先/工場/外注先の5種）。
-  - **B-078 follow-up**: PR #104（ef258cb）＝サイドバー「取引」見出し追加＋
-    アクセント帯 sticky top-16 固定。
-  - **B-079 WO 編集画面**: PR #105（9d35005）＝ /work-orders/[id]/edit 新設・
-    WorkOrderForm create/edit union・DRAFT のみ編集可（production-axis §2-1 の解消）・
-    非 DRAFT は編集ボタン非表示＋/edit 直アクセスは詳細へ redirect・明細行通貨読込。
+- フェーズ: 業務トランザクション期・量産軸。**(A) 量産見積レーン seed① 完了・本番リリース済み**。
+- 本セッション（07-20 後半）の完了事項:
+  - **PR #106**（4fdde39）: ProductionEstimate/Item スキーマ＋確定サンプルフラグ
+    （isProductionEstimateBase・1品番1点 partial unique index=SQL手書き）。
+    triple-gate 完了（dev 確認→本番 dry-run ROLLBACK→migrate deploy→partial index 本番実在確認）。
+  - **PR #107**（6c59d5c・migration なし）: 量産見積の実体実装。コミット5本:
+    6e00628 実体（基準サンプル指定・コピー導線・calc・UI）／c8244f3 1枚あたり中心表示
+    ／c94a462 単位入力・数量追従・行並替↑↓・費目色分け／8305663 一覧掲載・分母0案内・
+    単位プルダウン・カット代METERガード（バグ修正）／32d0579 非計上の補足文言。
+  - calc.test 10/10。慎太郎さんローカル確認で3巡のフィードバックをすべて反映済み。
+- 機能の入口: 品番カルテ→サンプル一覧「基準にする」→「サンプルから見積作成」→
+  /production-estimates/[id]（詳細）・/edit（編集）。/quotations に量産見積セクション併設。
 
 ## ② 未マージ PR
-- なし（PR #105 マージ済み 9d35005・ブランチ削除済み・作業ツリークリーン）。
+- なし（#106・#107 ともマージ済み・ブランチ削除済み）。
 
 ## ③ dev DB の状態
-- VERIFY 系（T0/QE1/B78/B79）物理残存 0・完全原状。
-- 実データ WO-2026-0004（量産・JPY・50枚×3,000・行通貨 JPY）無傷を生出力確認済み。
-- 接続先 dev = hopper.proxy.rlwy.net:12921（railway）。本番 = shuttle:16099（ab6d）。
+- VERIFY 系（PE2VERIFY）物理残存 0・全 PE 件数 0・WO/PO-2026-0004 原状（明細1件ずつ）。
+- AOI 品番の基準サンプルフラグもリセット済み（base=0）。
+- 接続先 dev = hopper.proxy.rlwy.net:12921。本番 = shuttle:16099（postgres-ab6d）。
+- dev サーバ PORT=3001 稼働中の可能性あり（セッション終了時点）。
 
 ## ④ ナレッジ登録状況（鉄則4）
-- production-axis-spec-confirmation-v1_0-2026-07-16.md 登録済み（検索で現物確認済み）。
-- 今セッションの新規 spec/addendum なし（実装セッション）。未同期ゼロ。
+- 本セッションの新規 spec/addendum なし（実装セッション・設計判断はチャット確定）。
+- 実装ブリーフ2本（PR-1/PR-2）＋追加修正指示3本はチャット内のみ（ファイル化不要と判断）。
 
 ## ⑤ 次セッションで最初にやること（優先順）
-1. **量産軸 (A) seed① 実装ブリーフ（本丸復帰）**: ProductionEstimate/Item 列定義
-   （語彙は RoughEstimate 踏襲）・確定サンプル指定フラグ（新設・1品番1点制約・
-   APPROVED を既定候補）・コピー導線（SampleProduction.patternWoId/sewingWoId＋
-   PurchaseOrder.sampleProductionId＋WorkOrder.samplProductionId 綴りミス温存）・
-   INDIVIDUAL_BILLING は参考表示非計上・migration あり＝triple-gate。
-   着手時 design-reread: production-axis v1.0 §1・QE-1R 一式・live schema。
-2. B-080: 既存 Select の検索対応（素材ほか・searchable-select.tsx を展開）。
+1. **本番表示確認（未実施）**: 本番の品番カルテに「量産見積」セクション・「基準にする」
+   ボタン、/quotations に量産見積セクションが表示されることを目視確認。
+2. **B-080 実装**: (a) PE 明細行へのマスターピッカー追加（MATERIAL=素材ピッカー・
+   LABOR=原価費目ピッカー・SearchableSelect・選択で品目名自動補完＋上書き可＝QE-1R 作法）
+   (b) 既存 Select の検索対応展開（素材ほか）。※(B) より先に実施
+   （理由: PE 実運用でマスター非連携の手動行が溜まるのを防ぐ）。
+3. **(B) 量産発注生成の仕様確認書**: 保存済み量産見積（最新版）→SKU 数量入力→PO/WO
+   ドラフト生成（Q-d/Q-e・PoItem.productColorwayId 新設・B-083 調達区分と同時設計）。
 
-## ⑥ 申し送り・バックログ
-- B-065 は PR #94 クローズ済み・(B) に吸収（production-axis §2-5）。
-- バックログ: B-072（BOM 行通貨 UI）/B-073（PoAllocation 按分・当面手動）/
-  B-074（量産WO明細数量=SKU量産数チェック常時化）/B-075（rollLength 乱）/
-  B-076（通貨ソースWO単位化検討）/B-077（初期費用インクルーズ切替）/
-  B-080（Select 検索展開・優先度は (A) の後）。
-- 編集フォームの通貨追従（ヘッダ一致行のみ追従・手動変更行は保持）は
-  慎太郎さん確認済みの意図的仕様。
+## ⑥ 申し送り・バックログ（本日新規起票 B-081〜B-084）
+- **B-081**: サイドバー並び順変更（案件→取引→マスターの順に。現状はマスターが先頭）。
+- **B-082a**: 品番一覧のサムネイル拡大（スクロールせず大枠が掴めるサイズ）。
+- **B-082b**: 品番カルテの絵型をメイン＋サムネイル方式に（1枚目大・以降下に小・切替）。
+- **B-083**: 明細行の調達区分 procurementRoute（COMPANY_ARRANGED/CLIENT_SUPPLIED/
+  STOCK_ALLOCATED）。全明細行共通の直交軸・COMPANY_ARRANGED のみ分子計上・
+  (B) の PO 生成判定キー。migration あり。(B) 仕様確認書と同時設計。
+  在庫引き当ての実在庫参照は B-023 接続の将来段。それまで支給品・引き当て品は
+  「単価空→計上外（単価未入力）」運用でつなぐ。
+- **B-084**: PE 明細行のドラッグ&ドロップ並び替え（現状は↑↓ボタン）。
+- 既存: B-072〜B-077・B-080（→⑤-2 に昇格）。B-065 は #94 クローズ済み・(B) に吸収。
 
 ## ⑦ 本日マージした PR
-- PR #102: fix/t0-line-item-currency（T-0 行通貨修正）→ 21eb16e
-- PR #103: feat/b078-navigation-improvements（ナビ4点＋検索ピッカー）→ 97203bd
-- PR #104: fix/b078-accent-followup（取引見出し＋帯固定）→ ef258cb
-- PR #105: feat/b079-wo-edit-page（WO 編集画面）→ 9d35005
-※ PR #101（QE-1 量産実績原価・a70f890）は前セッション 07-15 のマージ。
+- PR #106: feat/pe1-schema（PE スキーマ＋確定サンプルフラグ・migration）→ 4fdde39
+- PR #107: feat/pe2-estimate-core（量産見積 実体・5コミット）→ 6c59d5c
 
-## ⑧ 運用の教訓（恒久ルール化）
-- **WO/PO 番号は物理削除で再利用される**（実測: B78VERIFY が削除済み WO-2026-0005 を
-  再取得）。→ **本番は物理削除禁止（論理削除のみ）**。物理削除は dev のテストデータ
-  後始末に限る。削除対象の特定は番号でなく **title ガード（VERIFY プレフィックス）を正**。
-- **UI 削除＝論理削除**。WoItem/PoItem は物理残存する。dev 完全原状は物理削除まで。
-- **T-0 以後「行通貨≠ヘッダ通貨」は正当な仕様**。監査クエリ item.currency <>
-  header.currency はバグ検出器ではない。今後の監査は生存データ限定＋文脈判断で設計。
-- 同一指示の再送は盲目的に再実行せず冪等確認で対応（07-20 実践済み・これを正とする）。
-- npm install が未宣言パッケージ（playwright）を prune することがある。検証ツールは
-  --no-save で導入し、package.json/lock へのノイズ混入を毎回 diff で確認する。
+## ⑧ 設計確定事項（チャット確定・spec 未文書化のもの）
+- 量産見積の1枚あたり表示: MATERIAL=単価×使用量×(1+ロス率)・LABOR=単価×数量÷分母。
+  MATERIAL は所要量（自動）表示・数量入力なし（quantity 列は温存・LABOR で使用）。
+- LABOR 数量は見積数量に自動追従（編集で解除・「見積数量に戻す」で再追従・form 状態のみ）。
+- 単位は PE 明細のみプルダウン（m/yd/個/枚/組/式/巻/反/㎏/cm＋その他…自由入力）。
+  PE_UNIT_OPTIONS。WO/PO/BOM は自由入力のまま（単位マスター化は将来課題）。
+- カット代は METER 限定（calc/フォーム/保存の三層ガード）。
+- 別枠（初期費用）は既定非計上・presentedPriceManualJpy 入力行のみ計上（§1-5）。
+  版代・パンチ代等を量産で請求する場合は編集で提示額を入力（二重請求防止の設計意図）。
+- 費目色分け: MATERIAL=sky・LABOR=グレー・別枠=amber（最優先）。
+- /quotations は2セクション（概算 QE-1R＋量産見積）。
+
+## ⑨ 運用の教訓（本セッション追加）
+- dev サーバは schema 変更 PR の後に必ず再起動（stale Prisma Client で enum undefined になる）。
+- Railway GUI の Data タブは複数文トランザクションの一括実行に不向き。
+  本番 dry-run は Console タブ（psql）で BEGIN→全文→count 確認→ROLLBACK が正。
+- stacked PR は base が先にマージされたら rebase --onto origin/main で載せ替え・
+  force-with-lease・PR は base=main で開き直す（本日 #107 で実践）。
