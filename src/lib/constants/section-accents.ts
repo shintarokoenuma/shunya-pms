@@ -27,7 +27,11 @@ export const SECTION_ACCENTS: Record<
 
 // パス前方一致 → 系統。（project の "/products" は "/product-categories" と別＝前方一致は "/products/" で判定）
 const ACCENT_PREFIXES: { key: SectionAccentKey; prefixes: string[] }[] = [
-  { key: "project", prefixes: ["/products", "/samples", "/skus"] },
+  // A-seed1: 量産見積は品番カルテ直結の案件系（ブリーフ指定＝project/emerald）。
+  {
+    key: "project",
+    prefixes: ["/products", "/samples", "/skus", "/production-estimates"],
+  },
   {
     key: "trade",
     prefixes: [

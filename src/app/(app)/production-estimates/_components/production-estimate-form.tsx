@@ -1,0 +1,897 @@
+"use client"
+
+import { useTransition } from "react"
+import { useRouter } from "next/navigation"
+import Link from "next/link"
+import {
+  useForm,
+  useFieldArray,
+  useWatch,
+  type SubmitHandler,
+} from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
+import { toast } from "sonner"
+import { Loader2, Plus, Trash2, ChevronLeft } from "lucide-react"
+import {
+  Currency,
+  ProductionEstimateCategory,
+  ProductionEstimateItemSource,
+  FabricProcurementMode,
+} from "@prisma/client"
+import {
+  productionEstimateInputSchema,
+  type ProductionEstimateFormValues,
+  type ProductionEstimateInput,
+} from "@/lib/validators/production-estimate"
+import {
+  computeProductionEstimate,
+  resolveFinalUnitPriceJpy,
+  computeGrandTotalJpy,
+  type ProductionEstimateLineForCalc,
+} from "@/lib/production-estimate/calc"
+import type {
+  ProductionEstimateDTO,
+  ProductionEstimateItemDTO,
+} from "@/lib/actions/production-estimates"
+import { updateProductionEstimate } from "@/lib/actions/production-estimates"
+import type { ProductionCostCurrency } from "@/lib/calc/production-cost"
+import {
+  PRODUCTION_ESTIMATE_CATEGORY_LABELS,
+  PRODUCTION_ESTIMATE_SOURCE_LABELS,
+  PE_CURRENCY_OPTIONS,
+  PE_PROCUREMENT_MODE_OPTIONS,
+} from "@/lib/constants/production-estimate-types"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+
+const PROC_NONE = "__none__"
+
+type PEFormItem = NonNullable<ProductionEstimateFormValues["items"]>[number]
+
+function jpy(n: number | null): string {
+  return n === null ? "—" : `¥${n.toLocaleString("ja-JP")}`
+}
+
+function toNum(v: unknown): number | null {
+  if (v === "" || v === null || v === undefined) return null
+  const n = typeof v === "number" ? v : Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+function itemToFormValues(
+  it: ProductionEstimateItemDTO,
+): PEFormItem {
+  return {
+    itemCategory: it.itemCategory,
+    itemName: it.itemName,
+    itemNameEn: it.itemNameEn ?? "",
+    materialId: it.materialId,
+    costCategoryId: it.costCategoryId,
+    source: it.source,
+    sourcePoItemId: it.sourcePoItemId,
+    sourceWoItemId: it.sourceWoItemId,
+    sourceBomItemId: it.sourceBomItemId,
+    unitPrice: it.unitPrice ?? "",
+    currency: it.currency,
+    usagePerUnit: it.usagePerUnit ?? "",
+    lossRate: it.lossRate ?? 0,
+    procurementMode: it.procurementMode,
+    rollLength: it.rollLength ?? "",
+    rollPrice: it.rollPrice ?? "",
+    rollCurrency: it.rollCurrency,
+    cutFee: it.cutFee ?? "",
+    quantity: it.quantity ?? "",
+    unit: it.unit ?? "",
+    isSeparateBilling: it.isSeparateBilling,
+    presentedPriceManualJpy: it.presentedPriceManualJpy ?? "",
+    notes: it.notes ?? "",
+  }
+}
+
+function toFormValues(
+  dto: ProductionEstimateDTO,
+): ProductionEstimateFormValues {
+  return {
+    productId: dto.productId,
+    sourceSampleProductionId: dto.sourceSampleProductionId,
+    title: dto.title ?? "",
+    notes: dto.notes ?? "",
+    estimateQuantity: dto.estimateQuantity,
+    currency: dto.currency,
+    exchangeRateUsdJpy: dto.exchangeRateUsdJpy ?? "",
+    marginRate: dto.marginRate ?? "",
+    marginRateSource: dto.marginRateSource,
+    initialCostBillingMode: dto.initialCostBillingMode,
+    finalUnitPriceManualJpy: dto.finalUnitPriceManualJpy ?? "",
+    items: dto.items.map(itemToFormValues),
+  }
+}
+
+function emptyItem(
+  category: ProductionEstimateCategory,
+  separate = false,
+): PEFormItem {
+  return {
+    itemCategory: category,
+    itemName: "",
+    itemNameEn: "",
+    materialId: null,
+    costCategoryId: null,
+    source: ProductionEstimateItemSource.MANUAL,
+    sourcePoItemId: null,
+    sourceWoItemId: null,
+    sourceBomItemId: null,
+    unitPrice: "",
+    currency: Currency.JPY,
+    usagePerUnit: "",
+    lossRate: 0,
+    procurementMode: null,
+    rollLength: "",
+    rollPrice: "",
+    rollCurrency: null,
+    cutFee: "",
+    quantity: "",
+    unit: "",
+    isSeparateBilling: separate,
+    presentedPriceManualJpy: "",
+    notes: "",
+  }
+}
+
+type Props = {
+  estimate: ProductionEstimateDTO
+  /** ブランド既定利益率（marginRateSource 判定用）。 */
+  brandDefaultMarginRate: number | null
+}
+
+export function ProductionEstimateForm({
+  estimate,
+  brandDefaultMarginRate,
+}: Props) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+
+  const form = useForm<ProductionEstimateFormValues>({
+    resolver: zodResolver(productionEstimateInputSchema),
+    defaultValues: toFormValues(estimate),
+  })
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "items",
+  })
+
+  const watchedItems = useWatch({ control: form.control, name: "items" })
+  const watchedQty = useWatch({ control: form.control, name: "estimateQuantity" })
+  const watchedMargin = useWatch({ control: form.control, name: "marginRate" })
+  const watchedRate = useWatch({
+    control: form.control,
+    name: "exchangeRateUsdJpy",
+  })
+  const watchedFinal = useWatch({
+    control: form.control,
+    name: "finalUnitPriceManualJpy",
+  })
+
+  const items = watchedItems ?? []
+  const estimateQuantity = toNum(watchedQty) ?? 0
+  const marginNum = toNum(watchedMargin)
+  const rateNum = toNum(watchedRate)
+
+  const calcLines: ProductionEstimateLineForCalc[] = items.map((it, i) => ({
+    id: String(i),
+    itemCategory:
+      it.itemCategory === ProductionEstimateCategory.MATERIAL
+        ? "MATERIAL"
+        : "LABOR",
+    isSeparateBilling: it.isSeparateBilling ?? false,
+    usagePerUnit: toNum(it.usagePerUnit),
+    lossRate: toNum(it.lossRate) ?? 0,
+    procurementMode: (it.procurementMode as "ROLL" | "METER" | null) ?? null,
+    rollLength: toNum(it.rollLength),
+    rollPrice: toNum(it.rollPrice),
+    rollCurrency: (it.rollCurrency as ProductionCostCurrency | null) ?? null,
+    cutFee: toNum(it.cutFee),
+    unitPrice: toNum(it.unitPrice),
+    currency: (it.currency ?? Currency.JPY) as ProductionCostCurrency,
+    quantity: toNum(it.quantity),
+    unit: (it.unit as string) || null,
+    presentedPriceManualJpy: toNum(it.presentedPriceManualJpy),
+  }))
+  const calc = computeProductionEstimate(
+    calcLines,
+    estimateQuantity,
+    marginNum,
+    rateNum,
+  )
+  const finalUnit = resolveFinalUnitPriceJpy(
+    calc.autoUnitPriceJpy,
+    toNum(watchedFinal),
+  )
+  const grandTotal = computeGrandTotalJpy(
+    finalUnit.valueJpy,
+    estimateQuantity,
+    calc.separateTotalJpy,
+  )
+
+  const onSubmit: SubmitHandler<ProductionEstimateFormValues> = (values) => {
+    startTransition(async () => {
+      const mr = toNum(values.marginRate)
+      const marginRateSource =
+        mr === null
+          ? null
+          : brandDefaultMarginRate !== null && mr === brandDefaultMarginRate
+            ? "BRAND_DEFAULT"
+            : "MANUAL_OVERRIDE"
+      const payload = {
+        ...values,
+        marginRateSource,
+      } as unknown as ProductionEstimateInput
+      const r = await updateProductionEstimate(estimate.id, payload)
+      if (!r.ok) {
+        toast.error(r.error)
+        return
+      }
+      toast.success("量産見積を更新しました")
+      router.push(`/production-estimates/${estimate.id}`)
+      router.refresh()
+    })
+  }
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+        <div>
+          <Button asChild variant="ghost" size="sm" className="-ml-2">
+            <Link href={`/production-estimates/${estimate.id}`}>
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              詳細に戻る
+            </Link>
+          </Button>
+          <h1 className="mt-1 font-mono text-2xl font-semibold tracking-tight">
+            {estimate.estimateNumber} を編集
+          </h1>
+        </div>
+
+        {/* ヘッダ */}
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          <FormField
+            control={form.control}
+            name="title"
+            render={({ field }) => (
+              <FormItem className="md:col-span-3">
+                <FormLabel>タイトル</FormLabel>
+                <FormControl>
+                  <Input autoComplete="off" placeholder="任意" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="estimateQuantity"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>見積数量（分母）</FormLabel>
+                <FormControl>
+                  <Input
+                    autoComplete="off"
+                    type="number"
+                    step="1"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </FormControl>
+                <p className="text-[10px] text-muted-foreground">
+                  Σ SKU 量産数を既定値に。受注前の想定数量。
+                </p>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="marginRate"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>利益率（％）</FormLabel>
+                <FormControl>
+                  <Input
+                    autoComplete="off"
+                    type="number"
+                    step="0.01"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="exchangeRateUsdJpy"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>USD/JPY レート</FormLabel>
+                <FormControl>
+                  <Input
+                    autoComplete="off"
+                    type="number"
+                    step="0.000001"
+                    placeholder="USD 行があれば必須"
+                    value={field.value ?? ""}
+                    onChange={field.onChange}
+                    onBlur={field.onBlur}
+                    name={field.name}
+                    ref={field.ref}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* 明細 */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-medium">明細</h2>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  append(emptyItem(ProductionEstimateCategory.MATERIAL))
+                }
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                材料費行
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  append(emptyItem(ProductionEstimateCategory.LABOR))
+                }
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                工賃行
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  append(emptyItem(ProductionEstimateCategory.LABOR, true))
+                }
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                別枠（初期費用）行
+              </Button>
+            </div>
+          </div>
+
+          {fields.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              明細がありません。上のボタンで行を追加してください。
+            </p>
+          )}
+
+          {fields.map((f, idx) => {
+            const it = items[idx]
+            const isSeparate = it?.isSeparateBilling ?? false
+            const isMaterial =
+              it?.itemCategory === ProductionEstimateCategory.MATERIAL
+            const rowResult = calc.rows[idx]
+            return (
+              <div
+                key={f.id}
+                className={`space-y-3 rounded-md border p-3 ${
+                  isSeparate ? "border-amber-300 bg-amber-50" : "bg-muted/30"
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge variant={isSeparate ? "outline" : "secondary"}>
+                      {PRODUCTION_ESTIMATE_CATEGORY_LABELS[
+                        (it?.itemCategory as ProductionEstimateCategory) ??
+                          ProductionEstimateCategory.MATERIAL
+                      ]}
+                    </Badge>
+                    {it?.source && (
+                      <Badge variant="outline" className="text-[10px]">
+                        {PRODUCTION_ESTIMATE_SOURCE_LABELS[it.source]}
+                      </Badge>
+                    )}
+                    {isSeparate && (
+                      <Badge
+                        variant="outline"
+                        className="border-amber-300 text-amber-700"
+                      >
+                        別枠計上（1枚原価外）
+                      </Badge>
+                    )}
+                    {rowResult?.excluded && !isSeparate && (
+                      <Badge
+                        variant="outline"
+                        className="border-destructive/40 text-destructive text-[10px]"
+                      >
+                        計算除外（{rowResult.excludeReason}）
+                      </Badge>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="h-7 w-7 text-destructive"
+                    onClick={() => remove(idx)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name={`items.${idx}.itemName`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs">品目名</FormLabel>
+                      <FormControl>
+                        <Input autoComplete="off" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+                  <FormField
+                    control={form.control}
+                    name={`items.${idx}.unitPrice`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">単価</FormLabel>
+                        <FormControl>
+                          <Input
+                            autoComplete="off"
+                            type="number"
+                            step="0.0001"
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            ref={field.ref}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`items.${idx}.quantity`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">数量</FormLabel>
+                        <FormControl>
+                          <Input
+                            autoComplete="off"
+                            type="number"
+                            step="0.0001"
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            ref={field.ref}
+                          />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`items.${idx}.unit`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">単位</FormLabel>
+                        <FormControl>
+                          <Input autoComplete="off" {...field} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name={`items.${idx}.currency`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">通貨</FormLabel>
+                        <Select
+                          value={field.value}
+                          onValueChange={field.onChange}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent position="popper">
+                            {PE_CURRENCY_OPTIONS.map((o) => (
+                              <SelectItem key={o.value} value={o.value}>
+                                {o.value}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </FormItem>
+                    )}
+                  />
+                  <FormItem>
+                    <FormLabel className="text-xs">行小計(JPY)</FormLabel>
+                    <div className="flex h-9 items-center font-mono text-xs">
+                      {jpy(rowResult?.subtotalJpy ?? null)}
+                    </div>
+                  </FormItem>
+                </div>
+
+                {/* 生地行の量計算材料 */}
+                {isMaterial && (
+                  <div className="grid grid-cols-2 gap-2 rounded-md border border-dashed p-2 md:grid-cols-4">
+                    <FormField
+                      control={form.control}
+                      name={`items.${idx}.usagePerUnit`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">用尺/枚</FormLabel>
+                          <FormControl>
+                            <Input
+                              autoComplete="off"
+                              type="number"
+                              step="0.0001"
+                              value={field.value ?? ""}
+                              onChange={field.onChange}
+                              onBlur={field.onBlur}
+                              name={field.name}
+                              ref={field.ref}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`items.${idx}.lossRate`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">ロス率(％)</FormLabel>
+                          <FormControl>
+                            <Input
+                              autoComplete="off"
+                              type="number"
+                              step="0.01"
+                              value={field.value ?? ""}
+                              onChange={field.onChange}
+                              onBlur={field.onBlur}
+                              name={field.name}
+                              ref={field.ref}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`items.${idx}.procurementMode`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">販売モード</FormLabel>
+                          <Select
+                            value={field.value ?? PROC_NONE}
+                            onValueChange={(v) =>
+                              field.onChange(v === PROC_NONE ? null : v)
+                            }
+                          >
+                            <FormControl>
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="—" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent position="popper">
+                              <SelectItem value={PROC_NONE}>—（付属）</SelectItem>
+                              {PE_PROCUREMENT_MODE_OPTIONS.map((o) => (
+                                <SelectItem key={o.value} value={o.value}>
+                                  {o.value}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name={`items.${idx}.cutFee`}
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs">カット代</FormLabel>
+                          <FormControl>
+                            <Input
+                              autoComplete="off"
+                              type="number"
+                              step="0.01"
+                              placeholder="METER のみ"
+                              value={field.value ?? ""}
+                              onChange={field.onChange}
+                              onBlur={field.onBlur}
+                              name={field.name}
+                              ref={field.ref}
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                    {it?.procurementMode === FabricProcurementMode.ROLL && (
+                      <>
+                        <FormField
+                          control={form.control}
+                          name={`items.${idx}.rollLength`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">原反長</FormLabel>
+                              <FormControl>
+                                <Input
+                                  autoComplete="off"
+                                  type="number"
+                                  step="0.01"
+                                  value={field.value ?? ""}
+                                  onChange={field.onChange}
+                                  onBlur={field.onBlur}
+                                  name={field.name}
+                                  ref={field.ref}
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`items.${idx}.rollPrice`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">反単価</FormLabel>
+                              <FormControl>
+                                <Input
+                                  autoComplete="off"
+                                  type="number"
+                                  step="0.0001"
+                                  value={field.value ?? ""}
+                                  onChange={field.onChange}
+                                  onBlur={field.onBlur}
+                                  name={field.name}
+                                  ref={field.ref}
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name={`items.${idx}.rollCurrency`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-xs">反通貨</FormLabel>
+                              <Select
+                                value={field.value ?? Currency.JPY}
+                                onValueChange={field.onChange}
+                              >
+                                <FormControl>
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent position="popper">
+                                  {PE_CURRENCY_OPTIONS.map((o) => (
+                                    <SelectItem key={o.value} value={o.value}>
+                                      {o.value}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </FormItem>
+                          )}
+                        />
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* 別枠計上切替 */}
+                <FormField
+                  control={form.control}
+                  name={`items.${idx}.isSeparateBilling`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={field.value === true}
+                          onCheckedChange={(c) => field.onChange(c === true)}
+                        />
+                        別枠計上（初期費用）
+                        <span className="text-[11px] text-muted-foreground">
+                          ＝1枚原価に含めず別途請求
+                        </span>
+                      </label>
+                    </FormItem>
+                  )}
+                />
+
+                {isSeparate && (
+                  <FormField
+                    control={form.control}
+                    name={`items.${idx}.presentedPriceManualJpy`}
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-xs">
+                          提示額（手打ち・税抜・円）
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            autoComplete="off"
+                            type="number"
+                            step="1"
+                            placeholder="計上する場合に入力（空=非計上）"
+                            value={field.value ?? ""}
+                            onChange={field.onChange}
+                            onBlur={field.onBlur}
+                            name={field.name}
+                            ref={field.ref}
+                          />
+                        </FormControl>
+                        <p className="text-[10px] text-muted-foreground">
+                          別枠合計に計上されるのは金額を入力した行のみ（既定は非計上）。
+                        </p>
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* 集計 */}
+        <div className="space-y-2 rounded-md border p-4 text-sm">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">材料費Σ（計上）</span>
+            <span className="font-mono">{jpy(calc.materialNumeratorJpy)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">工賃・付属Σ（計上）</span>
+            <span className="font-mono">{jpy(calc.laborNumeratorJpy)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">
+              1枚原価（自動＝分子÷{estimateQuantity.toLocaleString("ja-JP")}）
+            </span>
+            <span className="font-mono">{jpy(calc.autoUnitCostJpy)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">1枚単価（自動＝×利益率）</span>
+            <span className="font-mono">{jpy(calc.autoUnitPriceJpy)}</span>
+          </div>
+
+          <FormField
+            control={form.control}
+            name="finalUnitPriceManualJpy"
+            render={({ field }) => (
+              <FormItem className="pt-2">
+                <FormLabel>最終1枚単価（手打ち・整数円）</FormLabel>
+                <div className="flex gap-2">
+                  <FormControl>
+                    <Input
+                      autoComplete="off"
+                      type="number"
+                      step="1"
+                      placeholder={
+                        calc.autoUnitPriceJpy != null
+                          ? `未入力なら自動 ¥${calc.autoUnitPriceJpy.toLocaleString("ja-JP")}`
+                          : "自動値（原価×利益率）"
+                      }
+                      value={field.value ?? ""}
+                      onChange={field.onChange}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  {calc.autoUnitPriceJpy != null && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        field.onChange(String(calc.autoUnitPriceJpy))
+                      }
+                    >
+                      自動値
+                    </Button>
+                  )}
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  手打ちは自動値を潰さず別列保存。空なら自動1枚単価を採用。
+                </p>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="flex justify-between border-t pt-2">
+            <span className="text-muted-foreground">別枠合計（1枚原価外）</span>
+            <span className="font-mono text-amber-700">
+              {jpy(calc.separateTotalJpy)}
+            </span>
+          </div>
+          <div className="flex justify-between text-base font-medium">
+            <span>
+              総合計（最終単価×{estimateQuantity.toLocaleString("ja-JP")}＋別枠）
+            </span>
+            <span className="font-mono">{jpy(grandTotal)}</span>
+          </div>
+        </div>
+
+        <FormField
+          control={form.control}
+          name="notes"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>備考</FormLabel>
+              <FormControl>
+                <Textarea rows={3} {...field} />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <div className="flex justify-end gap-2">
+          <Button asChild variant="outline" type="button">
+            <Link href={`/production-estimates/${estimate.id}`}>
+              変更を破棄
+            </Link>
+          </Button>
+          <Button type="submit" disabled={pending}>
+            {pending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+            更新する
+          </Button>
+        </div>
+      </form>
+    </Form>
+  )
+}

@@ -182,6 +182,7 @@ type SampleBaseRow = Pick<
   | "status"
   | "sampleQuantity"
   | "assignedToUserId"
+  | "isProductionEstimateBase"
   | "createdAt"
   | "updatedAt"
 >
@@ -239,6 +240,7 @@ export async function listSampleProductions(
           status: true,
           sampleQuantity: true,
           assignedToUserId: true,
+          isProductionEstimateBase: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -683,6 +685,84 @@ export async function changeSampleStatus(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "ステータス変更に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
+// 量産見積の基準サンプル指定（A-seed1・Q-a: 1品番1点）
+// - 同一 productId の既存 true を false に落としてから対象を true にする（1トランザクション）。
+// - partial unique index（1品番1点・deletedAt NULL 限定）の P2002 は競合時の最終防衛として捕捉。
+// =============================================================================
+export async function setProductionEstimateBase(
+  id: string,
+): Promise<ActionResult<{ id: string; productId: string }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const existing = await prisma.sampleProduction.findFirst({
+      where: { id, companyId: sess.companyId, deletedAt: null },
+      select: { id: true, productId: true, isProductionEstimateBase: true },
+    })
+    if (!existing) {
+      return { ok: false, error: "サンプル製作セットが見つかりません" }
+    }
+    if (existing.isProductionEstimateBase) {
+      return { ok: true, data: { id, productId: existing.productId } }
+    }
+
+    try {
+      await prisma.$transaction(async (tx) => {
+        // 同一品番の既存基準を落とす（deletedAt NULL 限定＝partial index と同条件）。
+        await tx.sampleProduction.updateMany({
+          where: {
+            companyId: sess.companyId,
+            productId: existing.productId,
+            isProductionEstimateBase: true,
+            deletedAt: null,
+          },
+          data: { isProductionEstimateBase: false },
+        })
+        await tx.sampleProduction.update({
+          where: { id },
+          data: { isProductionEstimateBase: true },
+        })
+      })
+    } catch (e) {
+      if (
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === "P2002"
+      ) {
+        return {
+          ok: false,
+          error:
+            "この品番には既に別の基準サンプルが指定されています（1品番につき1点）",
+        }
+      }
+      throw e
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        companyId: sess.companyId,
+        userId: sess.userId,
+        action: "UPDATE",
+        entityType: "SampleProduction",
+        entityId: id,
+        beforeData: { isProductionEstimateBase: false },
+        afterData: { isProductionEstimateBase: true },
+      },
+    })
+
+    revalidatePath("/samples")
+    revalidatePath(`/samples/${id}`)
+    revalidatePath(`/products/${existing.productId}`)
+    return { ok: true, data: { id, productId: existing.productId } }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "基準サンプルの指定に失敗しました",
     }
   }
 }
