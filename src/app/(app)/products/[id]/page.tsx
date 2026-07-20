@@ -34,6 +34,8 @@ import { MaterialRequirementSection } from "../_components/material-requirement-
 import type { MaterialReqBomItem } from "@/lib/calc/material-requirement"
 import { ProductionCostSection } from "../_components/production-cost-section"
 import { getProductionCostInputs } from "@/lib/actions/production-cost"
+import { ProductionEstimateSection } from "../_components/production-estimate-section"
+import { getProductionEstimateSection } from "@/lib/actions/production-estimates"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
 import { RoughEstimateSection } from "../_components/rough-estimate-section"
 import {
@@ -187,6 +189,9 @@ export default async function ProductDetailPage({
   const brandDefaultMarginRate = marginDefaultResult.ok
     ? marginDefaultResult.data.marginRate
     : 0
+
+  // A-seed1: 量産見積（発行履歴＋基準サンプル有無）。
+  const productionEstimateSection = await getProductionEstimateSection(id)
 
   // QE-1: 量産原価ビュー用の入力（ROLL 反情報・PRODUCTION WoItem。read-only）。
   const productionCostResult = await getProductionCostInputs(id)
@@ -510,7 +515,11 @@ export default async function ProductDetailPage({
           </div>
         </CardHeader>
         <CardContent>
-          <SampleProductionsTable items={samples} showProduct={false} />
+          <SampleProductionsTable
+            items={samples}
+            showProduct={false}
+            showEstimateBaseControl
+          />
         </CardContent>
       </Card>
 
@@ -548,6 +557,20 @@ export default async function ProductDetailPage({
 
       {/* 資材所要量（B-067 D4ア・量産数×用尺の計算ビュー・read-only） */}
       <MaterialRequirementSection skus={skus} items={materialReqItems} />
+
+      {/* 量産見積（A-seed1・確定サンプル実績コピー＝受注前1枚単価提示・発行履歴） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">量産見積（提示1枚単価）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProductionEstimateSection
+            productId={item.id}
+            rows={productionEstimateSection.rows}
+            hasBaseSample={productionEstimateSection.hasBaseSample}
+          />
+        </CardContent>
+      </Card>
 
       {/* 量産実績原価（QE-1・発注後の実績原価＝材料費＋工賃・請求突合用・read-only） */}
       <ProductionCostSection

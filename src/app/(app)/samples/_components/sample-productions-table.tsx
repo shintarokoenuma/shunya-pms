@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/table"
 import type { SampleProductionListItem } from "@/lib/actions/sample-productions"
 import { primaryProductCode } from "@/lib/utils/product-code"
+import { SetEstimateBaseButton } from "./set-estimate-base-button"
 import {
   SAMPLE_STATUS_LABELS,
   SAMPLE_STATUS_BADGE_VARIANT,
@@ -22,9 +23,15 @@ type Props = {
   items: SampleProductionListItem[]
   /** Product 詳細など、品番列を出さない場面で false */
   showProduct?: boolean
+  /** 品番カルテで量産見積の基準サンプル指定 UI を出す（A-seed1・§1-3）。 */
+  showEstimateBaseControl?: boolean
 }
 
-export function SampleProductionsTable({ items, showProduct = true }: Props) {
+export function SampleProductionsTable({
+  items,
+  showProduct = true,
+  showEstimateBaseControl = false,
+}: Props) {
   if (items.length === 0) {
     return (
       <div className="rounded-md border border-dashed py-12 text-center text-sm text-muted-foreground">
@@ -44,6 +51,9 @@ export function SampleProductionsTable({ items, showProduct = true }: Props) {
             <TableHead className="w-[90px]">ラウンド</TableHead>
             <TableHead className="w-[70px]">数量</TableHead>
             <TableHead className="w-[150px]">ステータス</TableHead>
+            {showEstimateBaseControl && (
+              <TableHead className="w-[180px]">量産見積 基準</TableHead>
+            )}
             <TableHead className="w-[70px]" />
           </TableRow>
         </TableHeader>
@@ -90,6 +100,17 @@ export function SampleProductionsTable({ items, showProduct = true }: Props) {
                   {SAMPLE_STATUS_LABELS[item.status]}
                 </Badge>
               </TableCell>
+              {showEstimateBaseControl && (
+                <TableCell>
+                  {item.isProductionEstimateBase ? (
+                    <Badge className="border-emerald-400 bg-emerald-50 text-emerald-700">
+                      基準サンプル
+                    </Badge>
+                  ) : (
+                    <SetEstimateBaseButton id={item.id} status={item.status} />
+                  )}
+                </TableCell>
+              )}
               <TableCell>
                 <Link
                   href={`/samples/${item.id}`}
