@@ -4750,6 +4750,11 @@ model SampleProduction {
   clientApprovedAt DateTime? @map("client_approved_at")
   clientFeedback   String?   @map("client_feedback") @db.Text
 
+  // 量産見積の基準サンプル指定（Q-a・1品番1点は partial unique index=SQL手書きで担保。
+  // ⚠ Prisma 非表現のため db push は当該 index を DROP し得る。db push 後は
+  // migration.sql 記載の CREATE UNIQUE INDEX を dev に再適用すること）
+  isProductionEstimateBase Boolean @default(false) @map("is_production_estimate_base")
+
   // 配送（クライアントへサンプル送付）
   shippedAt      DateTime? @map("shipped_at")
   shippingMethod String?   @map("shipping_method") @db.VarChar(50)
@@ -9543,9 +9548,9 @@ model RoughEstimate {
   initialCostBillingMode InitialCostBillingMode @default(SEPARATE) @map("initial_cost_billing_mode")
 
   // 金額の2層保存（自動値と手打ち最終値を別列で両方）
-  autoCostTotalJpy    Decimal? @map("auto_cost_total_jpy") @db.Decimal(15, 2) // 自動集計原価（JPY 換算後合計）
-  autoPriceTotalJpy   Decimal? @map("auto_price_total_jpy") @db.Decimal(15, 2) // 自動提示価格合計＝原価×(1+利益率)
-  finalPriceManualJpy Decimal? @map("final_price_manual_jpy") @db.Decimal(15, 2) // 手打ち最終値（総額・道A で非推奨化＝列は残置・UI/読み書きから撤去）
+  autoCostTotalJpy        Decimal? @map("auto_cost_total_jpy") @db.Decimal(15, 2) // 自動集計原価（JPY 換算後合計）
+  autoPriceTotalJpy       Decimal? @map("auto_price_total_jpy") @db.Decimal(15, 2) // 自動提示価格合計＝原価×(1+利益率)
+  finalPriceManualJpy     Decimal? @map("final_price_manual_jpy") @db.Decimal(15, 2) // 手打ち最終値（総額・道A で非推奨化＝列は残置・UI/読み書きから撤去）
   // 手打ち1枚単価（道A・金額の正）。null なら自動参考単価にフォールバック
   finalUnitPriceManualJpy Decimal? @map("final_unit_price_manual_jpy") @db.Decimal(15, 2)
 
@@ -9571,9 +9576,9 @@ model RoughEstimateItem {
   itemOrder Int @map("item_order")
 
   // 費目区分（行の性格：MATERIAL/LABOR の2値運用。旧 INITIAL_COST は廃止＝isSeparateBilling へ移行）
-  itemCategory RoughEstimateCategory @map("item_category")
+  itemCategory      RoughEstimateCategory @map("item_category")
   // 別枠計上（初期費用）。防衛線の判定基準＝true の行は1枚原価の分子に入れず別枠へ。
-  isSeparateBilling Boolean @default(false) @map("is_separate_billing")
+  isSeparateBilling Boolean               @default(false) @map("is_separate_billing")
 
   // 品目（日英）
   itemName   String  @map("item_name") @db.VarChar(255)
@@ -9589,12 +9594,12 @@ model RoughEstimateItem {
   sourceWoItemId String?                 @map("source_wo_item_id") // PAST_WO 引き当て元の記録（scalar）
 
   // 数量・単価・通貨（行別 JPY/USD）
-  quantity    Decimal? @db.Decimal(15, 4)
-  unit        String?  @db.VarChar(20)
-  unitPrice   Decimal? @map("unit_price") @db.Decimal(15, 4) // スナップショット値
-  currency    Currency @default(JPY)
-  subtotal    Decimal? @db.Decimal(15, 2)
-  subtotalJpy Decimal? @map("subtotal_jpy") @db.Decimal(15, 2) // JPY 換算（入力レート方式）
+  quantity                Decimal? @db.Decimal(15, 4)
+  unit                    String?  @db.VarChar(20)
+  unitPrice               Decimal? @map("unit_price") @db.Decimal(15, 4) // スナップショット値
+  currency                Currency @default(JPY)
+  subtotal                Decimal? @db.Decimal(15, 2)
+  subtotalJpy             Decimal? @map("subtotal_jpy") @db.Decimal(15, 2) // JPY 換算（入力レート方式）
   // 初期費用行の手打ち提示額（道A・isSeparateBilling=true 行のみ UI 露出・フラグ OFF 行は常に null）
   presentedPriceManualJpy Decimal? @map("presented_price_manual_jpy") @db.Decimal(15, 2)
 
@@ -9608,4 +9613,127 @@ model RoughEstimateItem {
   @@index([roughEstimateId, itemOrder])
   @@index([materialId])
   @@map("rough_estimate_items")
+}
+
+/// 量産見積のカテゴリ（行の性格）。INITIAL_COST は持たない（isSeparateBilling 方式）。
+enum ProductionEstimateCategory {
+  MATERIAL // 材料費
+  LABOR // 工賃
+}
+
+/// 量産見積明細の値の出所。スナップショットコピー（参照リンクにしない）。
+enum ProductionEstimateItemSource {
+  MANUAL // 直接入力
+  SAMPLE_PO // 確定サンプルの PoItem からコピー（seed①）
+  SAMPLE_WO // 確定サンプルの WoItem からコピー（seed①）
+  BOM // BOM＋過去量産実績（seed② 予約・PR-1 時点では未使用）
+}
+
+/// 量産見積ヘッダ（(A) 量産見積レーン・保存型・提示価格込み）。
+/// 設計: production-axis-spec-confirmation-v1_0-2026-07-16.md §1
+model ProductionEstimate {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+
+  // 採番 PE-{year}-NNNN（RE と同作法・P2002 retry）
+  estimateNumber String @map("estimate_number") @db.VarChar(50)
+
+  // 品番（scalar FK・@relation なし＝house style）
+  productId String @map("product_id")
+
+  // seed① コピー元の確定サンプル（scalar FK・監査用）
+  sourceSampleProductionId String? @map("source_sample_production_id")
+
+  issuedAt DateTime @default(now()) @map("issued_at")
+  title    String?  @db.VarChar(255)
+  notes    String?  @db.Text
+
+  // 見積数量＝分母（手入力・ΣSku.productionQuantity を既定値・保存時焼き込み）
+  estimateQuantity Int @map("estimate_quantity")
+
+  currency           Currency @default(JPY)
+  // USD/JPY 換算レート焼き込み（手入力・発行履歴の再現性）
+  exchangeRateUsdJpy Decimal? @map("exchange_rate_usd_jpy") @db.Decimal(15, 6)
+
+  // 利益率（1件1率・Brand.defaultMarginRate 既定）
+  marginRate       Decimal?         @map("margin_rate") @db.Decimal(5, 2)
+  marginRateSource MarginRateSource @map("margin_rate_source")
+
+  // 初期費用の請求方式（列のみ先行・UI 露出は B-077）
+  initialCostBillingMode InitialCostBillingMode @default(SEPARATE) @map("initial_cost_billing_mode")
+
+  // 金額の2層保存（単価粒度・addendum v0.2 準拠）
+  autoUnitCostJpy         Decimal? @map("auto_unit_cost_jpy") @db.Decimal(15, 2)
+  autoUnitPriceJpy        Decimal? @map("auto_unit_price_jpy") @db.Decimal(15, 2)
+  finalUnitPriceManualJpy Decimal? @map("final_unit_price_manual_jpy") @db.Decimal(15, 2)
+
+  createdByUserId String? @map("created_by_user_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  items ProductionEstimateItem[]
+
+  @@unique([companyId, estimateNumber])
+  @@index([companyId, productId])
+  @@index([sourceSampleProductionId])
+  @@map("production_estimates")
+}
+
+/// 量産見積明細。単価＝スナップショット・量＝用尺×量産数×(1+ロス率) を保存型で再現する。
+model ProductionEstimateItem {
+  id                   String @id @default(uuid())
+  productionEstimateId String @map("production_estimate_id")
+
+  itemOrder Int @map("item_order")
+
+  itemCategory      ProductionEstimateCategory @map("item_category")
+  // 別枠計上（初期費用）。true 行は1枚原価の分子に入れず別枠（絶対防衛線）。
+  isSeparateBilling Boolean                    @default(false) @map("is_separate_billing")
+
+  itemName   String  @map("item_name") @db.VarChar(255)
+  itemNameEn String? @map("item_name_en") @db.VarChar(255)
+
+  materialId     String? @map("material_id")
+  costCategoryId String? @map("cost_category_id")
+
+  source          ProductionEstimateItemSource
+  sourcePoItemId  String?                      @map("source_po_item_id")
+  sourceWoItemId  String?                      @map("source_wo_item_id")
+  sourceBomItemId String?                      @map("source_bom_item_id") // seed② 予約
+
+  // 単価スナップショット・行別通貨
+  unitPrice Decimal? @map("unit_price") @db.Decimal(15, 4)
+  currency  Currency @default(JPY)
+
+  // 量の計算材料（生地行・MaterialCostInput 同形の焼き込み）
+  usagePerUnit    Decimal?               @map("usage_per_unit") @db.Decimal(10, 4)
+  lossRate        Decimal                @default(0) @map("loss_rate") @db.Decimal(5, 2)
+  procurementMode FabricProcurementMode? @map("procurement_mode")
+  rollLength      Decimal?               @map("roll_length") @db.Decimal(10, 2)
+  rollPrice       Decimal?               @map("roll_price") @db.Decimal(15, 4)
+  rollCurrency    Currency?              @map("roll_currency")
+  cutFee          Decimal?               @map("cut_fee") @db.Decimal(15, 2)
+
+  // 数量・単位（付属・工賃行）
+  quantity Decimal? @db.Decimal(15, 4)
+  unit     String?  @db.VarChar(20)
+
+  subtotal    Decimal? @db.Decimal(15, 2)
+  subtotalJpy Decimal? @map("subtotal_jpy") @db.Decimal(15, 2)
+
+  // 別枠（isSeparateBilling=true）行の手打ち提示額
+  presentedPriceManualJpy Decimal? @map("presented_price_manual_jpy") @db.Decimal(15, 2)
+
+  notes String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  productionEstimate ProductionEstimate @relation(fields: [productionEstimateId], references: [id], onDelete: Cascade)
+
+  @@index([productionEstimateId, itemOrder])
+  @@index([materialId])
+  @@map("production_estimate_items")
 }
