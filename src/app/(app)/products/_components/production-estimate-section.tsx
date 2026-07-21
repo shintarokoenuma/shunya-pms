@@ -1,17 +1,19 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Loader2, Plus, Pencil, Trash2, ChevronRight } from "lucide-react"
+import { Loader2, Plus, Pencil, Trash2, ChevronRight, FileDown } from "lucide-react"
 import {
   createProductionEstimateFromSample,
   softDeleteProductionEstimate,
   type ProductionEstimateListRow,
 } from "@/lib/actions/production-estimates"
+import { downloadPeQuotationPdf } from "@/lib/production-estimates/download-pe-quotation-pdf"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Table,
   TableBody,
@@ -39,6 +41,40 @@ export function ProductionEstimateSection({
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // 品番カルテ内は単一クライアント＝宛先混在なし。PE_NOT_READY のみガード。
+  const notReady = useMemo(
+    () =>
+      rows
+        .filter((r) => selected.has(r.id))
+        .filter(
+          (r) =>
+            r.estimateQuantity <= 0 ||
+            (r.finalUnitPriceManualJpy == null && r.autoUnitPriceJpy == null),
+        )
+        .map((r) => r.estimateNumber),
+    [rows, selected],
+  )
+  const hasNotReady = notReady.length > 0
+
+  const handleExport = () => {
+    const ids = [...selected]
+    if (ids.length === 0) return
+    startTransition(async () => {
+      const r = await downloadPeQuotationPdf(ids)
+      if (!r.ok) toast.error(r.message)
+    })
+  }
 
   const handleCreate = () => {
     startTransition(async () => {
@@ -68,7 +104,24 @@ export function ProductionEstimateSection({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {hasNotReady && (
+          <span className="text-xs text-destructive">
+            見積数量0または1枚単価未確定は出力不可（{notReady.join(", ")}）
+          </span>
+        )}
+        {rows.length > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleExport}
+            disabled={selected.size === 0 || hasNotReady || pending}
+          >
+            <FileDown className="mr-1 h-4 w-4" />
+            選択をPDF出力
+            {selected.size > 0 && `（${selected.size}）`}
+          </Button>
+        )}
         {!hasBaseSample && (
           <span className="text-xs text-muted-foreground">
             確定サンプル（量産見積の基準）が未指定です。サンプル一覧で「基準にする」を選択してください。
@@ -97,6 +150,7 @@ export function ProductionEstimateSection({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[40px]" />
               <TableHead>見積番号</TableHead>
               <TableHead>発行日</TableHead>
               <TableHead className="text-right">見積数量</TableHead>
@@ -112,6 +166,13 @@ export function ProductionEstimateSection({
               const isManual = r.finalUnitPriceManualJpy !== null
               return (
                 <TableRow key={r.id}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selected.has(r.id)}
+                      onCheckedChange={() => toggle(r.id)}
+                      aria-label={`${r.estimateNumber} を選択`}
+                    />
+                  </TableCell>
                   <TableCell className="font-mono text-xs">
                     {r.estimateNumber}
                     {r.title && (

@@ -957,6 +957,8 @@ export type CompanyProductionEstimateRow = {
   productId: string
   productName: string
   productCode: string
+  /** 宛先クライアント（PDF 一括出力の混在ガード用）。 */
+  clientId: string
   title: string | null
   issuedAt: string // ISO
   estimateQuantity: number
@@ -989,7 +991,7 @@ export async function listProductionEstimatesForCompany(): Promise<
   const products = productIds.length
     ? await prisma.product.findMany({
         where: { companyId: sess.companyId, id: { in: productIds } },
-        select: { id: true, productName: true, productCode: true },
+        select: { id: true, productName: true, productCode: true, clientId: true },
       })
     : []
   const productById = new Map(products.map((p) => [p.id, p]))
@@ -1002,6 +1004,7 @@ export async function listProductionEstimatesForCompany(): Promise<
       productId: e.productId,
       productName: product?.productName ?? "—",
       productCode: product?.productCode ?? "—",
+      clientId: product?.clientId ?? "",
       title: e.title,
       issuedAt: e.issuedAt.toISOString(),
       estimateQuantity: e.estimateQuantity,
