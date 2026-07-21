@@ -73,6 +73,23 @@ import { UnitSelect } from "./unit-select"
 
 const PROC_NONE = "__none__"
 
+/**
+ * LABOR 数量 input で「手打ち（文字入力・削除・貼付）」とみなす InputEvent.inputType。
+ * これ以外（スピナー上下ボタン・矢印キー＝inputType が空/step系）は整数へスナップする。
+ * step="any" にして手打ち小数を :invalid にしない（要件: 手打ち小数可 ＞ スピナー整数）。
+ */
+const QTY_TYPING_INPUT_TYPES = new Set<string>([
+  "insertText",
+  "insertFromPaste",
+  "insertCompositionText",
+  "insertReplacementText",
+  "deleteContentBackward",
+  "deleteContentForward",
+  "deleteWordBackward",
+  "deleteWordForward",
+  "deleteByCut",
+])
+
 type PEFormItem = NonNullable<ProductionEstimateFormValues["items"]>[number]
 
 function jpy(n: number | null): string {
@@ -675,7 +692,10 @@ export function ProductionEstimateForm({
                                 <Input
                                   autoComplete="off"
                                   type="number"
-                                  step="0.0001"
+                                  // step="any": 手打ち小数を :invalid にせず阻害しない。
+                                  // スピナー/矢印（inputType が手打ち系でない）は整数へスナップ。
+                                  step="any"
+                                  inputMode="decimal"
                                   value={
                                     following ? estimateQuantity : field.value ?? ""
                                   }
@@ -685,8 +705,29 @@ export function ProductionEstimateForm({
                                       : undefined
                                   }
                                   onChange={(e) => {
+                                    const it = (e.nativeEvent as InputEvent)
+                                      .inputType
+                                    let v = e.target.value
+                                    // スピナー上下ボタン・矢印キー由来のみ整数化（手打ち小数は保持）。
+                                    if (
+                                      !QTY_TYPING_INPUT_TYPES.has(it ?? "") &&
+                                      v !== "" &&
+                                      !Number.isInteger(Number(v))
+                                    ) {
+                                      const prev =
+                                        toNum(
+                                          following
+                                            ? estimateQuantity
+                                            : field.value,
+                                        ) ?? 0
+                                      const up = Number(v) > prev
+                                      const snapped = up
+                                        ? Math.floor(prev) + 1
+                                        : Math.ceil(prev) - 1
+                                      v = String(snapped < 0 ? 0 : snapped)
+                                    }
                                     if (following) releaseFollow(f.id)
-                                    field.onChange(e)
+                                    field.onChange(v)
                                   }}
                                   onBlur={field.onBlur}
                                   name={field.name}
