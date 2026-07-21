@@ -3,6 +3,8 @@ import { OrderDocument } from "./order-document"
 import type { OrderPdfData } from "./order-data"
 import { QuotationDocument } from "./quotation-document"
 import type { QuotationPdfData } from "./quotation-data"
+import { PeQuotationDocument } from "./pe-quotation-document"
+import type { PeQuotationPdfData } from "./pe-quotation-data"
 
 /**
  * S-4c-2(H2): 「組み立て(OrderDocument)」と「出力先」を分離するための生成層。
@@ -17,4 +19,11 @@ export async function renderQuotationPdfBuffer(
   data: QuotationPdfData,
 ): Promise<Buffer> {
   return renderToBuffer(<QuotationDocument data={data} />)
+}
+
+/** B-085 量産見積 見積書 PDF。route はこの Buffer をレスポンスに載せる。 */
+export async function renderPeQuotationPdfBuffer(
+  data: PeQuotationPdfData,
+): Promise<Buffer> {
+  return renderToBuffer(<PeQuotationDocument data={data} />)
 }
