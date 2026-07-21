@@ -65,7 +65,10 @@ import {
   computeInitialCostPresentedJpy,
   type RoughEstimateLineForCalc,
 } from "@/lib/rough-estimate/calc"
-import { downloadQuotationPdf } from "@/lib/quotations/download-quotation-pdf"
+import {
+  usePdfPreview,
+  PdfPreviewDialog,
+} from "@/components/pdf/pdf-preview-dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -189,6 +192,7 @@ export function RoughEstimateSection({
   const [deleting, setDeleting] = useState<RoughEstimateListRow | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [exporting, startExport] = useTransition()
+  const preview = usePdfPreview()
 
   // editingId と duplicateFromId は排他（同時に非null にしない）。
   const openCreate = () => {
@@ -230,13 +234,18 @@ export function RoughEstimateSection({
     const ids = [...selectedIds]
     if (ids.length === 0) return
     startExport(async () => {
-      const r = await downloadQuotationPdf(ids)
+      const r = await preview.open("/api/quotations/pdf", ids, "見積書.pdf")
       if (!r.ok) toast.error(r.message)
     })
   }
 
   return (
     <div className="space-y-3">
+      <PdfPreviewDialog
+        url={preview.url}
+        filename={preview.filename}
+        onClose={preview.close}
+      />
       <div className="flex items-center justify-end gap-2">
         {hasMoqMissing && (
           <span className="text-xs text-destructive">

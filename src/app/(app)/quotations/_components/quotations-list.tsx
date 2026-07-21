@@ -5,7 +5,10 @@ import { ArrowDown, ArrowUp, ArrowUpDown, FileDown } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
-import { downloadQuotationPdf } from "@/lib/quotations/download-quotation-pdf"
+import {
+  usePdfPreview,
+  PdfPreviewDialog,
+} from "@/components/pdf/pdf-preview-dialog"
 import {
   Table,
   TableBody,
@@ -28,6 +31,7 @@ export function QuotationsList({ rows }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [sortDir, setSortDir] = useState<SortDir>(null)
   const [pending, startTransition] = useTransition()
+  const preview = usePdfPreview()
 
   // null=元順(issuedAt desc)。asc/desc は宛先(clientName)の日本語ロケール順。
   const sortedRows = useMemo(() => {
@@ -81,7 +85,7 @@ export function QuotationsList({ rows }: Props) {
     const ids = [...selected]
     if (ids.length === 0) return
     startTransition(async () => {
-      const r = await downloadQuotationPdf(ids)
+      const r = await preview.open("/api/quotations/pdf", ids, "見積書.pdf")
       if (!r.ok) toast.error(r.message)
     })
   }
@@ -96,6 +100,11 @@ export function QuotationsList({ rows }: Props) {
 
   return (
     <div className="space-y-3">
+      <PdfPreviewDialog
+        url={preview.url}
+        filename={preview.filename}
+        onClose={preview.close}
+      />
       <div className="flex items-center gap-3">
         <Button
           onClick={handleExport}

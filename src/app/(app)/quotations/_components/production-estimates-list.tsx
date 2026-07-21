@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation"
 import { FileDown } from "lucide-react"
 import { toast } from "sonner"
 import type { CompanyProductionEstimateRow } from "@/lib/actions/production-estimates"
-import { downloadPeQuotationPdf } from "@/lib/production-estimates/download-pe-quotation-pdf"
+import {
+  usePdfPreview,
+  PdfPreviewDialog,
+} from "@/components/pdf/pdf-preview-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -29,6 +32,7 @@ export function ProductionEstimatesList({
   const router = useRouter()
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [pending, startTransition] = useTransition()
+  const preview = usePdfPreview()
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -65,7 +69,11 @@ export function ProductionEstimatesList({
     const ids = [...selected]
     if (ids.length === 0) return
     startTransition(async () => {
-      const r = await downloadPeQuotationPdf(ids)
+      const r = await preview.open(
+        "/api/production-estimates/pdf",
+        ids,
+        "量産見積書.pdf",
+      )
       if (!r.ok) toast.error(r.message)
     })
   }
@@ -80,6 +88,11 @@ export function ProductionEstimatesList({
 
   return (
     <div className="space-y-3">
+      <PdfPreviewDialog
+        url={preview.url}
+        filename={preview.filename}
+        onClose={preview.close}
+      />
       <div className="flex flex-wrap items-center gap-3">
         <Button
           onClick={handleExport}
