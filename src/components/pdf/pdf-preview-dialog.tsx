@@ -91,7 +91,8 @@ export function PdfPreviewDialog({
         if (!o) onClose()
       }}
     >
-      <DialogContent className="flex h-[88vh] max-w-5xl flex-col gap-3">
+      {/* 画面ほぼいっぱいに拡大。既定の sm:max-w-lg を sm:max-w-[1500px] で上書き。 */}
+      <DialogContent className="flex h-[94vh] w-[96vw] max-w-[1500px] flex-col gap-3 sm:max-w-[1500px]">
         <DialogHeader>
           <DialogTitle className="truncate text-base">
             {filename || "見積書プレビュー"}
