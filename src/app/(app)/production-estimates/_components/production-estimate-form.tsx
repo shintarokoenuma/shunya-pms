@@ -90,6 +90,30 @@ const QTY_TYPING_INPUT_TYPES = new Set<string>([
   "deleteByCut",
 ])
 
+/**
+ * type=number（step="any"）の onChange で使う共通スナップ。
+ * 手打ち（inputType が上記の編集系）は素通し、スピナー上下ボタン・矢印キー由来
+ * （inputType が編集系でない＝空等）で非整数になった場合のみ整数へスナップする。
+ * 方向は変更前値との大小で判定（Math.floor(prev)+1 / Math.ceil(prev)-1・負値は 0 に丸め）。
+ */
+function snapSpinnerInteger(
+  inputType: string | undefined | null,
+  rawValue: string,
+  prevValue: number | null,
+): string {
+  if (
+    QTY_TYPING_INPUT_TYPES.has(inputType ?? "") ||
+    rawValue === "" ||
+    Number.isInteger(Number(rawValue))
+  ) {
+    return rawValue
+  }
+  const prev = prevValue ?? 0
+  const up = Number(rawValue) > prev
+  const snapped = up ? Math.floor(prev) + 1 : Math.ceil(prev) - 1
+  return String(snapped < 0 ? 0 : snapped)
+}
+
 type PEFormItem = NonNullable<ProductionEstimateFormValues["items"]>[number]
 
 function jpy(n: number | null): string {
@@ -434,9 +458,18 @@ export function ProductionEstimateForm({
                   <Input
                     autoComplete="off"
                     type="number"
-                    step="0.01"
+                    step="any"
+                    inputMode="decimal"
                     value={field.value ?? ""}
-                    onChange={field.onChange}
+                    onChange={(e) =>
+                      field.onChange(
+                        snapSpinnerInteger(
+                          (e.nativeEvent as InputEvent).inputType,
+                          e.target.value,
+                          toNum(field.value),
+                        ),
+                      )
+                    }
                     onBlur={field.onBlur}
                     name={field.name}
                     ref={field.ref}
@@ -456,10 +489,19 @@ export function ProductionEstimateForm({
                   <Input
                     autoComplete="off"
                     type="number"
-                    step="0.000001"
+                    step="any"
+                    inputMode="decimal"
                     placeholder="USD 行があれば必須"
                     value={field.value ?? ""}
-                    onChange={field.onChange}
+                    onChange={(e) =>
+                      field.onChange(
+                        snapSpinnerInteger(
+                          (e.nativeEvent as InputEvent).inputType,
+                          e.target.value,
+                          toNum(field.value),
+                        ),
+                      )
+                    }
                     onBlur={field.onBlur}
                     name={field.name}
                     ref={field.ref}
@@ -640,9 +682,18 @@ export function ProductionEstimateForm({
                           <Input
                             autoComplete="off"
                             type="number"
-                            step="0.0001"
+                            step="any"
+                            inputMode="decimal"
                             value={field.value ?? ""}
-                            onChange={field.onChange}
+                            onChange={(e) =>
+                              field.onChange(
+                                snapSpinnerInteger(
+                                  (e.nativeEvent as InputEvent).inputType,
+                                  e.target.value,
+                                  toNum(field.value),
+                                ),
+                              )
+                            }
                             onBlur={field.onBlur}
                             name={field.name}
                             ref={field.ref}
@@ -705,27 +756,13 @@ export function ProductionEstimateForm({
                                       : undefined
                                   }
                                   onChange={(e) => {
-                                    const it = (e.nativeEvent as InputEvent)
-                                      .inputType
-                                    let v = e.target.value
-                                    // スピナー上下ボタン・矢印キー由来のみ整数化（手打ち小数は保持）。
-                                    if (
-                                      !QTY_TYPING_INPUT_TYPES.has(it ?? "") &&
-                                      v !== "" &&
-                                      !Number.isInteger(Number(v))
-                                    ) {
-                                      const prev =
-                                        toNum(
-                                          following
-                                            ? estimateQuantity
-                                            : field.value,
-                                        ) ?? 0
-                                      const up = Number(v) > prev
-                                      const snapped = up
-                                        ? Math.floor(prev) + 1
-                                        : Math.ceil(prev) - 1
-                                      v = String(snapped < 0 ? 0 : snapped)
-                                    }
+                                    const v = snapSpinnerInteger(
+                                      (e.nativeEvent as InputEvent).inputType,
+                                      e.target.value,
+                                      toNum(
+                                        following ? estimateQuantity : field.value,
+                                      ),
+                                    )
                                     if (following) releaseFollow(f.id)
                                     field.onChange(v)
                                   }}
@@ -811,9 +848,18 @@ export function ProductionEstimateForm({
                             <Input
                               autoComplete="off"
                               type="number"
-                              step="0.0001"
+                              step="any"
+                              inputMode="decimal"
                               value={field.value ?? ""}
-                              onChange={field.onChange}
+                              onChange={(e) =>
+                                field.onChange(
+                                  snapSpinnerInteger(
+                                    (e.nativeEvent as InputEvent).inputType,
+                                    e.target.value,
+                                    toNum(field.value),
+                                  ),
+                                )
+                              }
                               onBlur={field.onBlur}
                               name={field.name}
                               ref={field.ref}
@@ -845,9 +891,18 @@ export function ProductionEstimateForm({
                             <Input
                               autoComplete="off"
                               type="number"
-                              step="0.01"
+                              step="any"
+                              inputMode="decimal"
                               value={field.value ?? ""}
-                              onChange={field.onChange}
+                              onChange={(e) =>
+                                field.onChange(
+                                  snapSpinnerInteger(
+                                    (e.nativeEvent as InputEvent).inputType,
+                                    e.target.value,
+                                    toNum(field.value),
+                                  ),
+                                )
+                              }
                               onBlur={field.onBlur}
                               name={field.name}
                               ref={field.ref}
@@ -900,7 +955,8 @@ export function ProductionEstimateForm({
                             <Input
                               autoComplete="off"
                               type="number"
-                              step="0.01"
+                              step="any"
+                              inputMode="decimal"
                               placeholder={
                                 it?.procurementMode ===
                                 FabricProcurementMode.METER
@@ -912,7 +968,15 @@ export function ProductionEstimateForm({
                                 FabricProcurementMode.METER
                               }
                               value={field.value ?? ""}
-                              onChange={field.onChange}
+                              onChange={(e) =>
+                                field.onChange(
+                                  snapSpinnerInteger(
+                                    (e.nativeEvent as InputEvent).inputType,
+                                    e.target.value,
+                                    toNum(field.value),
+                                  ),
+                                )
+                              }
                               onBlur={field.onBlur}
                               name={field.name}
                               ref={field.ref}
@@ -948,9 +1012,18 @@ export function ProductionEstimateForm({
                                 <Input
                                   autoComplete="off"
                                   type="number"
-                                  step="0.01"
+                                  step="any"
+                                  inputMode="decimal"
                                   value={field.value ?? ""}
-                                  onChange={field.onChange}
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      snapSpinnerInteger(
+                                        (e.nativeEvent as InputEvent).inputType,
+                                        e.target.value,
+                                        toNum(field.value),
+                                      ),
+                                    )
+                                  }
                                   onBlur={field.onBlur}
                                   name={field.name}
                                   ref={field.ref}
@@ -969,9 +1042,18 @@ export function ProductionEstimateForm({
                                 <Input
                                   autoComplete="off"
                                   type="number"
-                                  step="0.0001"
+                                  step="any"
+                                  inputMode="decimal"
                                   value={field.value ?? ""}
-                                  onChange={field.onChange}
+                                  onChange={(e) =>
+                                    field.onChange(
+                                      snapSpinnerInteger(
+                                        (e.nativeEvent as InputEvent).inputType,
+                                        e.target.value,
+                                        toNum(field.value),
+                                      ),
+                                    )
+                                  }
                                   onBlur={field.onBlur}
                                   name={field.name}
                                   ref={field.ref}
