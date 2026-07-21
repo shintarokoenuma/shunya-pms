@@ -61,6 +61,26 @@ export const NAV_SECTIONS: NavSection[] = [
     ],
   },
   {
+    label: "案件",
+    accent: "project",
+    items: [
+      { label: "品番カルテ", href: "/products", icon: Package, enabled: true },
+      { label: "サンプル製作", href: "/samples", icon: Shirt, enabled: true },
+      { label: "SKU", href: "/skus", icon: Layers, enabled: false },
+    ],
+  },
+  {
+    label: "取引",
+    accent: "trade",
+    items: [
+      { label: "見積もり", href: "/quotations", icon: Calculator, enabled: true },
+      { label: "発注（仕入 PO）", href: "/purchase-orders", icon: ShoppingCart, enabled: true },
+      { label: "発注（作業 WO）", href: "/work-orders", icon: Hammer, enabled: true },
+      { label: "受注", href: "/sales-orders", icon: ClipboardCheck, enabled: false },
+      { label: "納品・請求", href: "/deliveries", icon: Receipt, enabled: false },
+    ],
+  },
+  {
     label: "マスター",
     accent: "master",
     items: [
@@ -89,26 +109,6 @@ export const NAV_SECTIONS: NavSection[] = [
         icon: MessageSquare,
         enabled: false,
       },
-    ],
-  },
-  {
-    label: "案件",
-    accent: "project",
-    items: [
-      { label: "品番カルテ", href: "/products", icon: Package, enabled: true },
-      { label: "サンプル製作", href: "/samples", icon: Shirt, enabled: true },
-      { label: "SKU", href: "/skus", icon: Layers, enabled: false },
-    ],
-  },
-  {
-    label: "取引",
-    accent: "trade",
-    items: [
-      { label: "見積もり", href: "/quotations", icon: Calculator, enabled: true },
-      { label: "発注（仕入 PO）", href: "/purchase-orders", icon: ShoppingCart, enabled: true },
-      { label: "発注（作業 WO）", href: "/work-orders", icon: Hammer, enabled: true },
-      { label: "受注", href: "/sales-orders", icon: ClipboardCheck, enabled: false },
-      { label: "納品・請求", href: "/deliveries", icon: Receipt, enabled: false },
     ],
   },
   {
