@@ -10,7 +10,10 @@ import {
   softDeleteProductionEstimate,
   type ProductionEstimateListRow,
 } from "@/lib/actions/production-estimates"
-import { downloadPeQuotationPdf } from "@/lib/production-estimates/download-pe-quotation-pdf"
+import {
+  usePdfPreview,
+  PdfPreviewDialog,
+} from "@/components/pdf/pdf-preview-dialog"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -42,6 +45,7 @@ export function ProductionEstimateSection({
   const [pending, startTransition] = useTransition()
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const preview = usePdfPreview()
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -71,7 +75,11 @@ export function ProductionEstimateSection({
     const ids = [...selected]
     if (ids.length === 0) return
     startTransition(async () => {
-      const r = await downloadPeQuotationPdf(ids)
+      const r = await preview.open(
+        "/api/production-estimates/pdf",
+        ids,
+        "量産見積書.pdf",
+      )
       if (!r.ok) toast.error(r.message)
     })
   }
@@ -104,6 +112,11 @@ export function ProductionEstimateSection({
 
   return (
     <div className="space-y-3">
+      <PdfPreviewDialog
+        url={preview.url}
+        filename={preview.filename}
+        onClose={preview.close}
+      />
       <div className="flex flex-wrap items-center justify-end gap-2">
         {hasNotReady && (
           <span className="text-xs text-destructive">
