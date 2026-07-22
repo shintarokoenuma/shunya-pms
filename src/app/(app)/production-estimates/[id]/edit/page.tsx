@@ -2,6 +2,10 @@ import { notFound, redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { getProductionEstimate } from "@/lib/actions/production-estimates"
 import { getDefaultMarginRateForProduct } from "@/lib/actions/rough-estimates"
+import {
+  listActiveMaterialsForPoSelect,
+  listActiveCostCategoriesForPoSelect,
+} from "@/lib/actions/purchase-orders"
 import { getNavRefs } from "@/lib/actions/nav-refs"
 import { buildDocBreadcrumb } from "@/lib/nav/breadcrumb"
 import { EntityBreadcrumb } from "../../../_components/entity-breadcrumb"
@@ -22,9 +26,12 @@ export default async function ProductionEstimateEditPage({
   if (!result.ok) notFound()
   const pe = result.data
 
-  const [nav, marginDefault] = await Promise.all([
+  const [nav, marginDefault, materials, costCategories] = await Promise.all([
     getNavRefs(pe.productId, pe.sourceSampleProductionId),
     getDefaultMarginRateForProduct(pe.productId),
+    // B-080: QE-1R と同じ供給 action を流用（companyId スコープ・有効のみ）。
+    listActiveMaterialsForPoSelect(),
+    listActiveCostCategoriesForPoSelect(),
   ])
   const brandDefaultMarginRate = marginDefault.ok
     ? marginDefault.data.marginRate
@@ -44,6 +51,8 @@ export default async function ProductionEstimateEditPage({
       <ProductionEstimateForm
         estimate={pe}
         brandDefaultMarginRate={brandDefaultMarginRate}
+        materials={materials}
+        costCategories={costCategories}
       />
     </div>
   )

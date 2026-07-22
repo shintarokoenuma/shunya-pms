@@ -102,9 +102,7 @@ import {
 import {
   Select,
   SelectContent,
-  SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -112,8 +110,13 @@ import {
   EXTERNAL_COST_CATEGORY_LABELS,
   EXTERNAL_COST_CATEGORY_ORDER,
 } from "@/lib/constants/cost-category-types"
+import {
+  SearchableSelect,
+  type SearchableOption,
+} from "../../_components/searchable-select"
 
 const NONE = "__none__"
+// B-080: 素材/費目 Select を検索対応（SearchableSelect）に統一。
 
 // 概算で許可する通貨は JPY / USD のみ（validator と一致）。
 const QE_CURRENCY_OPTIONS: Array<{ value: Currency; label: string }> = [
@@ -1357,6 +1360,48 @@ function ItemCard({
       }
     })
 
+  // B-080: SearchableSelect（flat）用の選択肢。先頭に（未選択）＝クリア用。
+  // 素材はコード＋名称。費目は大分類順（EXTERNAL_COST_CATEGORY_ORDER）で並べ、分類名を検索語/表示に含める。
+  const materialOptions: SearchableOption[] = [
+    { value: NONE, label: "（未選択）" },
+    ...materials.map((m) => ({
+      value: m.id,
+      label: `${m.materialCode} ${m.materialName}`,
+      keywords: `${m.materialCode} ${m.materialName}`,
+      node: (
+        <span>
+          <span className="font-mono text-xs text-muted-foreground mr-2">
+            {m.materialCode}
+          </span>
+          {m.materialName}
+        </span>
+      ),
+    })),
+  ]
+  const costCategoryOptions: SearchableOption[] = [
+    { value: NONE, label: "（未選択）" },
+    ...EXTERNAL_COST_CATEGORY_ORDER.flatMap((ext) =>
+      costCategories
+        .filter((c) => c.externalCategory === ext)
+        .map((c) => ({
+          value: c.id,
+          label: `${c.categoryCode} ${c.categoryName}`,
+          keywords: `${EXTERNAL_COST_CATEGORY_LABELS[ext]} ${c.categoryCode} ${c.categoryName}`,
+          node: (
+            <span>
+              <span className="font-mono text-xs text-muted-foreground mr-2">
+                {c.categoryCode}
+              </span>
+              {c.categoryName}
+              <span className="ml-2 text-[10px] text-muted-foreground">
+                {EXTERNAL_COST_CATEGORY_LABELS[ext]}
+              </span>
+            </span>
+          ),
+        })),
+    ),
+  ]
+
   return (
     <div
       className={`rounded-md border p-3 space-y-3 ${
@@ -1521,27 +1566,14 @@ function ItemCard({
                   <FormLabel className="text-xs">
                     素材（選ぶと品目名を補完・任意）
                   </FormLabel>
-                  <Select
-                    value={field.value ?? NONE}
-                    onValueChange={(v) => onPickMaterial(v === NONE ? null : v)}
-                  >
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="素材を選択（任意）" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent position="popper">
-                      <SelectItem value={NONE}>（未選択）</SelectItem>
-                      {materials.map((m) => (
-                        <SelectItem key={m.id} value={m.id}>
-                          <span className="font-mono text-xs text-muted-foreground mr-2">
-                            {m.materialCode}
-                          </span>
-                          {m.materialName}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <SearchableSelect
+                    options={materialOptions}
+                    value={field.value ?? null}
+                    onChange={(v) => onPickMaterial(v === NONE ? null : v)}
+                    placeholder="素材を選択（任意）"
+                    searchPlaceholder="素材コード・名称で検索…"
+                    ariaLabel="素材"
+                  />
                 </FormItem>
               )}
             />
@@ -1555,43 +1587,16 @@ function ItemCard({
                   <FormLabel className="text-xs">
                     費目（選ぶと品目名を補完・任意）
                   </FormLabel>
-                  <Select
-                    value={field.value ?? NONE}
-                    onValueChange={(v) =>
+                  <SearchableSelect
+                    options={costCategoryOptions}
+                    value={field.value ?? null}
+                    onChange={(v) =>
                       onPickCostCategory(v === NONE ? null : v)
                     }
-                  >
-                    <FormControl>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="費目を選択（任意）" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent position="popper">
-                      <SelectItem value={NONE}>（未選択）</SelectItem>
-                      {/* 大分類（材料→縫製→加工→諸経費）でグループ化・分類内は日本語名順（action で整列済み）。 */}
-                      {EXTERNAL_COST_CATEGORY_ORDER.map((ext) => {
-                        const group = costCategories.filter(
-                          (c) => c.externalCategory === ext,
-                        )
-                        if (group.length === 0) return null
-                        return (
-                          <SelectGroup key={ext}>
-                            <SelectLabel>
-                              {EXTERNAL_COST_CATEGORY_LABELS[ext]}
-                            </SelectLabel>
-                            {group.map((c) => (
-                              <SelectItem key={c.id} value={c.id}>
-                                <span className="font-mono text-xs text-muted-foreground mr-2">
-                                  {c.categoryCode}
-                                </span>
-                                {c.categoryName}
-                              </SelectItem>
-                            ))}
-                          </SelectGroup>
-                        )
-                      })}
-                    </SelectContent>
-                  </Select>
+                    placeholder="費目を選択（任意）"
+                    searchPlaceholder="費目コード・名称で検索…"
+                    ariaLabel="費目"
+                  />
                 </FormItem>
               )}
             />

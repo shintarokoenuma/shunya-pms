@@ -42,6 +42,10 @@ import type {
   ProductionEstimateItemDTO,
 } from "@/lib/actions/production-estimates"
 import { updateProductionEstimate } from "@/lib/actions/production-estimates"
+import type {
+  MaterialOption,
+  CostCategoryOption,
+} from "@/lib/actions/purchase-orders"
 import type { ProductionCostCurrency } from "@/lib/calc/production-cost"
 import {
   PRODUCTION_ESTIMATE_CATEGORY_LABELS,
@@ -70,8 +74,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { UnitSelect } from "./unit-select"
+import {
+  SearchableSelect,
+  type SearchableOption,
+} from "../../_components/searchable-select"
 
 const PROC_NONE = "__none__"
+const PICK_NONE = "__none__"
+
+/** 空欄判定（QE-1R rough-estimate-section.tsx の isBlank と同一）。 */
+function isBlankValue(v: unknown): boolean {
+  return v === "" || v === null || v === undefined
+}
 
 /**
  * LABOR 数量 input で「手打ち（文字入力・削除・貼付）」とみなす InputEvent.inputType。
@@ -235,14 +249,38 @@ type Props = {
   estimate: ProductionEstimateDTO
   /** ブランド既定利益率（marginRateSource 判定用）。 */
   brandDefaultMarginRate: number | null
+  /** B-080: 素材ピッカー候補（QE-1R と同供給・companyId スコープ・有効のみ）。 */
+  materials: MaterialOption[]
+  /** B-080: 費目ピッカー候補。 */
+  costCategories: CostCategoryOption[]
 }
 
 export function ProductionEstimateForm({
   estimate,
   brandDefaultMarginRate,
+  materials,
+  costCategories,
 }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
+
+  // B-080: ピッカーの選択肢（先頭に（未選択）＝クリア用・SearchableSelect は flat）。
+  const materialOptions: SearchableOption[] = [
+    { value: PICK_NONE, label: "（未選択）" },
+    ...materials.map((m) => ({
+      value: m.id,
+      label: `${m.materialCode} ${m.materialName}`,
+      keywords: `${m.materialCode} ${m.materialName}`,
+    })),
+  ]
+  const costCategoryOptions: SearchableOption[] = [
+    { value: PICK_NONE, label: "（未選択）" },
+    ...costCategories.map((c) => ({
+      value: c.id,
+      label: `${c.categoryCode} ${c.categoryName}`,
+      keywords: `${c.categoryCode} ${c.categoryName}`,
+    })),
+  ]
   // 作成直後 Σ SKU=0 → 分母未入力。入力を促す（autoFocus・案内）。
   const initialQtyZero = estimate.estimateQuantity === 0
 
@@ -670,6 +708,74 @@ export function ProductionEstimateForm({
                     </FormItem>
                   )}
                 />
+
+                {/* B-080: マスターピッカー（MATERIAL=素材 / LABOR=費目）。
+                    QE-1R 同挙動: id を setValue → 品目名が空欄のときのみ名称を補完（上書きしない）・
+                    素材は unit も空欄時のみ補完。PE はページのため preserveDialogScroll 不要。 */}
+                <FormItem>
+                  <FormLabel className="text-xs">
+                    {isMaterial
+                      ? "素材（選ぶと品目名を補完・任意）"
+                      : "費目（選ぶと品目名を補完・任意）"}
+                  </FormLabel>
+                  <SearchableSelect
+                    options={isMaterial ? materialOptions : costCategoryOptions}
+                    value={
+                      (isMaterial ? it?.materialId : it?.costCategoryId) ?? null
+                    }
+                    onChange={(v) => {
+                      const picked = v === PICK_NONE ? null : v
+                      if (isMaterial) {
+                        form.setValue(`items.${idx}.materialId`, picked)
+                        if (picked) {
+                          const m = materials.find((x) => x.id === picked)
+                          if (m) {
+                            if (
+                              isBlankValue(
+                                form.getValues(`items.${idx}.itemName`),
+                              )
+                            ) {
+                              form.setValue(
+                                `items.${idx}.itemName`,
+                                m.materialName,
+                                { shouldValidate: true },
+                              )
+                            }
+                            if (
+                              isBlankValue(form.getValues(`items.${idx}.unit`))
+                            ) {
+                              form.setValue(`items.${idx}.unit`, m.unit)
+                            }
+                          }
+                        }
+                      } else {
+                        form.setValue(`items.${idx}.costCategoryId`, picked)
+                        if (
+                          picked &&
+                          isBlankValue(form.getValues(`items.${idx}.itemName`))
+                        ) {
+                          const c = costCategories.find((x) => x.id === picked)
+                          if (c) {
+                            form.setValue(
+                              `items.${idx}.itemName`,
+                              c.categoryName,
+                              { shouldValidate: true },
+                            )
+                          }
+                        }
+                      }
+                    }}
+                    placeholder={
+                      isMaterial ? "素材を選択（任意）" : "費目を選択（任意）"
+                    }
+                    searchPlaceholder={
+                      isMaterial
+                        ? "素材コード・名称で検索…"
+                        : "費目コード・名称で検索…"
+                    }
+                    ariaLabel={isMaterial ? "素材" : "費目"}
+                  />
+                </FormItem>
 
                 <div className="grid grid-cols-2 gap-2 md:grid-cols-6">
                   <FormField
