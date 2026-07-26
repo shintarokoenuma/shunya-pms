@@ -9,6 +9,7 @@ import {
   FabricProcurementMode,
   ProductionEstimateCategory,
   ProductionEstimateItemSource,
+  ProcurementRoute,
   type InitialCostBillingMode,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
@@ -120,6 +121,7 @@ type FullItem = {
   itemOrder: number
   itemCategory: ProductionEstimateCategory
   isSeparateBilling: boolean
+  procurementRoute: ProcurementRoute
   itemName: string
   itemNameEn: string | null
   materialId: string | null
@@ -151,6 +153,7 @@ function toCalcLine(f: FullItem): ProductionEstimateLineForCalc {
         ? "MATERIAL"
         : "LABOR",
     isSeparateBilling: f.isSeparateBilling,
+    procurementRoute: f.procurementRoute,
     usagePerUnit: f.usagePerUnit,
     lossRate: f.lossRate,
     procurementMode: (f.procurementMode as "ROLL" | "METER" | null) ?? null,
@@ -177,6 +180,7 @@ function toItemCreateBase(
     itemOrder: f.itemOrder,
     itemCategory: f.itemCategory,
     isSeparateBilling: f.isSeparateBilling,
+    procurementRoute: f.procurementRoute,
     itemName: f.itemName,
     itemNameEn: f.itemNameEn,
     materialId: f.materialId,
@@ -213,6 +217,7 @@ function fromInputItem(
     itemOrder: order,
     itemCategory: it.itemCategory,
     isSeparateBilling: it.isSeparateBilling,
+    procurementRoute: it.procurementRoute,
     itemName: it.itemName,
     itemNameEn: it.itemNameEn || null,
     materialId: it.materialId,
@@ -249,6 +254,7 @@ export type ProductionEstimateItemDTO = {
   itemOrder: number
   itemCategory: ProductionEstimateCategory
   isSeparateBilling: boolean
+  procurementRoute: ProcurementRoute
   itemName: string
   itemNameEn: string | null
   materialId: string | null
@@ -474,6 +480,8 @@ export async function createProductionEstimateFromSample(
         itemOrder: order,
         itemCategory: ProductionEstimateCategory.MATERIAL,
         isSeparateBilling: sep,
+        // コピー行は自社手配を既定（seed① は自社が発注した実績のため）。
+        procurementRoute: ProcurementRoute.COMPANY_ARRANGED,
         itemName: p.customItemName ?? mat?.materialName ?? "（品目名未設定）",
         itemNameEn: p.customItemNameEn ?? mat?.materialNameEn ?? null,
         materialId: p.materialId,
@@ -509,6 +517,8 @@ export async function createProductionEstimateFromSample(
         itemOrder: order,
         itemCategory: ProductionEstimateCategory.LABOR,
         isSeparateBilling: sep,
+        // コピー行は自社手配を既定（seed① は自社が発注した実績のため）。
+        procurementRoute: ProcurementRoute.COMPANY_ARRANGED,
         itemName: w.workDescription,
         itemNameEn: null,
         materialId: null,
@@ -847,6 +857,7 @@ export async function getProductionEstimate(
           itemOrder: it.itemOrder,
           itemCategory: it.itemCategory,
           isSeparateBilling: it.isSeparateBilling,
+          procurementRoute: it.procurementRoute,
           itemName: it.itemName,
           itemNameEn: it.itemNameEn,
           materialId: it.materialId,

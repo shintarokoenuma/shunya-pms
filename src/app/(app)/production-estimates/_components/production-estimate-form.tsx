@@ -24,6 +24,7 @@ import {
   Currency,
   ProductionEstimateCategory,
   ProductionEstimateItemSource,
+  ProcurementRoute,
   FabricProcurementMode,
 } from "@prisma/client"
 import {
@@ -50,6 +51,8 @@ import type { ProductionCostCurrency } from "@/lib/calc/production-cost"
 import {
   PRODUCTION_ESTIMATE_CATEGORY_LABELS,
   PRODUCTION_ESTIMATE_SOURCE_LABELS,
+  PROCUREMENT_ROUTE_LABELS,
+  PROCUREMENT_ROUTE_OPTIONS,
   PE_CURRENCY_OPTIONS,
   PE_PROCUREMENT_MODE_OPTIONS,
 } from "@/lib/constants/production-estimate-types"
@@ -165,6 +168,7 @@ function itemToFormValues(
     quantity: it.quantity ?? "",
     unit: it.unit ?? "",
     isSeparateBilling: it.isSeparateBilling,
+    procurementRoute: it.procurementRoute,
     presentedPriceManualJpy: it.presentedPriceManualJpy ?? "",
     notes: it.notes ?? "",
   }
@@ -219,6 +223,7 @@ function emptyItem(
     quantity: defaultQuantity != null ? defaultQuantity : "",
     unit: "",
     isSeparateBilling: separate,
+    procurementRoute: ProcurementRoute.COMPANY_ARRANGED,
     presentedPriceManualJpy: "",
     notes: "",
   }
@@ -359,6 +364,9 @@ export function ProductionEstimateForm({
         ? "MATERIAL"
         : "LABOR",
     isSeparateBilling: it.isSeparateBilling ?? false,
+    procurementRoute:
+      (it.procurementRoute as ProcurementRoute | undefined) ??
+      ProcurementRoute.COMPANY_ARRANGED,
     usagePerUnit: toNum(it.usagePerUnit),
     lossRate: toNum(it.lossRate) ?? 0,
     procurementMode: (it.procurementMode as "ROLL" | "METER" | null) ?? null,
@@ -658,6 +666,22 @@ export function ProductionEstimateForm({
                         {excludeLabel(rowResult.excludeReason ?? "")}
                       </Badge>
                     )}
+                    {/* B-083: 非自社手配は控えめな slate バッジ＋計上外表示（費目/別枠色と衝突しない）。 */}
+                    {it?.procurementRoute &&
+                      it.procurementRoute !==
+                        ProcurementRoute.COMPANY_ARRANGED && (
+                        <Badge
+                          variant="outline"
+                          className="border-slate-300 text-slate-600 text-[10px]"
+                        >
+                          {
+                            PROCUREMENT_ROUTE_LABELS[
+                              it.procurementRoute as ProcurementRoute
+                            ]
+                          }
+                          ・計上外
+                        </Badge>
+                      )}
                   </div>
                   <div className="flex items-center gap-0.5">
                     <Button
@@ -1198,6 +1222,39 @@ export function ProductionEstimateForm({
                     )}
                   </div>
                 )}
+
+                {/* B-083 調達区分（自社手配のみ1枚単価に計上・他は温存/計上外） */}
+                <FormField
+                  control={form.control}
+                  name={`items.${idx}.procurementRoute`}
+                  render={({ field }) => (
+                    <FormItem className="max-w-xs">
+                      <FormLabel className="text-xs">
+                        調達区分（自社手配のみ1枚単価に計上）
+                      </FormLabel>
+                      <Select
+                        value={
+                          (field.value as ProcurementRoute | undefined) ??
+                          ProcurementRoute.COMPANY_ARRANGED
+                        }
+                        onValueChange={field.onChange}
+                      >
+                        <FormControl>
+                          <SelectTrigger className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent position="popper">
+                          {PROCUREMENT_ROUTE_OPTIONS.map((o) => (
+                            <SelectItem key={o.value} value={o.value}>
+                              {o.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )}
+                />
 
                 {/* 別枠計上切替 */}
                 <FormField
