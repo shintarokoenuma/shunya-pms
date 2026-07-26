@@ -36,6 +36,8 @@ export type ProductionEstimateLineForCalc = {
   itemCategory: "MATERIAL" | "LABOR"
   /** 別枠計上（初期費用）。true は1枚原価の分子から外し別枠へ（絶対防衛線）。 */
   isSeparateBilling: boolean
+  /** B-083 調達区分。COMPANY_ARRANGED のみ 1枚単価の分子に計上（客先支給/在庫引き当ては計上外）。 */
+  procurementRoute: "COMPANY_ARRANGED" | "CLIENT_SUPPLIED" | "STOCK_ALLOCATED"
   // ---- 量計算材料（生地行・usagePerUnit があれば「所要量ベース」行として扱う）----
   usagePerUnit: number | null
   lossRate: number
@@ -197,7 +199,13 @@ export function computeProductionEstimate(
     const subtotalJpy = row?.amountJpy ?? null
     const excluded = row?.excluded ?? true
     const excludeReason = row?.excludeReason ?? "AMOUNT_UNDECIDED"
-    const counted = !line.isSeparateBilling && !excluded && subtotalJpy !== null
+    // 計上条件: 別枠でない（絶対防衛線・先に判定）×調達区分が自社手配×換算成立。
+    // B-083: COMPANY_ARRANGED 以外（客先支給/在庫引き当て）は行を温存しつつ分子から除外。
+    const counted =
+      !line.isSeparateBilling &&
+      line.procurementRoute === "COMPANY_ARRANGED" &&
+      !excluded &&
+      subtotalJpy !== null
 
     if (counted) {
       if (requirement) materialNumeratorJpy += subtotalJpy as number

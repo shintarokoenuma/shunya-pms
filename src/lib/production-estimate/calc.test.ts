@@ -28,6 +28,7 @@ function line(
     id: "l1",
     itemCategory: "LABOR",
     isSeparateBilling: false,
+    procurementRoute: "COMPANY_ARRANGED",
     usagePerUnit: null,
     lossRate: 0,
     procurementMode: null,
@@ -220,4 +221,57 @@ let passed = 0
   passed++
 })()
 
-console.log(`✓ production-estimate calc: ${passed}/10 ケース PASS`)
+// ⑪ B-083 調達区分: COMPANY_ARRANGED のみ分子計上（CLIENT_SUPPLIED/STOCK_ALLOCATED は除外・行は温存）
+;(() => {
+  const lines = [
+    line({ id: "sew", unitPrice: 200, quantity: 100 }), // COMPANY_ARRANGED（既定）→計上
+    line({
+      id: "supplied",
+      unitPrice: 999,
+      quantity: 100,
+      procurementRoute: "CLIENT_SUPPLIED",
+    }), // 客先支給→計上外
+    line({
+      id: "stock",
+      itemCategory: "MATERIAL",
+      usagePerUnit: 1,
+      lossRate: 0,
+      unitPrice: 500,
+      procurementRoute: "STOCK_ALLOCATED",
+    }), // 在庫引き当て→計上外
+  ]
+  const r = computeProductionEstimate(lines, 100, 40, null)
+  assert(approx(r.numeratorJpy, 20000), "⑪分子は COMPANY_ARRANGED のみ=20,000")
+  assert(approx(r.autoUnitCostJpy ?? -1, 200), "⑪1枚原価=200（支給/引き当て混入なし）")
+  const supplied = r.rows.find((x) => x.itemId === "supplied")
+  const stock = r.rows.find((x) => x.itemId === "stock")
+  assert(supplied !== undefined && !supplied.counted, "⑪CLIENT_SUPPLIED は counted=false")
+  assert(stock !== undefined && !stock.counted, "⑪STOCK_ALLOCATED は counted=false")
+  // 行は温存（subtotalJpy は算出されているが分子外）
+  assert(
+    supplied !== undefined && approx(supplied.subtotalJpy ?? -1, 99900),
+    "⑪計上外でも行小計は算出される（温存）",
+  )
+  passed++
+})()
+
+// ⑫ 直交性: 別枠判定が先・区分は分子計上のみに作用（別枠の presentedPriceManualJpy は区分に関わらず計上）
+;(() => {
+  const lines = [
+    line({ id: "sew", unitPrice: 200, quantity: 100 }),
+    line({
+      id: "plate",
+      unitPrice: 30000,
+      quantity: 1,
+      isSeparateBilling: true,
+      presentedPriceManualJpy: 30000,
+      procurementRoute: "CLIENT_SUPPLIED", // 別枠かつ非自社手配でも別枠合計には計上（現行どおり）
+    }),
+  ]
+  const r = computeProductionEstimate(lines, 100, 40, null)
+  assert(approx(r.numeratorJpy, 20000), "⑫分子は縫製のみ（別枠は区分に関わらず分子外）")
+  assert(approx(r.separateTotalJpy, 30000), "⑫別枠合計は区分に関わらず presented を計上")
+  passed++
+})()
+
+console.log(`✓ production-estimate calc: ${passed}/12 ケース PASS`)
