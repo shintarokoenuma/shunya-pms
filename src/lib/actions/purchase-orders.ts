@@ -442,6 +442,8 @@ function buildItemRows(
     return {
       itemOrder: i,
       materialId: it.materialId,
+      // B-065/(B): カラーウェイ分割列を温存（編集保存で消えないよう配管）。
+      productColorwayId: it.productColorwayId,
       customItemName: it.materialId ? null : it.customItemName || null,
       description: it.description || null,
       supplierItemCode: it.supplierItemCode || null,

@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, Plus, Trash2 } from "lucide-react"
 import { Currency } from "@prisma/client"
+import { Badge } from "@/components/ui/badge"
 import {
   purchaseOrderInputSchema,
   type PurchaseOrderFormValues,
@@ -87,6 +88,8 @@ type Props =
       materials: MaterialOption[]
       defaultValues: PurchaseOrderFormValues
       currentPoNumber: string
+      /** B-065/(B): productColorwayId → カラーウェイ名（読み取り専用バッジ表示用）。 */
+      colorwayNames?: Record<string, string>
     }
 
 function emptyItem(
@@ -94,6 +97,7 @@ function emptyItem(
 ): PurchaseOrderFormValues["items"][number] {
   return {
     materialId: null,
+    productColorwayId: null,
     customItemName: "",
     description: "",
     supplierItemCode: "",
@@ -469,6 +473,9 @@ export function PurchaseOrderForm(props: Props) {
                 form={form}
                 materials={props.materials}
                 costCategories={props.costCategories}
+                colorwayNames={
+                  props.mode === "edit" ? props.colorwayNames : undefined
+                }
                 onRemove={() => (fields.length > 1 ? remove(idx) : null)}
                 canRemove={fields.length > 1}
               />
@@ -500,6 +507,7 @@ function ItemRow({
   form,
   materials,
   costCategories,
+  colorwayNames,
   onRemove,
   canRemove,
 }: {
@@ -507,19 +515,35 @@ function ItemRow({
   form: ReturnType<typeof useForm<PurchaseOrderFormValues>>
   materials: MaterialOption[]
   costCategories: CostCategoryOption[]
+  colorwayNames?: Record<string, string>
   onRemove: () => void
   canRemove: boolean
 }) {
   const base = `items.${idx}` as const
   const isPhysicalAsset = form.watch(`items.${idx}.isPhysicalAsset`)
   const materialId = form.watch(`items.${idx}.materialId`)
+  // B-065/(B): 生成された色別明細のカラーウェイを読み取り専用バッジで温存表示。
+  const productColorwayId = form.watch(`items.${idx}.productColorwayId`)
+  const colorwayLabel = productColorwayId
+    ? colorwayNames?.[productColorwayId]
+    : undefined
 
   return (
     <div className="space-y-3 rounded-md border p-3">
       <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-muted-foreground">
-          明細 {idx + 1}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            明細 {idx + 1}
+          </span>
+          {productColorwayId && (
+            <Badge
+              variant="outline"
+              className="border-violet-300 text-violet-700 text-[10px]"
+            >
+              {colorwayLabel ?? "カラーウェイ指定"}
+            </Badge>
+          )}
+        </div>
         {canRemove && (
           <Button
             type="button"

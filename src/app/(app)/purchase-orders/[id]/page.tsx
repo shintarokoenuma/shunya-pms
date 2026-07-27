@@ -85,12 +85,14 @@ export default async function PurchaseOrderDetailPage({
                 発注書 PDF
               </a>
             </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/purchase-orders/${id}/edit`}>
-                <Pencil className="mr-1 h-4 w-4" />
-                編集
-              </Link>
-            </Button>
+            {po.status === "DRAFT" && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/purchase-orders/${id}/edit`}>
+                  <Pencil className="mr-1 h-4 w-4" />
+                  編集
+                </Link>
+              </Button>
+            )}
             <PurchaseOrderDeleteButton id={po.id} poNumber={po.poNumber} />
           </div>
         </div>

@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 import { Button } from "@/components/ui/button"
 import {
   getPurchaseOrder,
@@ -43,6 +44,28 @@ export default async function EditPurchaseOrderPage({
   if (!result.ok) notFound()
   const po = result.data
 
+  // B-079 / production-axis §2-1 と同型: DRAFT のみ編集可。非 DRAFT は詳細へリダイレクト。
+  if (po.status !== "DRAFT") {
+    redirect(`/purchase-orders/${id}`)
+  }
+
+  // B-065/(B): 明細のカラーウェイ名を解決（読み取り専用バッジ表示・値は温存済み）。
+  const colorwayIds = [
+    ...new Set(
+      po.items
+        .map((it) => it.productColorwayId)
+        .filter((v): v is string => !!v),
+    ),
+  ]
+  const colorwayNames: Record<string, string> = {}
+  if (colorwayIds.length > 0) {
+    const rows = await prisma.productColorway.findMany({
+      where: { id: { in: colorwayIds }, companyId: session.user.companyId },
+      select: { id: true, colorwayName: true },
+    })
+    for (const r of rows) colorwayNames[r.id] = r.colorwayName
+  }
+
   const defaultValues: PurchaseOrderFormValues = {
     supplierId: po.supplierId,
     title: po.title ?? "",
@@ -55,6 +78,8 @@ export default async function EditPurchaseOrderPage({
     productId: po.primaryProductId,
     items: po.items.map((it) => ({
       materialId: it.materialId,
+      // B-065/(B): カラーウェイ分割列を編集フォームに読み込む（保存で消えないよう温存）。
+      productColorwayId: it.productColorwayId,
       customItemName: it.customItemName ?? "",
       description: it.description ?? "",
       supplierItemCode: it.supplierItemCode ?? "",
@@ -99,6 +124,7 @@ export default async function EditPurchaseOrderPage({
         materials={materials}
         defaultValues={defaultValues}
         currentPoNumber={po.poNumber}
+        colorwayNames={colorwayNames}
       />
     </div>
   )
