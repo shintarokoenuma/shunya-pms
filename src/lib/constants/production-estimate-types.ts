@@ -6,8 +6,26 @@ import {
   Currency,
   ProductionEstimateCategory,
   ProductionEstimateItemSource,
+  ProcurementRoute,
   FabricProcurementMode,
 } from "@prisma/client"
+
+/** B-083 調達区分ラベル（COMPANY_ARRANGED のみ 1枚単価に計上）。 */
+export const PROCUREMENT_ROUTE_LABELS: Record<ProcurementRoute, string> = {
+  [ProcurementRoute.COMPANY_ARRANGED]: "自社手配",
+  [ProcurementRoute.CLIENT_SUPPLIED]: "客先支給",
+  [ProcurementRoute.STOCK_ALLOCATED]: "在庫引き当て",
+}
+
+/** 調達区分の選択肢（フォーム Select 用）。 */
+export const PROCUREMENT_ROUTE_OPTIONS: Array<{
+  value: ProcurementRoute
+  label: string
+}> = [
+  { value: ProcurementRoute.COMPANY_ARRANGED, label: "自社手配" },
+  { value: ProcurementRoute.CLIENT_SUPPLIED, label: "客先支給" },
+  { value: ProcurementRoute.STOCK_ALLOCATED, label: "在庫引き当て" },
+]
 
 export const PRODUCTION_ESTIMATE_CATEGORY_LABELS: Record<
   ProductionEstimateCategory,

@@ -3,6 +3,7 @@ import {
   Currency,
   ProductionEstimateCategory,
   ProductionEstimateItemSource,
+  ProcurementRoute,
   MarginRateSource,
   InitialCostBillingMode,
   FabricProcurementMode,
@@ -125,6 +126,10 @@ export const productionEstimateItemInputSchema = z.object({
   unit: optionalString(20),
   // 別枠計上（絶対防衛線）。ON 行は原価分子から外れ別枠へ・手打ち提示額欄が露出。
   isSeparateBilling: z.boolean().default(false),
+  // B-083 調達区分（既定 自社手配）。COMPANY_ARRANGED のみ 1枚単価に計上。
+  procurementRoute: z
+    .nativeEnum(ProcurementRoute)
+    .default(ProcurementRoute.COMPANY_ARRANGED),
   presentedPriceManualJpy: optionalNonNegativeIntYen,
   notes: optionalString(10000),
 })

@@ -4057,10 +4057,12 @@ model PoItem {
   itemOrder Int @map("item_order")
 
   // 品目情報
-  materialId       String? @map("material_id")
-  customItemName   String? @map("custom_item_name") @db.VarChar(255)
-  customItemNameEn String? @map("custom_item_name_en") @db.VarChar(255)
-  description      String? @db.Text
+  materialId        String? @map("material_id")
+  // B-083/(B): 量産発注生成のカラーウェイ分割（scalar FK・@relation なし＝house style・付属行は null 可）。
+  productColorwayId String? @map("product_colorway_id")
+  customItemName    String? @map("custom_item_name") @db.VarChar(255)
+  customItemNameEn  String? @map("custom_item_name_en") @db.VarChar(255)
+  description       String? @db.Text
 
   // 仕様
   specification    String?  @db.Text
@@ -4115,6 +4117,7 @@ model PoItem {
   @@index([poId, itemOrder])
   @@index([materialId])
   @@index([costCategoryId])
+  @@index([productColorwayId])
   @@map("po_items")
 }
 
@@ -9629,6 +9632,14 @@ enum ProductionEstimateItemSource {
   BOM // BOM＋過去量産実績（seed② 予約・PR-1 時点では未使用）
 }
 
+/// B-083: 調達区分（全明細行共通の直交軸・将来 PoItem/WoItem/BomItem と共有前提の命名）。
+/// COMPANY_ARRANGED のみ 1枚単価の分子に計上＋(B) で伝票化。他は温存・計上外。
+enum ProcurementRoute {
+  COMPANY_ARRANGED // 自社手配
+  CLIENT_SUPPLIED // 客先支給
+  STOCK_ALLOCATED // 在庫引き当て
+}
+
 /// 量産見積ヘッダ（(A) 量産見積レーン・保存型・提示価格込み）。
 /// 設計: production-axis-spec-confirmation-v1_0-2026-07-16.md §1
 model ProductionEstimate {
@@ -9691,6 +9702,8 @@ model ProductionEstimateItem {
   itemCategory      ProductionEstimateCategory @map("item_category")
   // 別枠計上（初期費用）。true 行は1枚原価の分子に入れず別枠（絶対防衛線）。
   isSeparateBilling Boolean                    @default(false) @map("is_separate_billing")
+  // B-083 調達区分（直交軸）。COMPANY_ARRANGED のみ分子計上＋(B) 伝票化。既定で既存挙動不変。
+  procurementRoute  ProcurementRoute           @default(COMPANY_ARRANGED) @map("procurement_route")
 
   itemName   String  @map("item_name") @db.VarChar(255)
   itemNameEn String? @map("item_name_en") @db.VarChar(255)
