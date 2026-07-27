@@ -4,7 +4,15 @@ import { useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { toast } from "sonner"
-import { Loader2, Plus, Pencil, Trash2, ChevronRight, FileDown } from "lucide-react"
+import {
+  Loader2,
+  Plus,
+  Pencil,
+  Trash2,
+  ChevronRight,
+  FileDown,
+  PackagePlus,
+} from "lucide-react"
 import {
   createProductionEstimateFromSample,
   softDeleteProductionEstimate,
@@ -224,6 +232,18 @@ export function ProductionEstimateSection({
                       >
                         <Link href={`/production-estimates/${r.id}/edit`}>
                           <Pencil className="h-3.5 w-3.5" />
+                        </Link>
+                      </Button>
+                      {/* (B): 量産発注生成の入口。 */}
+                      <Button
+                        asChild
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7"
+                        title="量産発注を生成"
+                      >
+                        <Link href={`/production-estimates/${r.id}/generate`}>
+                          <PackagePlus className="h-3.5 w-3.5" />
                         </Link>
                       </Button>
                       <Button

@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ChevronLeft, Pencil } from "lucide-react"
+import { ChevronLeft, Pencil, PackagePlus } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -86,12 +86,21 @@ export default async function ProductionEstimateDetailPage({
               {pe.title ?? "（無題）"}
             </div>
           </div>
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/production-estimates/${pe.id}/edit`}>
-              <Pencil className="mr-1 h-4 w-4" />
-              編集
-            </Link>
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/production-estimates/${pe.id}/edit`}>
+                <Pencil className="mr-1 h-4 w-4" />
+                編集
+              </Link>
+            </Button>
+            {/* (B): 量産発注生成の入口。 */}
+            <Button asChild size="sm">
+              <Link href={`/production-estimates/${pe.id}/generate`}>
+                <PackagePlus className="mr-1 h-4 w-4" />
+                量産発注を生成
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
 
