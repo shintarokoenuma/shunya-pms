@@ -160,7 +160,7 @@ function convertToJpy(
 }
 
 /** ロス込み必要量 = Σqty × usagePerUnit × (1 + lossRate/100)。usagePerUnit=null は null。 */
-function computeRequirement(
+export function computeRequirement(
   totalQuantity: number,
   usagePerUnit: number | null,
   lossRate: number,
@@ -169,45 +169,89 @@ function computeRequirement(
   return totalQuantity * usagePerUnit * (1 + lossRate / 100)
 }
 
-/** 材料費 1 行を集計行へ。ROLL は取り切り（反数 ceil）、METER/生地以外は 必要量×単価＋カット代。 */
-function buildMaterialRow(
+/**
+ * 材料 1 行の調達内訳（ROLL 取り切り / METER＋カット代）。
+ * (B) 量産発注生成のカラーウェイ別再計算がこの純関数を流用する（新実装しない）。
+ * - poQuantity/unitPrice/currency は PoItem 焼き込みにそのまま使える粒度で返す。
+ * - amountOriginal は ROLL=反数×反単価 / METER=必要量×単価＋カット代（既存挙動と一致）。
+ */
+export type MaterialProcurement = {
+  requirement: number | null
+  rolls: number | null
+  poQuantity: number | null
+  unitPrice: number | null
+  currency: ProductionCostCurrency
+  cutFee: number
+  amountOriginal: number | null
+}
+export function computeMaterialProcurement(
   m: MaterialCostInput,
   totalQuantity: number,
-  usdJpyRate: number,
-): ProductionCostRow {
+): MaterialProcurement {
   const requirement = computeRequirement(
     totalQuantity,
     m.usagePerUnit,
     m.lossRate,
   )
 
-  let amountOriginal: number | null = null
-  let note: string | null = null
-  let currency: ProductionCostCurrency = m.currency
-
   if (m.procurementMode === "ROLL") {
-    // ROLL: 反数 = ceil(必要量 ÷ 原反長)、生地コスト = 反数 × 反単価（Material 通貨）。
-    currency = m.rollCurrency ?? "JPY"
+    const currency: ProductionCostCurrency = m.rollCurrency ?? "JPY"
+    let rolls: number | null = null
+    let amountOriginal: number | null = null
     if (
       requirement !== null &&
       m.rollLength !== null &&
       m.rollLength > 0 &&
       m.rollPrice !== null
     ) {
-      const rolls = Math.ceil(requirement / m.rollLength)
+      rolls = Math.ceil(requirement / m.rollLength)
       amountOriginal = rolls * m.rollPrice
-      note = `${rolls.toLocaleString("ja-JP")}反`
     }
-  } else {
-    // METER / 生地以外: 生地コスト = 必要量 × 単価 ＋ カット代（METER のみ・行通貨）。
-    if (requirement !== null && m.unitPrice !== null) {
-      const cut = m.procurementMode === "METER" ? m.cutFee ?? 0 : 0
-      amountOriginal = requirement * m.unitPrice + cut
-      if (cut > 0) note = "カット代含む"
+    return {
+      requirement,
+      rolls,
+      poQuantity: rolls,
+      unitPrice: m.rollPrice,
+      currency,
+      cutFee: 0,
+      amountOriginal,
     }
   }
 
-  const conv = convertToJpy(amountOriginal, currency, usdJpyRate)
+  // METER / 生地以外: 必要量 × 単価 ＋ カット代（METER のみ・行通貨）。
+  const cutFee = m.procurementMode === "METER" ? m.cutFee ?? 0 : 0
+  let amountOriginal: number | null = null
+  if (requirement !== null && m.unitPrice !== null) {
+    amountOriginal = requirement * m.unitPrice + cutFee
+  }
+  return {
+    requirement,
+    rolls: null,
+    poQuantity: requirement,
+    unitPrice: m.unitPrice,
+    currency: m.currency,
+    cutFee,
+    amountOriginal,
+  }
+}
+
+/** 材料費 1 行を集計行へ。ROLL は取り切り（反数 ceil）、METER/生地以外は 必要量×単価＋カット代。 */
+function buildMaterialRow(
+  m: MaterialCostInput,
+  totalQuantity: number,
+  usdJpyRate: number,
+): ProductionCostRow {
+  const proc = computeMaterialProcurement(m, totalQuantity)
+  const note =
+    m.procurementMode === "ROLL"
+      ? proc.rolls !== null
+        ? `${proc.rolls.toLocaleString("ja-JP")}反`
+        : null
+      : proc.cutFee > 0
+        ? "カット代含む"
+        : null
+
+  const conv = convertToJpy(proc.amountOriginal, proc.currency, usdJpyRate)
   const excluded = conv.reason !== null
   return {
     key: m.bomItemId,
@@ -216,12 +260,11 @@ function buildMaterialRow(
     docType: null,
     docId: null,
     docNumber: null,
-    quantity: requirement,
+    quantity: proc.requirement,
     unit: m.unit,
-    unitPrice:
-      m.procurementMode === "ROLL" ? m.rollPrice : m.unitPrice,
-    currency,
-    amountOriginal,
+    unitPrice: proc.unitPrice,
+    currency: proc.currency,
+    amountOriginal: proc.amountOriginal,
     amountJpy: conv.jpy,
     excluded,
     excludeReason: conv.reason,
