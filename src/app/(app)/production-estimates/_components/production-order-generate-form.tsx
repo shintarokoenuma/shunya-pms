@@ -163,7 +163,8 @@ export function ProductionOrderGenerateForm({
       } else {
         toast.success(`量産発注を生成しました：${summary}`)
       }
-      router.push(`/products/${productId}`)
+      // Part8: 発注セクションに着地させる。
+      router.push(`/products/${productId}#orders`)
       router.refresh()
     })
   }
