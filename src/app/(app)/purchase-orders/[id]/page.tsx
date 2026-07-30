@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft, Pencil, FileText } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -43,6 +44,24 @@ export default async function PurchaseOrderDetailPage({
   const result = await getPurchaseOrder(id)
   if (!result.ok) notFound()
   const po = result.data
+
+  // B-065/(B) Part7: 明細のカラーウェイ名を解決（生成された色別生地行の表示・編集フォームと表記統一）。
+  const colorwayIds = [
+    ...new Set(
+      po.items
+        .map((it) => it.productColorwayId)
+        .filter((v): v is string => !!v),
+    ),
+  ]
+  const colorwayById = new Map<string, { name: string; code: string }>()
+  if (colorwayIds.length > 0) {
+    const cws = await prisma.productColorway.findMany({
+      where: { id: { in: colorwayIds }, companyId: session.user.companyId },
+      select: { id: true, colorwayName: true, colorwayCode: true },
+    })
+    for (const c of cws)
+      colorwayById.set(c.id, { name: c.colorwayName, code: c.colorwayCode })
+  }
 
   const nav = await getNavRefs(po.primaryProductId, po.sampleProductionId)
   const crumbs = buildDocBreadcrumb({
@@ -164,13 +183,26 @@ export default async function PurchaseOrderDetailPage({
           <CardTitle className="text-base">明細</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          {po.items.map((it, i) => (
+          {po.items.map((it, i) => {
+            const cw = it.productColorwayId
+              ? colorwayById.get(it.productColorwayId)
+              : undefined
+            return (
             <div key={it.id} className="rounded-md border p-3 text-sm">
               <div className="flex items-center justify-between">
-                <span className="font-medium">
+                <span className="flex items-center gap-2 font-medium">
                   明細 {i + 1}：
                   {it.customItemName ??
                     (it.materialId ? "（素材マスター）" : "（品目未設定）")}
+                  {/* Part7: カラーウェイ（編集フォームの violet バッジと表記統一）。 */}
+                  {cw && (
+                    <Badge
+                      variant="outline"
+                      className="border-violet-300 text-violet-700 text-[10px]"
+                    >
+                      {cw.name}
+                    </Badge>
+                  )}
                 </span>
                 {it.isPhysicalAsset && (
                   <Badge variant="outline" className="text-xs">現物資産</Badge>
@@ -179,7 +211,12 @@ export default async function PurchaseOrderDetailPage({
               <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 md:grid-cols-4">
                 <Cell label="仕入先品番" value={it.supplierItemCode ?? "—"} />
                 <Cell label="デザイン番号" value={it.designCode ?? "—"} />
-                <Cell label="カラー" value={it.colorCode ?? "—"} />
+                <Cell
+                  label="カラー"
+                  value={
+                    cw ? `${cw.name}（${cw.code}）` : it.colorCode ?? "—"
+                  }
+                />
                 <Cell
                   label="サイズ"
                   value={
@@ -243,7 +280,8 @@ export default async function PurchaseOrderDetailPage({
                 )}
               </div>
             </div>
-          ))}
+            )
+          })}
         </CardContent>
       </Card>
     </div>
