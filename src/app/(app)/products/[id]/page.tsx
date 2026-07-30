@@ -36,6 +36,8 @@ import { ProductionCostSection } from "../_components/production-cost-section"
 import { getProductionCostInputs } from "@/lib/actions/production-cost"
 import { ProductionEstimateSection } from "../_components/production-estimate-section"
 import { getProductionEstimateSection } from "@/lib/actions/production-estimates"
+import { ProductOrdersSection } from "../_components/product-orders-section"
+import { getProductOrders } from "@/lib/actions/product-orders"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
 import { RoughEstimateSection } from "../_components/rough-estimate-section"
 import {
@@ -192,6 +194,7 @@ export default async function ProductDetailPage({
 
   // A-seed1: 量産見積（発行履歴＋基準サンプル有無）。
   const productionEstimateSection = await getProductionEstimateSection(id)
+  const productOrders = await getProductOrders(id)
 
   // QE-1: 量産原価ビュー用の入力（ROLL 反情報・PRODUCTION WoItem。read-only）。
   const productionCostResult = await getProductionCostInputs(id)
@@ -571,6 +574,9 @@ export default async function ProductDetailPage({
           />
         </CardContent>
       </Card>
+
+      {/* 発注（PO / WO・品番直結・(B) 生成物の着地先／#orders アンカー） */}
+      <ProductOrdersSection rows={productOrders} />
 
       {/* 量産実績原価（QE-1・発注後の実績原価＝材料費＋工賃・請求突合用・read-only） */}
       <ProductionCostSection
