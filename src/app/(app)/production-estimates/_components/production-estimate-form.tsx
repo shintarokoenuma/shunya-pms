@@ -1262,16 +1262,19 @@ export function ProductionEstimateForm({
                   name={`items.${idx}.isSeparateBilling`}
                   render={({ field }) => (
                     <FormItem>
-                      <label className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          checked={field.value === true}
-                          onCheckedChange={(c) => field.onChange(c === true)}
-                        />
-                        別枠計上（初期費用）
+                      <div className="flex items-center gap-2 text-sm">
+                        <label className="flex items-center gap-2">
+                          <Checkbox
+                            checked={field.value === true}
+                            onCheckedChange={(c) => field.onChange(c === true)}
+                          />
+                          別枠計上（初期費用）
+                        </label>
+                        {/* B-088: 説明文は label 外（クリックでトグルさせない）。 */}
                         <span className="text-[11px] text-muted-foreground">
                           ＝1枚原価に含めず別途請求
                         </span>
-                      </label>
+                      </div>
                     </FormItem>
                   )}
                 />
