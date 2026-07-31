@@ -1,94 +1,94 @@
-# SESSION_HANDOVER.md（2026-07-28 締め / B-081・B-080・B-083 本番リリース＋(B) PR #113 Part1-8 完成）
+# SESSION_HANDOVER.md（2026-08-01 締め / #113〜#116 の4本本番リリース・UI/帳票設計整理）
 
 ## ⓪ プロジェクト棲み分け（毎回先頭・要目視確認）
 対象: shunya-pms（github.com/shintarokoenuma/shunya-pms / ~/shunya-production-system /
 本番 shunya-pms-web-production.up.railway.app）。saagara-v2 とは完全に別物。
-★localhost:3000 は saagara-rebuild が使用中。shunya-pms の dev は PORT=3001。
+★localhost:3000 は saagara-rebuild 使用中。shunya-pms の dev は PORT=3001。
+★複数 PR 並行時のローカル確認は必ず git branch --show-current から
+（本セッションで2回「変わってない」の原因が起動ブランチ違いだった）。
 
 ## ① 現在フェーズと完了状態
-- フェーズ: 業務トランザクション期・量産軸 (B) 量産発注生成。
-- 本セッション完了（本番リリース済み3本）:
-  - **PR #110（3c5d661）**: B-081 サイドバー並び順。本番目視確認済み。
-  - **PR #111（0283a38）**: B-080 PE 明細マスターピッカー＋QE-1R SearchableSelect 化。
-    BOM は乖離のため停止→B-087 起票。本番確認済み。
-  - **PR #112（754f8f3）**: B-083 調達区分。migration 43本目
-    （20260726000000_procurement_route_colorway）を triple-gate 完走
-    （dev db push→本番 dry-run 合格 pe_items 3/3・po_items 4・colorway 0→
-    マージ→migrate deploy 適用・deploy ログ検収済み）。
-    enum ProcurementRoute＋PE item.procurementRoute＋PoItem.productColorwayId。
-    分子計上は COMPANY_ARRANGED のみ（calc コア単一点・test 12/12）。
-- **(B) 仕様確認書 v0.1 確定・保存済み**（230e9ef・
-  docs/specs/production-order-generation-spec-confirmation-v0_1-2026-07-26.md・
-  project knowledge 登録済み）。R-a〜R-f 全確定。
-- 慎太郎さんが dev で初生成を実機確認済み（PE-2026-0001 → PO/WO-2026-0005）。
-  「生成後の所在が見えない」フィードバック → Part 6-8 で第一弾対応済み。
+- フェーズ: 業務トランザクション期。(B) 量産発注生成が本番稼働入り。
+- 本セッションで本番リリース（4本・すべて migration なし）:
+  - **PR #114（5b98206）**: B-088 チェックボックスクリック範囲修正（PE/QE-1R 別枠計上）。
+  - **PR #113（3e2e1d5）**: (B) 量産発注生成 Part1-8（PoItem.productColorwayId 配管＋
+    PO DRAFT 編集ゲート／B-074／生成コンテキスト／生成画面／生成パイプライン／
+    品番カルテ発注セクション／PO 詳細カラーウェイ表示／#orders 着地）。
+  - **PR #115（2154be0）**: 品番カルテ UI 再構成（セクション並び替え=ステータス→
+    製作ラウンド→基本情報→品番・分類→シーズン→数量・納期→絵型→カラー×数量→BOM→
+    マーキング→概算→量産見積→実績原価→発注／カラー展開＋数量マトリクス統合／
+    「サンプル製作」→「製作ラウンド」改名。統合時に色未設定 colorway クラッシュの
+    既存バグ修正込み）。
+  - **PR #116（236820f）**: B-095 グローバル検索（1窓統合・カテゴリ別結果・
+    Cmd+K パレット・ダッシュボード検索窓・伝票番号プレフィックス優先）。
+- 本番確認: #113/#114/#115 は慎太郎さん確認済み。#116 は本番 Cmd+K の軽い確認のみ残
+  （「PE-2026」「AOI」でヒット確認）。
 
-## ② 未マージ PR（2本 open・どちらも migration なし）
-- **PR #113** feat/b-production-order-generation（8コミット・HEAD 0adce80）:
-  Part1 PoItem.productColorwayId 配管＋PO DRAFT 編集ゲート／Part2 B-074／
-  Part3 生成コンテキスト／Part4 生成画面／Part5 生成パイプライン／
-  **Part6 品番カルテ「発注（PO/WO）」セクション（id="orders"・DRAFT amber・
-  量産タグ）／Part7 PO 詳細カラーウェイ名表示／Part8 生成後 #orders 着地**。
-  Playwright 27/27＋11/11。PR 本文に Part6-8 追記済み。
-- **PR #114** fix/b088-checkbox-click-area（12ea444）: B-088 チェックボックス
-  クリック範囲修正。8/8 PASS。独立・いつでもマージ可。
+## ② 未マージ PR
+なし（open 0本）。
 
 ## ③ dev DB の状態
-- 接続先 dev = hopper.proxy.rlwy.net:12921。本番 = shuttle:16099（Claude Code 接続禁止）。
-- **PO-2026-0005・WO-2026-0005「量産発注（PE-2026-0001）」が dev に現存**
-  （慎太郎さんの確認用・削除しないこと）。
+- dev = hopper.proxy.rlwy.net:12921。本番 = shuttle:16099（Claude Code 接続禁止）。
+- PO-2026-0005・WO-2026-0005「量産発注（PE-2026-0001）」が dev に現存
+  （慎太郎さんの確認用・削除しないこと）。PO/WO-2026-0003/0004 等の手動 DRAFT も現存。
 - PE-2026-0001（分母100・最終4200）/ PE-2026-0002（300枚見積もり）現存。
-- VERIFY 系残留 0（全検証データ物理削除済み・実データ無傷確認済み）。
-- 本番 DB: migration 43本適用済み。
+- VERIFY 系残留 0。本番 DB: migration 43本・追加なし。
 
 ## ④ ナレッジ登録状況（鉄則4）
-- production-order-generation-spec-confirmation-v0_1-2026-07-26.md 登録済み。
-- 未同期の新規 spec なし。
+- 新規 spec なし（本セッションは実装とバックログ整理のみ）。未同期なし。
+- B-094 着手時に仕様確認書を作る場合は保存＋ナレッジ登録を忘れないこと。
 
 ## ⑤ 次セッションで最初にやること（優先順）
-1. **慎太郎さんの UI/動線フィードバック**（2026-07-28 夜「使いづらい・
-   わかりづらい。動線と UI を考える。私も考えるがクーも考えて」→ 一晩置いて
-   詳細を聞く約束）。Part 6-8 のローカル再確認と合わせて改善方針を確定。
-   議論待ちの案: 生成結果サマリ画面/ダイアログ・生成画面の2段構成化
-   （数量入力→プレビュー確認→実行）等。
-2. ローカル確認 → **#114 マージ → #113 マージ**（どちらも migration なし）→
-   本番確認（#113 は本番での生成実行はせず表示確認まで）。
-3. マージ後、(B) の残タスク整理（下記⑥）。
+1. **B-094 縫製指示（migration あり・項目確定済み）**: Product に Json 列1本。
+   - 固定フィールド（プルダウン既定候補＋自由入力上書き可）:
+     ネーム位置／洗濯ネーム位置／仕上げ方法／製品後加工／下げ札
+   - 縫製指示（5項目のみ）: 糸（地色・その他）／ステッチ（番手）／
+     柄合わせ（有・無）／差し込み（不可・組合せ・一方向）／生地方向（並・逆）
+   - 箇所別始末表は作らない（慎太郎さん確定 2026-08-01）。
+   - 配置は「マーキング」と「概算量産見積」の間（既定案・未異議）。
+   - 軽い仕様確認（列名・Json 形・プルダウン候補値）→ migration dry-run 停止点
+     → triple-gate の通常手順。
+2. B-054 段1「品番サマリー1枚 PDF」の設計（絵型＋ヘッダ＋色×サイズ＋BOM 附属
+   マトリクス・@react-pdf/renderer 流用・migration ほぼ不要）。B-091 ピクトグラムと
+   デザイン一貫で検討。
+3. 本番での (B) 初生成の立ち会い（実データの SKU 数量・相手先を揃えてから実施）。
 
-## ⑥ 申し送り・バックログ
-- **B-088**: チェックボックスクリック範囲（PR #114・マージ待ち）。
-- **B-089（新規起票）**: PO/WO update action 自体の DRAFT ガード
-  （現状 edit ページのみゲート・直リクエストは全 status 更新可）。優先度中。
-- **B-087**: BOM 素材 Select の SearchableSelect 化（個別設計・(B) の後）。
-- (B) 後続の種: procurementRoute の PoItem/WoItem への値運搬・
-  本番初生成の立ち会い手順・生成 UX 改善（フィードバック待ち）。
+## ⑥ 申し送り・バックログ（本セッション起票・更新分）
+- **B-090（新規）**: カルテ一覧の2段表示化（1段目=絵型大・品名・品番等／2段目=
+  カラー・数量・進行状況。一覧から進行状況を更新できる操作性まで含む）。
+  北極星: 「詳細に行かずカルテ一覧だけで大枠把握と進行管理」。B-082a（サムネ拡大）
+  と同時設計。着手時に仕様確認書。次フェーズ送り可（慎太郎さん）。
+- **B-091（新規）**: ピクトグラム/アイコンでの視認性向上（DRAFT/量産/PO/WO 等を
+  マーク＋色で）。B-054 段1 と一貫デザイン。
+- **B-092（新規）**: サイドバー自動折りたたみ（通常アイコン帯・ホバー展開）。
+- **B-093（新規）**: モバイル対応（レスポンシブ）。
+- **B-094**: 縫製指示（⑤-1 参照・次セッション最優先）。
+- **B-095**: グローバル検索 → PR #116 で完了・クローズ。
+- **B-089**: PO/WO update action の DRAFT ガード（直リクエスト対策）。優先度中。
+- **B-087**: BOM 素材 Select の SearchableSelect 化（個別設計）。
+- (B) 後続の種: procurementRoute の PoItem/WoItem への値運搬・生成 UX 改善続き
+  （生成結果サマリ画面案・生成画面2段化案は未議論のまま持ち越し）。
 - 既存: B-072〜B-077・B-082a/b・B-084・B-086。
+- B-054 メモ: 現場 Excel 様式（ウエスタンSH 縫製仕様書）を 2026-07-31 に受領・
+  構造は 20260713_輸出入書類と縫製仕様書_構造メモ.md §3 と同型確認済み。
 
 ## ⑦ 本日マージした PR
-- PR #110: feat/b081-sidebar-order → 3c5d661
-- PR #111: feat/b080-pe-master-picker → 0283a38
-- PR #112: feat/b083-procurement-route → 754f8f3（migration 43本目・本番適用済み）
-- docs 直 push: 230e9ef（(B) 仕様確認書 v0.1）
+- PR #114: fix/b088-checkbox-click-area → 5b98206
+- PR #113: feat/b-production-order-generation → 3e2e1d5
+- PR #115: feat/product-page-reorder → 2154be0
+- PR #116: feat/b095-global-search → 236820f
 
 ## ⑧ 設計確定事項（本セッション）
-- (B) R-a〜R-f 確定（spec v0.1 参照）。
-- B-074: workOrderInputSchema の refine で PRODUCTION 全行数量一致
-  （create/update 共通・items root エラーのインライン表示追加）。
-- 生成は既存 createPurchaseOrder/createWorkOrder を再利用（採番複製禁止・
-  文書間非アトミック）。calc から computeRequirement/computeMaterialProcurement
-  export 抽出（挙動不変・test 9/9）。
-- 品番カルテ発注セクション: 品番直結（PO.primaryProductId/WO.productId）を
-  新しい順・DRAFT amber 強調・量産タグ emerald 強調。
+- 品番カルテ並び順・セクション名「製作ラウンド」・カラー×数量統合（PR #115 で実装済み）。
+- B-094 の項目構成（⑤-1 のとおり・箇所別始末表なし）。
+- グローバル検索は1窓統合＋Cmd+K 常設（2窓分離は不採用・慎太郎さん承認）。
+- カルテ一覧の北極星: 一覧だけで大枠把握＋進行管理（B-090 の設計軸）。
 
 ## ⑨ 運用の教訓（本セッション追加）
-- 複数 PR 並行時のローカル確認は git branch --show-current の案内から始める
-  （「ボタンが無い」の原因は起動ブランチ違いだった）。
-- spec の「一覧で見える状態にする」は受け皿 UI まで実装ブリーフに落とす
-  （リダイレクトだけ実装し受け皿が無かった）。
-- 列を新設したら保存配管だけでなく詳細画面の表示まで同 PR で通す
-  （productColorwayId が PO 詳細で「カラー: —」のままだった）。
-- page.waitForFunction の options は第3引数（第2引数に渡すと arg 扱いで
-  timeout が既定 30s のまま）。Playwright の同型ミス2回目・要注意。
-- git push がハングする一過性ネットワーク劣化あり。ls-remote で到達性を
-  切り分け・間隔を空けたリトライで回復（バックグラウンド放置は不可）。
-- .next はブランチ切替で stale になる → rm -rf .next で再検査。
+- **ローカル確認の第一手順は git branch --show-current**。本セッションで2回、
+  「機能が無い/変わってない」の原因が起動ブランチ違いだった。確認案内には
+  毎回ブランチ確認を含める（⓪にも恒久記載）。
+- 完了報告と実画面が食い違ったら (a) 起動ブランチ (b) 報告乖離 の順で切り分ける。
+  今回は2回とも (a) だった。
+- 統合系リファクタでは「表示項目の差分一覧を PR 本文に記載」が有効だった
+  （情報欠落ゼロの検収がしやすい）。
