@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { UserMenu } from "./user-menu"
+import { GlobalSearchTrigger } from "./global-search-dialog"
 
 type Props = {
   user: {
@@ -22,12 +23,16 @@ export function Header({ user }: Props) {
           </Badge>
         )}
       </div>
-      <UserMenu
-        name={user.name}
-        email={user.email}
-        role={user.role}
-        tenantType={user.tenantType}
-      />
+      <div className="flex items-center gap-3">
+        {/* B-095: グローバル検索（⌘K で開く・常設） */}
+        <GlobalSearchTrigger />
+        <UserMenu
+          name={user.name}
+          email={user.email}
+          role={user.role}
+          tenantType={user.tenantType}
+        />
+      </div>
     </header>
   )
 }
