@@ -3,6 +3,7 @@ import { redirect } from "next/navigation"
 import { prisma } from "@/lib/prisma"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { DashboardSearchBox } from "./_components/dashboard-search-box"
 
 export default async function DashboardPage() {
   const session = await auth()
@@ -26,6 +27,9 @@ export default async function DashboardPage() {
           shunya 生産管理システムへようこそ。Phase 0 セットアップ完了！
         </p>
       </div>
+
+      {/* B-095 Part3: グローバル検索窓（クリックでコマンドパレットを開く） */}
+      <DashboardSearchBox />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
