@@ -10,10 +10,21 @@ import {
   ProductionEstimateCategory,
   ProductionEstimateItemSource,
   ProcurementRoute,
+  WorkOrderType,
   type InitialCostBillingMode,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import {
+  listActiveSuppliersForPoSelect,
+  type SupplierOption,
+} from "@/lib/actions/purchase-orders"
+import {
+  listActiveFactoriesForWoSelect,
+  listActiveContractorsForWoSelect,
+  type FactoryOption,
+  type ContractorOption,
+} from "@/lib/actions/work-orders"
 import {
   productionEstimateInputSchema,
   type ProductionEstimateInput,
@@ -1023,4 +1034,280 @@ export async function listProductionEstimatesForCompany(): Promise<
         dnum(e.finalUnitPriceManualJpy) ?? dnum(e.autoUnitPriceJpy),
     }
   })
+}
+
+// =============================================================================
+// (B) 量産発注生成 コンテキスト（read 系・生成画面が消費）
+//   §3/§5: procurementRoute=COMPANY_ARRANGED かつ isSeparateBilling=false の行のみ。
+//   §2: 相手先を生成時に導出（元伝票 → primarySupplier → 人指定）。
+// =============================================================================
+
+/** 明細行の導出済み相手先。MATERIAL→仕入先(PO)・LABOR→工場/外注先(WO)。 */
+export type GenLineTarget =
+  | {
+      kind: "MATERIAL"
+      supplierId: string | null
+      supplierSource: "sourcePo" | "material" | null
+    }
+  | {
+      kind: "LABOR"
+      targetType: "factory" | "contractor" | null
+      targetId: string | null
+      workType: WorkOrderType | null
+      targetSource: "sourceWo" | null
+    }
+
+/** 生成対象の PE 明細行（生地/付属/工賃の判定材料を全部載せる）。 */
+export type GenLine = {
+  peItemId: string
+  itemOrder: number
+  itemCategory: "MATERIAL" | "LABOR"
+  itemName: string
+  materialId: string | null
+  costCategoryId: string | null
+  unitPrice: number | null
+  currency: Currency
+  usagePerUnit: number | null
+  lossRate: number
+  procurementMode: FabricProcurementMode | null
+  rollLength: number | null
+  rollPrice: number | null
+  rollCurrency: Currency | null
+  cutFee: number | null
+  quantity: number | null
+  unit: string | null
+  sourcePoItemId: string | null
+  sourceWoItemId: string | null
+  target: GenLineTarget
+}
+
+export type GenSkuCell = {
+  skuId: string
+  size: string
+  sizeOrder: number
+  productionQuantity: number
+}
+export type GenColorwayGroup = {
+  colorwayId: string
+  colorwayCode: string
+  colorwayName: string
+  sizes: GenSkuCell[]
+}
+
+export type ProductionOrderGenerationContext = {
+  pe: {
+    id: string
+    estimateNumber: string
+    productId: string
+    productCode: string
+    estimateQuantity: number
+    currency: Currency
+    exchangeRateUsdJpy: number | null
+  }
+  lines: GenLine[]
+  colorways: GenColorwayGroup[]
+  options: {
+    suppliers: SupplierOption[]
+    factories: FactoryOption[]
+    contractors: ContractorOption[]
+  }
+}
+
+export async function getProductionOrderGenerationContext(
+  peId: string,
+): Promise<ActionResult<ProductionOrderGenerationContext>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const pe = await prisma.productionEstimate.findFirst({
+      where: { id: peId, companyId: sess.companyId, deletedAt: null },
+    })
+    if (!pe) return { ok: false, error: "量産見積が見つかりません" }
+
+    const product = await prisma.product.findFirst({
+      where: { id: pe.productId, companyId: sess.companyId },
+      select: { productCode: true },
+    })
+
+    // §3/§5: 生成対象は COMPANY_ARRANGED かつ 非別枠のみ（初期費用・支給・引き当ては除外）。
+    const items = await prisma.productionEstimateItem.findMany({
+      where: {
+        productionEstimateId: peId,
+        procurementRoute: ProcurementRoute.COMPANY_ARRANGED,
+        isSeparateBilling: false,
+      },
+      orderBy: { itemOrder: "asc" },
+    })
+
+    // 相手先導出のための一括参照。
+    const poItemIds = items
+      .map((it) => it.sourcePoItemId)
+      .filter((v): v is string => !!v)
+    const woItemIds = items
+      .map((it) => it.sourceWoItemId)
+      .filter((v): v is string => !!v)
+    const materialIds = items
+      .map((it) => it.materialId)
+      .filter((v): v is string => !!v)
+
+    const [srcPoItems, srcWoItems, mats] = await Promise.all([
+      poItemIds.length
+        ? prisma.poItem.findMany({
+            where: { id: { in: poItemIds } },
+            select: { id: true, po: { select: { supplierId: true } } },
+          })
+        : Promise.resolve([]),
+      woItemIds.length
+        ? prisma.woItem.findMany({
+            where: { id: { in: woItemIds } },
+            select: {
+              id: true,
+              wo: {
+                select: {
+                  factoryId: true,
+                  contractorId: true,
+                  workType: true,
+                },
+              },
+            },
+          })
+        : Promise.resolve([]),
+      materialIds.length
+        ? prisma.material.findMany({
+            where: { id: { in: materialIds }, companyId: sess.companyId },
+            select: { id: true, primarySupplierId: true },
+          })
+        : Promise.resolve([]),
+    ])
+    const poItemById = new Map(srcPoItems.map((r) => [r.id, r]))
+    const woItemById = new Map(srcWoItems.map((r) => [r.id, r]))
+    const matById = new Map(mats.map((r) => [r.id, r]))
+
+    const lines: GenLine[] = items.map((it) => {
+      const isMaterial = it.itemCategory === ProductionEstimateCategory.MATERIAL
+      let target: GenLineTarget
+      if (isMaterial) {
+        // (1) 元 PO の仕入先 → (2) Material.primarySupplierId → (3) null
+        let supplierId: string | null = null
+        let supplierSource: "sourcePo" | "material" | null = null
+        if (it.sourcePoItemId && poItemById.get(it.sourcePoItemId)) {
+          supplierId = poItemById.get(it.sourcePoItemId)!.po.supplierId
+          supplierSource = "sourcePo"
+        } else if (it.materialId && matById.get(it.materialId)) {
+          supplierId = matById.get(it.materialId)!.primarySupplierId
+          supplierSource = "material"
+        }
+        target = { kind: "MATERIAL", supplierId, supplierSource }
+      } else {
+        // LABOR: (1) 元 WO の工場/外注先＋workType → (2) null
+        let targetType: "factory" | "contractor" | null = null
+        let targetId: string | null = null
+        let workType: WorkOrderType | null = null
+        let targetSource: "sourceWo" | null = null
+        const src = it.sourceWoItemId
+          ? woItemById.get(it.sourceWoItemId)
+          : undefined
+        if (src) {
+          if (src.wo.factoryId) {
+            targetType = "factory"
+            targetId = src.wo.factoryId
+          } else if (src.wo.contractorId) {
+            targetType = "contractor"
+            targetId = src.wo.contractorId
+          }
+          workType = src.wo.workType
+          targetSource = "sourceWo"
+        }
+        target = { kind: "LABOR", targetType, targetId, workType, targetSource }
+      }
+      return {
+        peItemId: it.id,
+        itemOrder: it.itemOrder,
+        itemCategory: isMaterial ? "MATERIAL" : "LABOR",
+        itemName: it.itemName,
+        materialId: it.materialId,
+        costCategoryId: it.costCategoryId,
+        unitPrice: dnum(it.unitPrice),
+        currency: it.currency,
+        usagePerUnit: dnum(it.usagePerUnit),
+        lossRate: Number(it.lossRate),
+        procurementMode: it.procurementMode,
+        rollLength: dnum(it.rollLength),
+        rollPrice: dnum(it.rollPrice),
+        rollCurrency: it.rollCurrency,
+        cutFee: dnum(it.cutFee),
+        quantity: dnum(it.quantity),
+        unit: it.unit,
+        sourcePoItemId: it.sourcePoItemId,
+        sourceWoItemId: it.sourceWoItemId,
+        target,
+      }
+    })
+
+    // SKU 一覧をカラーウェイ別にグループ化（既定数量＝Sku.productionQuantity）。
+    const skus = await prisma.sku.findMany({
+      where: { productId: pe.productId, deletedAt: null },
+      select: {
+        id: true,
+        size: true,
+        sizeOrder: true,
+        productionQuantity: true,
+        colorwayId: true,
+        colorway: {
+          select: { id: true, colorwayCode: true, colorwayName: true },
+        },
+      },
+      orderBy: [{ colorway: { sortOrder: "asc" } }, { sizeOrder: "asc" }],
+    })
+    const groupMap = new Map<string, GenColorwayGroup>()
+    for (const s of skus) {
+      let g = groupMap.get(s.colorwayId)
+      if (!g) {
+        g = {
+          colorwayId: s.colorwayId,
+          colorwayCode: s.colorway.colorwayCode,
+          colorwayName: s.colorway.colorwayName,
+          sizes: [],
+        }
+        groupMap.set(s.colorwayId, g)
+      }
+      g.sizes.push({
+        skuId: s.id,
+        size: s.size,
+        sizeOrder: s.sizeOrder,
+        productionQuantity: s.productionQuantity,
+      })
+    }
+    const colorways = [...groupMap.values()]
+
+    const [suppliers, factories, contractors] = await Promise.all([
+      listActiveSuppliersForPoSelect(),
+      listActiveFactoriesForWoSelect(),
+      listActiveContractorsForWoSelect(),
+    ])
+
+    return {
+      ok: true,
+      data: {
+        pe: {
+          id: pe.id,
+          estimateNumber: pe.estimateNumber,
+          productId: pe.productId,
+          productCode: product?.productCode ?? "—",
+          estimateQuantity: pe.estimateQuantity,
+          currency: pe.currency,
+          exchangeRateUsdJpy: dnum(pe.exchangeRateUsdJpy),
+        },
+        lines,
+        colorways,
+        options: { suppliers, factories, contractors },
+      },
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "生成コンテキスト取得に失敗しました",
+    }
+  }
 }

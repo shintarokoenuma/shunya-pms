@@ -624,9 +624,12 @@ export function WorkOrderForm(props: Props) {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
-            {form.formState.errors.items?.message && (
+            {/* 配列全体の refine（B-074 の工程数量一致等）は RHF が root に格納する。 */}
+            {(form.formState.errors.items?.message ||
+              form.formState.errors.items?.root?.message) && (
               <p className="text-sm text-destructive">
-                {form.formState.errors.items.message}
+                {form.formState.errors.items?.message ??
+                  form.formState.errors.items?.root?.message}
               </p>
             )}
             {fields.map((f, idx) => (

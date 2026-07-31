@@ -123,6 +123,21 @@ export const workOrderInputSchema = z
     message: "品番を選択してください（案件に紐づかない発注は作成できません）",
     path: ["productId"],
   })
+  .refine(
+    (d) => {
+      // B-074 / production-axis §2-2: 量産 WO（PRODUCTION）の工程明細数量は全行一致
+      //（＝品番の量産数）。不一致は品番を分けるべき案件＝見積として不成立。
+      //  create/update の両経路が本 schema を通るため常時検証される。
+      if (d.workCategory !== WorkOrderCategory.PRODUCTION) return true
+      if (d.items.length <= 1) return true
+      const first = d.items[0].quantity
+      return d.items.every((it) => it.quantity === first)
+    },
+    {
+      message: "量産 WO の工程数量は全行一致が必要です（品番分割を検討）",
+      path: ["items"],
+    },
+  )
 
 export type WorkOrderFormValues = z.input<typeof workOrderInputSchema>
 export type WorkOrderInput = z.infer<typeof workOrderInputSchema>

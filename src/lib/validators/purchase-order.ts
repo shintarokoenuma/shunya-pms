@@ -50,6 +50,9 @@ const unitPriceField = z
 export const poItemInputSchema = z
   .object({
     materialId: optionalRelationId,
+    // B-065/(B): カラーウェイ分割の温存列（生成パイプラインが焼く・付属行は null）。
+    // 編集フォームでは読み取り専用バッジ表示のみ（値の消失を防ぐ配管）。
+    productColorwayId: optionalRelationId,
     customItemName: optionalString(255),
     description: optionalString(10000),
     // v1.1 実務化項目（すべて任意）
