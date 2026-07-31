@@ -27,8 +27,7 @@ import { getProductSketchUrls } from "@/lib/actions/product-sketches"
 import { SketchSection } from "../_components/sketch-section"
 import { listColorwaysByBomItems } from "@/lib/actions/bom-item-colorways"
 import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
-import { QuantityMatrixSection } from "../_components/quantity-matrix-section"
-import { ColorwaySection } from "../_components/colorway-section"
+import { ColorQuantitySection } from "../_components/color-quantity-section"
 import { BomSection, type BomItemView } from "../_components/bom-section"
 import { MaterialRequirementSection } from "../_components/material-requirement-section"
 import type { MaterialReqBomItem } from "@/lib/calc/material-requirement"
@@ -281,7 +280,71 @@ export default async function ProductDetailPage({
         </div>
       </div>
 
-      {/* 基本情報 + 品番・分類 */}
+      {/* ①ステータス履歴 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">ステータス履歴</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {item.statusHistory.length === 0 ? (
+            <p className="text-sm text-muted-foreground">履歴がありません</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {item.statusHistory.map((h) => (
+                <li
+                  key={h.id}
+                  className="flex flex-wrap items-center gap-2 border-b pb-2 last:border-b-0 last:pb-0"
+                >
+                  <span className="text-muted-foreground">
+                    {new Date(h.changedAt).toLocaleString("ja-JP")}
+                  </span>
+                  <span>
+                    {h.fromStatus
+                      ? PRODUCT_STATUS_LABELS[h.fromStatus]
+                      : "（新規）"}
+                    {" → "}
+                    <Badge
+                      variant={PRODUCT_STATUS_BADGE_VARIANT[h.toStatus]}
+                      className="ml-1"
+                    >
+                      {PRODUCT_STATUS_LABELS[h.toStatus]}
+                    </Badge>
+                  </span>
+                  {h.changeReason && (
+                    <span className="text-muted-foreground">
+                      （{h.changeReason}）
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* ②製作ラウンド（旧「サンプル製作セット」・量産ラウンドも含む実態に合わせ改名・S-2） */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base">製作ラウンド</CardTitle>
+            <Button asChild size="sm">
+              <Link href={`/samples/new?productId=${item.id}`}>
+                <Plus className="mr-1 h-4 w-4" />
+                サンプル作成
+              </Link>
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <SampleProductionsTable
+            items={samples}
+            showProduct={false}
+            showEstimateBaseControl
+          />
+        </CardContent>
+      </Card>
+
+      {/* ③④基本情報 + 品番・分類 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
@@ -412,48 +475,6 @@ export default async function ProductDetailPage({
         </Card>
       </div>
 
-      {/* ステータス履歴 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">ステータス履歴</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {item.statusHistory.length === 0 ? (
-            <p className="text-sm text-muted-foreground">履歴がありません</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {item.statusHistory.map((h) => (
-                <li
-                  key={h.id}
-                  className="flex flex-wrap items-center gap-2 border-b pb-2 last:border-b-0 last:pb-0"
-                >
-                  <span className="text-muted-foreground">
-                    {new Date(h.changedAt).toLocaleString("ja-JP")}
-                  </span>
-                  <span>
-                    {h.fromStatus
-                      ? PRODUCT_STATUS_LABELS[h.fromStatus]
-                      : "（新規）"}
-                    {" → "}
-                    <Badge
-                      variant={PRODUCT_STATUS_BADGE_VARIANT[h.toStatus]}
-                      className="ml-1"
-                    >
-                      {PRODUCT_STATUS_LABELS[h.toStatus]}
-                    </Badge>
-                  </span>
-                  {h.changeReason && (
-                    <span className="text-muted-foreground">
-                      （{h.changeReason}）
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
-
       {/* 絵型（服のスケッチ・B-027） */}
       <Card>
         <CardHeader>
@@ -464,67 +485,16 @@ export default async function ProductDetailPage({
         </CardContent>
       </Card>
 
-      {/* カラー展開（B-062 β・カラー軸の親） */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">カラー展開</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ColorwaySection
-            productId={item.id}
-            colorways={colorways}
-            colorOptions={colorOptions}
-            patternOptions={patternOptions}
-          />
-        </CardContent>
-      </Card>
-
-      {/* 数量マトリクス（B-064・量産 色×サイズ） */}
-      <QuantityMatrixSection
+      {/* ⑧カラー×数量（B-062β カラー展開＋B-064 数量マトリクスを1ボックスに統合） */}
+      <ColorQuantitySection
+        productId={item.id}
+        colorways={colorways}
+        colorOptions={colorOptions}
+        patternOptions={patternOptions}
         skus={skus}
-        productId={id}
         defaultSizeOptions={defaultSizeOptions}
         categoryId={item.category?.id ?? null}
       />
-
-      {/* 概算量産見積（QE-1R・量産軸の提示価格。業務フロー順で見積を上流に配置） */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">概算量産見積（提示価格）</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <RoughEstimateSection
-            productId={item.id}
-            rows={roughEstimateRows}
-            brandDefaultMarginRate={brandDefaultMarginRate}
-            materials={qeMaterials}
-            costCategories={qeCostCategories}
-            suppliers={qeSuppliers}
-          />
-        </CardContent>
-      </Card>
-
-      {/* サンプル製作セット（S-2） */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">サンプル製作セット</CardTitle>
-            <Button asChild size="sm">
-              <Link href={`/samples/new?productId=${item.id}`}>
-                <Plus className="mr-1 h-4 w-4" />
-                サンプル作成
-              </Link>
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <SampleProductionsTable
-            items={samples}
-            showProduct={false}
-            showEstimateBaseControl
-          />
-        </CardContent>
-      </Card>
 
       {/* 資材表（BOM・QE-0b） */}
       <Card>
@@ -561,6 +531,23 @@ export default async function ProductDetailPage({
       {/* 資材所要量（B-067 D4ア・量産数×用尺の計算ビュー・read-only） */}
       <MaterialRequirementSection skus={skus} items={materialReqItems} />
 
+      {/* ⑪概算量産見積（QE-1R・量産軸の提示価格） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">概算量産見積（提示価格）</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RoughEstimateSection
+            productId={item.id}
+            rows={roughEstimateRows}
+            brandDefaultMarginRate={brandDefaultMarginRate}
+            materials={qeMaterials}
+            costCategories={qeCostCategories}
+            suppliers={qeSuppliers}
+          />
+        </CardContent>
+      </Card>
+
       {/* 量産見積（A-seed1・確定サンプル実績コピー＝受注前1枚単価提示・発行履歴） */}
       <Card>
         <CardHeader>
@@ -575,15 +562,15 @@ export default async function ProductDetailPage({
         </CardContent>
       </Card>
 
-      {/* 発注（PO / WO・品番直結・(B) 生成物の着地先／#orders アンカー） */}
-      <ProductOrdersSection rows={productOrders} />
-
-      {/* 量産実績原価（QE-1・発注後の実績原価＝材料費＋工賃・請求突合用・read-only） */}
+      {/* ⑬量産実績原価（QE-1・発注後の実績原価＝材料費＋工賃・請求突合用・read-only） */}
       <ProductionCostSection
         skus={skus}
         materials={productionCostInputs.materials}
         labor={productionCostInputs.labor}
       />
+
+      {/* ⑭発注（PO / WO・品番直結・(B) 生成物の着地先／#orders アンカー） */}
+      <ProductOrdersSection rows={productOrders} />
 
       {/* メタ情報 */}
       <Card>
