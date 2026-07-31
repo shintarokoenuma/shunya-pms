@@ -28,11 +28,14 @@ export function QuantityMatrixSection({
   productId,
   defaultSizeOptions,
   categoryId,
+  bare = false,
 }: {
   skus: SkuRow[]
   productId: string
   defaultSizeOptions: string[]
   categoryId: string | null
+  /** B: 統合ボックス（カラー×数量）内に置く際は自前 Card を描画しない。 */
+  bare?: boolean
 }) {
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -64,22 +67,32 @@ export function QuantityMatrixSection({
   // セル参照用: colorwayId|size -> SkuRow
   const cellMap = new Map(skus.map((s) => [`${s.colorwayId}|${s.size}`, s]))
 
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <CardTitle>数量マトリクス（カラー×サイズ）</CardTitle>
-        <Button size="sm" variant="outline" onClick={() => setDialogOpen(true)}>
-          <Plus className="mr-1 h-4 w-4" />
-          SKU を生成
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {skus.length === 0 ? (
-          <div className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">
-            この品番にはまだ SKU が登録されていません。「SKU を生成」から作成してください。
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
+  const generateButton = (
+    <Button size="sm" variant="outline" onClick={() => setDialogOpen(true)}>
+      <Plus className="mr-1 h-4 w-4" />
+      SKU を生成
+    </Button>
+  )
+
+  const dialog = dialogOpen && (
+    <SkuGenerateDialog
+      productId={productId}
+      defaultSizeOptions={defaultSizeOptions}
+      existingSizes={existingSizes}
+      categoryId={categoryId}
+      open={dialogOpen}
+      onClose={() => setDialogOpen(false)}
+      onGenerated={() => setDialogOpen(false)}
+    />
+  )
+
+  const body =
+    skus.length === 0 ? (
+      <div className="rounded-md border border-dashed py-8 text-center text-sm text-muted-foreground">
+        この品番にはまだ SKU が登録されていません。「SKU を生成」から作成してください。
+      </div>
+    ) : (
+      <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -131,20 +144,30 @@ export function QuantityMatrixSection({
               上段=受注数（orderedQuantity・読み取り専用）／下段=量産発注数（productionQuantity・クリックで編集）。— は当該カラー×サイズの SKU 未登録。
             </p>
           </div>
-        )}
-      </CardContent>
+    )
 
-      {dialogOpen && (
-        <SkuGenerateDialog
-          productId={productId}
-          defaultSizeOptions={defaultSizeOptions}
-          existingSizes={existingSizes}
-          categoryId={categoryId}
-          open={dialogOpen}
-          onClose={() => setDialogOpen(false)}
-          onGenerated={() => setDialogOpen(false)}
-        />
-      )}
+  // 統合ボックス内（bare）では自前 Card を描かず、見出し＋操作＋本文のみ。
+  if (bare) {
+    return (
+      <div className="space-y-2">
+        <div className="flex flex-row items-center justify-between">
+          <h4 className="text-sm font-medium">数量マトリクス（カラー×サイズ）</h4>
+          {generateButton}
+        </div>
+        {body}
+        {dialog}
+      </div>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+        <CardTitle>数量マトリクス（カラー×サイズ）</CardTitle>
+        {generateButton}
+      </CardHeader>
+      <CardContent>{body}</CardContent>
+      {dialog}
     </Card>
   )
 }

@@ -27,8 +27,7 @@ import { getProductSketchUrls } from "@/lib/actions/product-sketches"
 import { SketchSection } from "../_components/sketch-section"
 import { listColorwaysByBomItems } from "@/lib/actions/bom-item-colorways"
 import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
-import { QuantityMatrixSection } from "../_components/quantity-matrix-section"
-import { ColorwaySection } from "../_components/colorway-section"
+import { ColorQuantitySection } from "../_components/color-quantity-section"
 import { BomSection, type BomItemView } from "../_components/bom-section"
 import { MaterialRequirementSection } from "../_components/material-requirement-section"
 import type { MaterialReqBomItem } from "@/lib/calc/material-requirement"
@@ -486,25 +485,13 @@ export default async function ProductDetailPage({
         </CardContent>
       </Card>
 
-      {/* カラー展開（B-062 β・カラー軸の親） */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">カラー展開</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ColorwaySection
-            productId={item.id}
-            colorways={colorways}
-            colorOptions={colorOptions}
-            patternOptions={patternOptions}
-          />
-        </CardContent>
-      </Card>
-
-      {/* 数量マトリクス（B-064・量産 色×サイズ） */}
-      <QuantityMatrixSection
+      {/* ⑧カラー×数量（B-062β カラー展開＋B-064 数量マトリクスを1ボックスに統合） */}
+      <ColorQuantitySection
+        productId={item.id}
+        colorways={colorways}
+        colorOptions={colorOptions}
+        patternOptions={patternOptions}
         skus={skus}
-        productId={id}
         defaultSizeOptions={defaultSizeOptions}
         categoryId={item.category?.id ?? null}
       />
