@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>生産進行・納期・資材管理｜UI叩き台 v0.1</title>
+<style>
+:root{--ink:#141414;--i70:#5a5a5a;--i40:#9a9a9a;--i25:#c4c4c4;--i15:#d8d8d8;--i07:#ececec;--paper:#fff;--shell:#f6f6f6}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{font-family:"游ゴシック体","Yu Gothic","YuGothic","Hiragino Kaku Gothic ProN",sans-serif;
+  background:var(--shell);color:var(--ink);font-size:13.5px;line-height:1.65;font-feature-settings:"palt" 1}
+.mincho{font-family:"游明朝体","Yu Mincho","YuMincho","Hiragino Mincho ProN",serif}
+.mono{font-family:Cambria,"Times New Roman",serif;letter-spacing:.03em}
+.eyebrow{font-family:Cambria,serif;letter-spacing:.3em;font-size:9.5px;color:var(--i40)}
+
+/* header */
+.top{background:var(--ink);color:#fff;padding:16px 26px 0}
+.top .eyebrow{color:rgba(255,255,255,.45)}
+.top h1{font-family:"游明朝体","Yu Mincho",serif;font-size:19px;font-weight:600;letter-spacing:.07em;margin:5px 0 14px}
+nav{display:flex;gap:2px;flex-wrap:wrap}
+nav button{background:transparent;border:none;color:rgba(255,255,255,.55);font-family:inherit;
+  font-size:12px;letter-spacing:.08em;padding:9px 15px;cursor:pointer;border-bottom:2px solid transparent}
+nav button:hover{color:#fff;background:rgba(255,255,255,.07)}
+nav button.on{color:var(--ink);background:var(--shell);border-bottom-color:var(--shell);font-weight:700}
+nav button:focus-visible{outline:2px solid #fff;outline-offset:-3px}
+
+main{padding:24px 26px 80px}
+.page{display:none}.page.on{display:block}
+h2.pt{font-family:"游明朝体","Yu Mincho",serif;font-size:20px;font-weight:600;letter-spacing:.1em;margin-bottom:3px}
+p.pd{font-size:11.5px;color:var(--i40);margin-bottom:18px}
+
+.card{background:var(--paper);border:1px solid var(--i15);margin-bottom:16px}
+.card>h3{font-size:10.5px;letter-spacing:.18em;background:var(--ink);color:#fff;padding:6px 12px}
+.card>.in{padding:14px 16px}
+
+/* KPI */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--paper);border:1px solid var(--i15);padding:13px 15px}
+.kpi .k{font-size:10px;letter-spacing:.14em;color:var(--i40)}
+.kpi .v{font-family:Cambria,serif;font-size:30px;line-height:1.15;margin-top:3px}
+.kpi .s{font-size:10.5px;color:var(--i40)}
+.kpi.alert{background:var(--ink);color:#fff}
+.kpi.alert .k,.kpi.alert .s{color:rgba(255,255,255,.6)}
+
+/* tables */
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+th{background:var(--ink);color:#fff;font-weight:400;font-size:10px;letter-spacing:.1em;padding:8px 8px;text-align:left;white-space:nowrap}
+td{border-bottom:1px solid var(--i07);padding:7px 8px;vertical-align:middle}
+tbody tr:hover{background:#fafafa}
+tbody tr.sel{background:var(--i07)}
+td.c,th.c{text-align:center}
+td.r{text-align:right}
+.tag{display:inline-block;font-size:9.5px;letter-spacing:.1em;padding:1.5px 6px;border:1px solid var(--i40);color:var(--i70)}
+.tag.k{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tag.o{border-style:dashed}
+
+/* 進行表マトリクス */
+table.board td.p{text-align:center;width:52px;padding:5px 2px}
+.dot{display:inline-block;width:19px;height:19px;line-height:17px;border-radius:50%;font-size:10px;
+  border:1px solid var(--i25);color:var(--i25);font-family:Cambria,serif}
+.dot.d1{border-color:var(--ink);color:var(--ink);
+  background:linear-gradient(90deg,var(--ink) 50%,#fff 50%)}
+.dot.d2{background:var(--ink);border-color:var(--ink);color:#fff}
+.dot.d3{background:#fff;border:2px solid var(--ink);color:var(--ink);font-weight:700}
+.dot.dna{border-style:dotted;color:var(--i15);border-color:var(--i15)}
+tr.late td{background:#f0f0f0}
+tr.late td:first-child{border-left:3px solid var(--ink)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:10.5px;color:var(--i70);margin-top:12px;align-items:center}
+.legend span{display:flex;align-items:center;gap:6px}
+
+/* 納期バー */
+.gantt{display:grid;grid-template-columns:170px 1fr;gap:0;font-size:11.5px}
+.gantt .gh{background:var(--ink);color:#fff;font-size:10px;letter-spacing:.1em;padding:6px 8px}
+.grow{display:contents}
+.glabel{padding:8px;border-bottom:1px solid var(--i07);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gtrack{position:relative;border-bottom:1px solid var(--i07);border-left:1px solid var(--i07);height:36px;overflow:hidden}
+.gbar{position:absolute;top:9px;height:17px;background:var(--i25);display:flex;align-items:center;padding:0 6px;
+  font-size:9.5px;color:var(--ink);white-space:nowrap;overflow:hidden}
+.gbar.done{background:var(--ink);color:#fff}
+.gbar.late{background:#fff;border:2px solid var(--ink);font-weight:700}
+.gdue{position:absolute;top:0;bottom:0;width:2px;background:var(--ink)}
+.gdue::after{content:"納期";position:absolute;top:-1px;left:4px;font-size:8.5px;letter-spacing:.1em;color:var(--ink);white-space:nowrap}
+.gtoday{position:absolute;top:0;bottom:0;width:1px;background:var(--i40);border-left:1px dashed var(--i40)}
+.gscale{position:relative;height:20px;border-left:1px solid var(--i07)}
+.gscale i{position:absolute;font-style:normal;font-size:9.5px;color:var(--i40);font-family:Cambria,serif;top:3px}
+
+/* 引当判定 */
+.quad{display:grid;grid-template-columns:110px 1fr 1fr;gap:1px;background:var(--i15);border:1px solid var(--i15);margin-bottom:14px;font-size:11.5px}
+.quad>div{background:#fff;padding:9px 11px}
+.quad .qh{background:#fafafa;font-size:10px;letter-spacing:.1em;color:var(--i70)}
+.quad .qk{background:var(--ink);color:#fff}
+.quad b{display:block;font-size:12px;margin-bottom:2px}
+.quad small{color:var(--i40);font-size:10.5px;line-height:1.6;display:block}
+
+.alertbox{border:2px solid var(--ink);padding:13px 15px;margin-bottom:14px}
+.alertbox h4{font-size:11px;letter-spacing:.14em;margin-bottom:7px}
+.alertbox p{font-size:12px;line-height:1.8}
+.opts{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:8px;margin-top:12px}
+.opt{border:1px solid var(--i15);padding:9px 11px;cursor:pointer;background:#fff;text-align:left;font-family:inherit}
+.opt:hover{border-color:var(--ink);background:#fafafa}
+.opt.on{border:2px solid var(--ink);background:var(--i07)}
+.opt b{display:block;font-size:12px;margin-bottom:2px}
+.opt small{color:var(--i40);font-size:10px;line-height:1.5;display:block}
+
+/* 詳細 */
+.split{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:900px){.split{grid-template-columns:1fr}}
+table.spec th{background:#fafafa;color:var(--i70);width:105px;font-size:10.5px;border:1px solid var(--i15);letter-spacing:.04em}
+table.spec td{border:1px solid var(--i15);font-size:12px}
+.timeline{list-style:none}
+.timeline li{display:flex;gap:12px;padding:8px 0;border-bottom:1px solid var(--i07);font-size:12px;align-items:flex-start}
+.timeline .tm{font-family:Cambria,serif;font-size:10.5px;color:var(--i40);width:74px;flex-shrink:0;padding-top:2px}
+.timeline .tb{flex:1}
+.timeline .tb b{display:block;font-size:12.5px}
+.timeline .tb small{color:var(--i40);font-size:10.5px}
+.timeline .st{font-size:9.5px;letter-spacing:.1em;padding:1.5px 6px;border:1px solid var(--i40);color:var(--i70);flex-shrink:0}
+.timeline .st.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+
+/* モバイル */
+.phones{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;padding:6px 0}
+.phone{width:290px;border:9px solid var(--ink);border-radius:26px;overflow:hidden;background:#fff;box-shadow:0 2px 0 var(--i15)}
+.pbar{background:var(--ink);color:#fff;padding:8px 12px;font-size:10px;letter-spacing:.1em;display:flex;justify-content:space-between}
+.pbody{padding:12px;min-height:400px}
+.pjob{border:1px solid var(--i15);padding:10px 11px;margin-bottom:9px}
+.pjob.now{border:2px solid var(--ink)}
+.pjob .h{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px}
+.pjob .n{font-family:Cambria,serif;font-size:10.5px;color:var(--i40)}
+.pjob b{font-size:13px}
+.pjob .m{font-size:10.5px;color:var(--i70);margin-top:2px}
+.pbtn{display:block;width:100%;margin-top:9px;padding:11px;background:var(--ink);color:#fff;border:none;
+  font-family:inherit;font-size:12.5px;letter-spacing:.1em;cursor:pointer}
+.pbtn.sec{background:#fff;color:var(--ink);border:1px solid var(--ink)}
+.pcap{text-align:center;font-size:10.5px;color:var(--i40);margin-top:9px;letter-spacing:.06em}
+.qr{width:64px;height:64px;background:
+  repeating-linear-gradient(0deg,var(--ink) 0 6px,#fff 6px 12px),
+  repeating-linear-gradient(90deg,var(--ink) 0 6px,transparent 6px 12px);
+  margin:0 auto 8px;border:4px solid #fff;outline:1px solid var(--i15)}
+
+.note{border-left:3px solid var(--ink);padding:9px 13px;font-size:11.5px;color:var(--i70);line-height:1.8;margin-top:14px;background:#fafafa}
+.note b{color:var(--ink)}
+button.mini{font-family:inherit;font-size:10.5px;letter-spacing:.06em;padding:4px 10px;border:1px solid var(--i15);
+  background:#fff;color:var(--i70);cursor:pointer}
+button.mini:hover{border-color:var(--ink);color:var(--ink)}
+button.mini.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.filters{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center}
+.filters .lb{font-size:10px;letter-spacing:.12em;color:var(--i40);margin-right:4px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="eyebrow">Production Control — Prototype</div>
+  <h1>生産進行・納期・資材管理</h1>
+  <nav>
+    <button class="on" data-p="board">進行表</button>
+    <button data-p="due">納期モニタ</button>
+    <button data-p="detail">案件詳細</button>
+    <button data-p="mat">資材所要・引当</button>
+    <button data-p="po">資材発注管理</button>
+    <button data-p="mobile">現場端末</button>
+  </nav>
+</div>
+
+<main>
+
+<!-- ============ 進行表 ============ -->
+<section class="page on" id="p-board">
+  <h2 class="pt">進行表</h2>
+  <p class="pd">案件 × 工程のマトリクス。現行の紙の進行表をそのまま画面に置き換えた形。</p>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>工程進捗</h3>
+    <div class="in">
+      <div class="filters">
+        <span class="lb">FILTER</span>
+        <button class="mini on" data-f="all">すべて</button>
+        <button class="mini" data-f="late">遅延のみ</button>
+        <button class="mini" data-f="emb">刺繍</button>
+        <button class="mini" data-f="sub">昇華</button>
+      </div>
+      <div class="scroll"><table class="board"><thead id="bhead"></thead><tbody id="bbody"></tbody></table></div>
+      <div class="legend">
+        <span><i class="dot"></i>未着手</span>
+        <span><i class="dot d1"></i>進行中</span>
+        <span><i class="dot d2"></i>完了</span>
+        <span><i class="dot d3">!</i>停止・要対応</span>
+        <span><i class="dot dna"></i>対象外</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>工程の並びは加工方式で変わります。</b>刺繍は「資材手配→裁断→縫製→刺繍→検品→出荷」、昇華は「資材手配→プリントデータ→転写→裁断→縫製→検品→出荷」。昇華のほうが工程が2つ多く、外注先を跨ぐ回数も多いため、納期テーブルは方式ごとに別で持つ設計にしています。
+  </div>
+</section>
+
+<!-- ============ 納期モニタ ============ -->
+<section class="page" id="p-due">
+  <h2 class="pt">納期モニタ</h2>
+  <p class="pd">工程の予定と実績、希望納期を1本の軸で見る。太枠は遅延。</p>
+
+  <div class="card">
+    <h3>2026年9月 — 10月</h3>
+    <div class="in">
+      <div class="gantt" id="gantt"></div>
+      <div class="legend">
+        <span><i style="display:inline-block;width:22px;height:10px;background:var(--i25)"></i>予定</span>
+        <span><i style="display:inline-block;width:22px;height:10px;background:var(--ink)"></i>完了</span>
+        <span><i style="display:inline-block;width:22px;height:10px;border:2px solid var(--ink)"></i>遅延</span>
+        <span><i style="display:inline-block;width:2px;height:14px;background:var(--ink)"></i>希望納期</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>外注先ライン空き状況</h3>
+    <div class="in">
+      <div class="scroll"><table><thead><tr>
+        <th>外注先</th><th>工程</th><th class="c">週キャパ</th><th class="c">9/1週</th><th class="c">9/8週</th>
+        <th class="c">9/15週</th><th class="c">9/22週</th><th class="c">9/29週</th><th>状態</th>
+      </tr></thead><tbody id="capBody"></tbody></table></div>
+      <div class="note">
+        <b>納期は工程時間の足し算では決まりません。</b>外注先の空き枠で決まります。現行フローにも「外注先が決まらないとプリントデータ作成できない」と明記されており、ここを持たずに納期を自動計算すると、守れない日付を回答する仕組みになります。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 案件詳細 ============ -->
+<section class="page" id="p-detail">
+  <h2 class="pt">案件詳細</h2>
+  <p class="pd">工場スタッフが現物のQRから開く画面。仕様書・工程・資材・受け渡し記録を1画面に。</p>
+  <div class="filters">
+    <span class="lb">ORDER</span>
+    <select id="ordPick" style="font-family:inherit;font-size:12px;padding:6px 10px;border:1px solid var(--i15)"></select>
+  </div>
+  <div class="split">
+    <div>
+      <div class="card"><h3>仕様</h3><div class="in"><table class="spec"><tbody id="dSpec"></tbody></table></div></div>
+      <div class="card"><h3>資材所要（仕様から自動生成）</h3><div class="in">
+        <div class="scroll"><table><thead><tr><th>品番</th><th>品名</th><th class="r">所要</th><th class="c">引当</th></tr></thead>
+          <tbody id="dMat"></tbody></table></div>
+      </div></div>
+    </div>
+    <div>
+      <div class="card"><h3>工程</h3><div class="in"><ul class="timeline" id="dTL"></ul></div></div>
+      <div class="card"><h3>受け渡し記録</h3><div class="in">
+        <div class="scroll"><table><thead><tr><th>日時</th><th>区分</th><th>相手先</th><th class="r">数量</th><th>担当</th></tr></thead>
+          <tbody id="dHand"></tbody></table></div>
+        <div class="note">現物が外注先を何度も往復する構造のため、受け渡しを記録しないと進行が推測になります。<b>いま紙の発注書が現物と一緒に旅をしているのは、実は受け渡しの証跡として機能している</b>ので、そこを代替する必要があります。</div>
+      </div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 資材所要・引当 ============ -->
+<section class="page" id="p-mat">
+  <h2 class="pt">資材所要・引当</h2>
+  <p class="pd">在庫は売り減らし運用。廃盤かどうかではなく「今回の所要量に対して足りるか」で判定する。</p>
+
+  <div class="card">
+    <h3>判定ロジック</h3>
+    <div class="in">
+      <div class="quad">
+        <div class="qh"></div><div class="qh">在庫が足りる</div><div class="qh">在庫が足りない</div>
+        <div class="qk">現行品</div>
+        <div><b>通常受注</b><small>そのまま引当</small></div>
+        <div><b>発注して受注</b><small>調達リードタイムを納期に加算</small></div>
+        <div class="qk">廃盤</div>
+        <div><b>通常受注</b><small>顧客への告知は不要。静かに売り減らす</small></div>
+        <div><b>要確認</b><small>営業に確認を上げ、解決策を選ばせる</small></div>
+      </div>
+      <div class="note">
+        判定は<b>「今回の所要量 ≦ 引当可能残」</b>。廃盤生地が残5mでも追加1枚（1.5m）なら売れますが、20枚のチームオーダー（30m）なら売れません。<b>同じ在庫でも案件によって答えが変わる</b>ため、マスタの静的フラグではなく受注ごとの動的判定にしています。
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>在庫・引当状況</h3>
+    <div class="in">
+      <div class="filters">
+        <span class="lb">FILTER</span>
+        <button class="mini on" data-mf="all">すべて</button>
+        <button class="mini" data-mf="short">要確認のみ</button>
+        <button class="mini" data-mf="fab">生地</button>
+        <button class="mini" data-mf="acc">付属</button>
+      </div>
+      <div class="scroll"><table><thead><tr>
+        <th>品番</th><th>品名</th><th class="c">区分</th><th class="c">状態</th>
+        <th class="r">実在庫</th><th class="r">引当済</th><th class="r">仮引当</th><th class="r">引当可</th>
+        <th class="c">LT</th><th class="c">判定</th>
+      </tr></thead><tbody id="matBody"></tbody></table></div>
+      <div class="note">
+        生地と付属で警告の重さを変えています。<b>生地はロットと色の問題があり代替が効きにくいため不足は重大、付属は規格品が多く調達で解決しやすいため軽い通知。</b>同じ強度で出すと、付属の警告に慣れて生地の警告も無視されます。
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>要確認案件 — 解決策の選択</h3>
+    <div class="in">
+      <div class="alertbox">
+        <h4>JSD-2609-002　みなとクラブ様（追加オーダー・8枚）</h4>
+        <p><b>EM-300-WBK ストライプメッシュ ホワイト×黒</b>／廃盤・引当可能残 <span class="mono">12.0m</span> に対し所要 <span class="mono">14.4m</span>。<span class="mono">2.4m</span> 不足しています。</p>
+        <div class="opts" id="solveOpts"></div>
+        <div id="solveOut" style="margin-top:12px;font-size:11.5px;color:var(--i70)"></div>
+      </div>
+      <div class="note">
+        「在庫なし」とだけ出すと結局は電話とメールが飛びます。<b>解決パスを選択肢として提示し、選んだ結果を記録する</b>設計にしてあります。代替への振替記録が溜まれば、次からは自動で代替候補を提示できます。これは営業の頭の中にしかない知識です。
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>引当のタイミング</h3>
+    <div class="in">
+      <div class="scroll"><table><thead><tr><th>段階</th><th>引当</th><th>解放条件</th></tr></thead><tbody>
+        <tr><td>見積提示</td><td>照会のみ（引当しない）</td><td>—</td></tr>
+        <tr><td>受注登録（入金前）</td><td><b>仮引当</b>・期限付き</td><td>見積有効期限で自動解放</td></tr>
+        <tr><td>入金確認</td><td>本引当</td><td>出荷で消費</td></tr>
+      </tbody></table></div>
+      <div class="note">
+        全額前金制・入金確認後に手配開始という運用に合わせています。<b>仮引当の期限は月末27日の締切サイクルと揃える必要があります。</b>期限切れが自動解放されないと、在庫が幽霊で埋まります。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 資材発注管理 ============ -->
+<section class="page" id="p-po">
+  <h2 class="pt">資材発注管理</h2>
+  <p class="pd">発注残と入荷予定。長納期品は着荷日から逆算して発注アラートを出す。</p>
+
+  <div class="kpis">
+    <div class="kpi"><div class="k">発注残</div><div class="v">7</div><div class="s">件</div></div>
+    <div class="kpi"><div class="k">今週入荷予定</div><div class="v">3</div><div class="s">件</div></div>
+    <div class="kpi alert"><div class="k">入荷遅延</div><div class="v">1</div><div class="s">キャップ生地・鳥取</div></div>
+    <div class="kpi alert"><div class="k">発注推奨</div><div class="v">2</div><div class="s">安全在庫割れ</div></div>
+  </div>
+
+  <div class="card">
+    <h3>発注残一覧</h3>
+    <div class="in"><div class="scroll"><table><thead><tr>
+      <th>発注番号</th><th>品番</th><th>品名</th><th>仕入先</th>
+      <th class="r">数量</th><th>発注日</th><th>入荷予定</th><th class="c">状態</th><th>紐付案件</th>
+    </tr></thead><tbody id="poBody"></tbody></table></div></div>
+  </div>
+
+  <div class="card">
+    <h3>発注推奨</h3>
+    <div class="in"><div class="scroll"><table><thead><tr>
+      <th>品番</th><th>品名</th><th class="r">引当可</th><th class="r">安全在庫</th>
+      <th class="c">LT</th><th>理由</th><th class="c"></th>
+    </tr></thead><tbody id="recBody"></tbody></table></div>
+    <div class="note">
+      廃盤品には発注推奨を出しません。かわりに<b>「取り置き量」の管理</b>が必要になります。初回打合せの整理どおり追加オーダーが囲い込みの実体だとすると、廃盤生地を新規チームに先着で売り切るのは囲い込み資産の切り売りです。<b>SYS-016「追加受注一覧_2021年から」からチームあたりの年間追加発生率を出せば、勘ではなく実績で取り置き量を決められます。</b>
+    </div></div>
+  </div>
+
+  <div class="card">
+    <h3>ロット取り置き</h3>
+    <div class="in"><div class="scroll"><table><thead><tr>
+      <th>品番</th><th>ロット</th><th class="r">残</th><th class="r">取置</th><th class="r">開放</th><th>対象チーム</th>
+    </tr></thead><tbody id="lotBody"></tbody></table></div>
+    <div class="note">
+      追加オーダーの規約に「同じカラーのものをオーダーしても仕上がりの色合いが若干違って出来上がる」とありますが、これは生地ロットが変わると色が動くためです。<b>初回と同ロットを取り置けば、この免責に頼らずに済みます。</b>クレームと作り直しが減るので、在庫管理ではなく品質施策として位置づけています。
+    </div></div>
+  </div>
+</section>
+
+<!-- ============ 現場端末 ============ -->
+<section class="page" id="p-mobile">
+  <h2 class="pt">現場端末</h2>
+  <p class="pd">全員がスマホを常用しているという前提。入力は「完了」と「数量」だけに絞る。</p>
+
+  <div class="card"><h3>画面イメージ</h3><div class="in">
+    <div class="phones">
+
+      <div class="phone">
+        <div class="pbar"><span>本日の作業</span><span class="mono">09/03</span></div>
+        <div class="pbody">
+          <div class="pjob now">
+            <div class="h"><span class="n">JSD-2609-004</span><span class="tag k">遅延</span></div>
+            <b>東雲メッツ様</b>
+            <div class="m">帽子 18個／裁断<br>納期 9/10（残り 7日）</div>
+            <button class="pbtn">この工程を完了にする</button>
+          </div>
+          <div class="pjob">
+            <div class="h"><span class="n">JSD-2609-001</span><span class="tag">進行中</span></div>
+            <b>サンライズBC様</b>
+            <div class="m">シャツ 22枚／縫製<br>納期 9/18</div>
+            <button class="pbtn sec">着手する</button>
+          </div>
+          <div class="pjob">
+            <div class="h"><span class="n">JSD-2609-007</span><span class="tag o">未着手</span></div>
+            <b>中央シニア様</b>
+            <div class="m">3点 30枚／資材待ち<br>入荷予定 9/08</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="phone">
+        <div class="pbar"><span>工程を完了にする</span><span>×</span></div>
+        <div class="pbody">
+          <div class="qr" aria-hidden="true"></div>
+          <div class="pcap" style="margin-bottom:14px">現物のQRを読み取り済み</div>
+          <table class="spec" style="font-size:11.5px"><tbody>
+            <tr><th>案件</th><td>JSD-2609-004</td></tr>
+            <tr><th>チーム</th><td>東雲メッツ様</td></tr>
+            <tr><th>工程</th><td>裁断</td></tr>
+            <tr><th>予定数</th><td class="mono">18</td></tr>
+          </tbody></table>
+          <div style="margin-top:12px;font-size:10.5px;letter-spacing:.1em;color:var(--i40)">完了数</div>
+          <input type="text" value="18" style="width:100%;padding:11px;border:1px solid var(--i15);font-family:Cambria,serif;font-size:20px;text-align:center">
+          <button class="pbtn">完了として記録する</button>
+          <button class="pbtn sec">一部完了で保存</button>
+        </div>
+      </div>
+
+      <div class="phone">
+        <div class="pbar"><span>仕様書</span><span class="mono">JSD-2609-004</span></div>
+        <div class="pbody">
+          <table class="spec" style="font-size:11.5px"><tbody>
+            <tr><th>チーム</th><td>東雲メッツ様</td></tr>
+            <tr><th>加工方式</th><td>刺繍</td></tr>
+            <tr><th>キャップ型</th><td>メジャー型</td></tr>
+            <tr><th>本体</th><td><i style="display:inline-block;width:10px;height:10px;background:#1d2b4a;border:1px solid #9a9a9a;vertical-align:-1px"></i> ネイビー <span class="mono" style="color:#9a9a9a">DIC-●●</span></td></tr>
+            <tr><th>つば</th><td><i style="display:inline-block;width:10px;height:10px;background:#141414;border:1px solid #9a9a9a;vertical-align:-1px"></i> ブラック <span class="mono" style="color:#9a9a9a">DIC-●●</span></td></tr>
+            <tr><th>穴かがり</th><td><i style="display:inline-block;width:10px;height:10px;background:#f2f2f2;border:1px solid #9a9a9a;vertical-align:-1px"></i> ホワイト</td></tr>
+            <tr><th>フロント</th><td>S／ウレタン立体刺繍</td></tr>
+            <tr><th>糸色</th><td>ホワイト <span class="mono" style="color:#9a9a9a">糸-●●</span></td></tr>
+            <tr><th>サイズ別</th><td class="mono">M:6 L:8 O:4</td></tr>
+          </tbody></table>
+          <button class="pbtn sec" style="margin-top:14px">絵型を見る</button>
+        </div>
+      </div>
+
+      <div class="phone">
+        <div class="pbar"><span>検品記録</span><span class="mono">JSD-2609-001</span></div>
+        <div class="pbody">
+          <div style="font-size:10.5px;letter-spacing:.1em;color:var(--i40)">検品数</div>
+          <input type="text" value="22" style="width:100%;padding:9px;border:1px solid var(--i15);font-family:Cambria,serif;font-size:18px;text-align:center;margin-bottom:10px">
+          <div style="font-size:10.5px;letter-spacing:.1em;color:var(--i40)">不良数</div>
+          <input type="text" value="1" style="width:100%;padding:9px;border:1px solid var(--i15);font-family:Cambria,serif;font-size:18px;text-align:center;margin-bottom:10px">
+          <div style="font-size:10.5px;letter-spacing:.1em;color:var(--i40)">不良理由</div>
+          <select style="width:100%;padding:9px;border:1px solid var(--i15);font-family:inherit;font-size:12.5px">
+            <option>縫製不良</option><option>生地キズ</option><option selected>刺繍ズレ</option>
+            <option>色ブレ</option><option>サイズ違い</option><option>汚れ</option>
+          </select>
+          <div style="font-size:10.5px;letter-spacing:.1em;color:var(--i40);margin-top:10px">処置</div>
+          <select style="width:100%;padding:9px;border:1px solid var(--i15);font-family:inherit;font-size:12.5px">
+            <option>そのまま出荷</option><option selected>作り直し</option><option>顧客に確認</option>
+          </select>
+          <button class="pbtn">記録する</button>
+        </div>
+      </div>
+
+    </div>
+  </div></div>
+
+  <div class="note">
+    <b>進行管理が死ぬ理由は一つだけで、現場が入力しないことです。</b>紙の発注書が30年続いているのは、現物と一緒に移動するので入力が要らないからです。置き換えるなら同じ性質が要ります。現物にQRを貼り、各工程で読むだけ。入力項目は「完了」と「数量」に絞る。写真やコメントは最初は載せないほうがいいと考えます。1タップより手数が増えた瞬間に更新されなくなり、システムが嘘をつき始めます。
+  </div>
+
+  <div class="card"><h3>検品記録を残す理由</h3><div class="in">
+    <p style="font-size:12.5px;line-height:1.85">検品基準が厳しすぎるのではないか、という論点がありました。<b>いまは記録がないため、緩めるべきかどうかを判断する材料がありません。</b>良品数・不良数・不良理由・処置を残せば、半年後には作り直しコストが数字で出ます。基準を変えるかどうかの議論はその後です。感覚で緩めると現場が納得しません。</p>
+  </div></div>
+</section>
+
+</main>
+
+<script>
+"use strict";
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num=n=>Number(n).toLocaleString('ja-JP');
+
+/* ===== 工程定義（加工方式で並びが変わる） ===== */
+const PROCS=['資材手配','ﾌﾟﾘﾝﾄﾃﾞｰﾀ','転写','裁断','縫製','刺繍','検品','出荷'];
+/* 0未着手 1進行中 2完了 3停止 -1対象外 */
+const ORDERS=[
+ {id:'JSD-2609-001',team:'サンライズBC',m:'emb',item:'3点セット',qty:22,due:'09/18',
+  st:[2,-1,-1,2,1,0,0,0],late:false,
+  spec:{方式:'刺繍',素材:'マイクロメッシュ KCT3844',ボディ:'ネイビー',胸:'SUNRISE／縁取り刺繍',背番号:'あり',キャップ:'日本型'}},
+ {id:'JSD-2609-002',team:'みなとクラブ',m:'emb',item:'シャツのみ',qty:8,due:'09/12',
+  st:[3,-1,-1,0,0,0,0,0],late:true,
+  spec:{方式:'刺繍',素材:'ストライプメッシュ EM-300',ボディ:'ホワイト×黒',胸:'MINATO／2重千鳥掛け',背番号:'あり',キャップ:'—'}},
+ {id:'JSD-2609-003',team:'城東ファイターズ',m:'sub',item:'3点セット',qty:15,due:'09/25',
+  st:[2,3,0,0,0,-1,0,0],late:false,
+  spec:{方式:'昇華',素材:'マイクロメッシュ KCT3844',パターン:'ストライプ',配色:'ネイビー／ホワイト',マーク:'JOTO',キャップ:'YG型'}},
+ {id:'JSD-2609-004',team:'東雲メッツ',m:'emb',item:'キャップのみ',qty:18,due:'09/10',
+  st:[2,-1,-1,3,0,0,0,0],late:true,
+  spec:{方式:'刺繍',キャップ型:'メジャー型',本体:'ネイビー',つば:'ブラック',フロント:'S／ウレタン立体刺繍',糸色:'ホワイト'}},
+ {id:'JSD-2609-005',team:'ブルーウィングス',m:'sub',item:'2点セット',qty:26,due:'10/02',
+  st:[2,2,1,0,0,-1,0,0],late:false,
+  spec:{方式:'昇華',素材:'ビヨンメッシュ AT4265',パターン:'グラデーション',配色:'ロイヤル→サックス',マーク:'B.WINGS',キャップ:'—'}},
+ {id:'JSD-2609-006',team:'港南レッドス',m:'emb',item:'3点セット（追加1）',qty:1,due:'09/30',
+  st:[2,-1,-1,2,2,1,0,0],late:false,
+  spec:{方式:'刺繍',素材:'マイクロメッシュ KCT3844',ボディ:'エンジ',胸:'KONAN／縁取り刺繍',備考:'2021年初回の追加',キャップ:'日本型'}},
+ {id:'JSD-2609-007',team:'中央シニア',m:'emb',item:'3点セット',qty:30,due:'10/15',
+  st:[1,-1,-1,0,0,0,0,0],late:false,
+  spec:{方式:'刺繍',素材:'ストレートメッシュ FIT4861',ボディ:'ホワイト',胸:'CHUO／縁取り刺繍',背番号:'あり',キャップ:'US型'}},
+ {id:'JSD-2609-008',team:'平和台クラブ',m:'sub',item:'シャツのみ',qty:12,due:'09/22',
+  st:[2,2,2,1,0,-1,0,0],late:false,
+  spec:{方式:'昇華',素材:'DRY STATUS AT4690',パターン:'総柄・モチーフ',配色:'ブラック／ゴールド／グレー',マーク:'HEIWADAI',キャップ:'—'}}
+];
+
+/* ===== 進行表 ===== */
+function drawBoard(f='all'){
+  $('bhead').innerHTML='<tr><th>案件</th><th>チーム</th><th>内容</th><th class="c">数量</th><th class="c">納期</th>'
+    +PROCS.map(p=>`<th class="c">${p}</th>`).join('')+'</tr>';
+  const rows=ORDERS.filter(o=>f==='all'||(f==='late'&&o.late)||(f==='emb'&&o.m==='emb')||(f==='sub'&&o.m==='sub'));
+  $('bbody').innerHTML=rows.map(o=>{
+    const cells=o.st.map(s=>{
+      const cls=s===-1?'dna':s===0?'':'d'+s;
+      const ch=s===2?'✓':s===3?'!':s===1?'':'';
+      return `<td class="p"><span class="dot ${cls}">${ch}</span></td>`;
+    }).join('');
+    return `<tr class="${o.late?'late':''}"><td class="mono">${o.id}</td><td>${esc(o.team)}様</td>`
+      +`<td>${esc(o.item)}<span class="tag" style="margin-left:6px">${o.m==='emb'?'刺繍':'昇華'}</span></td>`
+      +`<td class="c mono">${o.qty}</td><td class="c mono">${o.due}</td>${cells}</tr>`;
+  }).join('');
+  const late=ORDERS.filter(o=>o.late).length;
+  const stop=ORDERS.filter(o=>o.st.includes(3)).length;
+  $('kpis').innerHTML=`
+    <div class="kpi"><div class="k">進行中案件</div><div class="v">${ORDERS.length}</div><div class="s">件</div></div>
+    <div class="kpi"><div class="k">総枚数</div><div class="v">${ORDERS.reduce((a,b)=>a+b.qty,0)}</div><div class="s">点</div></div>
+    <div class="kpi alert"><div class="k">遅延</div><div class="v">${late}</div><div class="s">要対応</div></div>
+    <div class="kpi alert"><div class="k">工程停止</div><div class="v">${stop}</div><div class="s">資材・外注待ち</div></div>`;
+}
+
+/* ===== 納期モニタ ===== */
+const D0=new Date(2026,8,1), D1=new Date(2026,9,20), TODAY=new Date(2026,8,3);
+const pct=d=>((d-D0)/(D1-D0))*100;
+const md=s=>new Date(2026,+s.slice(0,2)-1,+s.slice(3,5));
+const GBARS=[
+ {id:'JSD-2609-001',s:'09/01',e:'09/16',due:'09/18',k:''},
+ {id:'JSD-2609-002',s:'09/02',e:'09/20',due:'09/12',k:'late'},
+ {id:'JSD-2609-003',s:'09/04',e:'09/23',due:'09/25',k:''},
+ {id:'JSD-2609-004',s:'08/28',e:'09/14',due:'09/10',k:'late'},
+ {id:'JSD-2609-005',s:'09/01',e:'09/29',due:'10/02',k:''},
+ {id:'JSD-2609-006',s:'09/05',e:'09/26',due:'09/30',k:'done'},
+ {id:'JSD-2609-007',s:'09/08',e:'10/12',due:'10/15',k:''},
+ {id:'JSD-2609-008',s:'08/30',e:'09/19',due:'09/22',k:'done'}
+];
+function drawGantt(){
+  let h='<div class="gh">案件</div><div class="gh">工程スケジュール</div>';
+  h+='<div></div><div class="gscale">';
+  for(let m=9;m<=10;m++) for(const d of [1,8,15,22,29]){
+    if(m===10&&d>15)break;
+    const x=pct(new Date(2026,m-1,d)); if(x<0||x>100)continue;
+    h+=`<i style="left:${x}%">${m}/${d}</i>`;
+  }
+  h+='</div>';
+  GBARS.forEach(b=>{
+    const o=ORDERS.find(x=>x.id===b.id);
+    const l=pct(md(b.s)), w=pct(md(b.e))-l;
+    h+=`<div class="glabel"><span class="mono" style="font-size:10px;color:var(--i40)">${b.id.slice(-3)}</span> ${esc(o.team)}様</div>`;
+    h+=`<div class="gtrack">`
+      +`<div class="gtoday" style="left:${pct(TODAY)}%"></div>`
+      +`<div class="gbar ${b.k}" style="left:${l}%;width:${w}%">${o.item}／${o.qty}</div>`
+      +`<div class="gdue" style="left:${pct(md(b.due))}%"></div></div>`;
+  });
+  $('gantt').innerHTML=h;
+}
+const CAPS=[
+ ['鳥取・K社','帽子 裁断+縫製','120個','満','満','120','120','80','逼迫'],
+ ['大阪・S社','プリント（昇華）','400枚','340','400','210','160','90','—'],
+ ['大阪・M社','刺繍','600枚','420','380','260','200','140','—'],
+ ['社内','縫製（4名）','80枚','80','80','65','40','20','逼迫'],
+ ['岡山・T社','裁断','300枚','180','120','90','60','30','—']
+];
+function drawCap(){
+  $('capBody').innerHTML=CAPS.map(r=>`<tr>
+    <td>${r[0]}</td><td>${r[1]}</td><td class="c mono">${r[2]}</td>
+    ${r.slice(3,8).map(v=>`<td class="c mono">${v==='満'?'<b>満</b>':v}</td>`).join('')}
+    <td>${r[8]==='逼迫'?'<span class="tag k">逼迫</span>':'<span class="tag">通常</span>'}</td></tr>`).join('');
+}
+
+/* ===== 資材 ===== */
+const MATS=[
+ ['KCT3844-NV','マイクロメッシュ ネイビー','fab','現行',180.0,120.0,18.0,42.0,'14日'],
+ ['KCT3844-WH','マイクロメッシュ ホワイト','fab','現行',220.0,80.0,0,140.0,'14日'],
+ ['KCT3844-EN','マイクロメッシュ エンジ','fab','現行',64.0,12.0,1.5,50.5,'14日'],
+ ['FIT4861-WH','ストレートメッシュ ホワイト','fab','現行',96.0,45.0,0,51.0,'21日'],
+ ['EM-300-WBK','ストライプメッシュ ホワイト×黒','fab','廃盤',12.0,0,0,12.0,'—'],
+ ['EM-300-WNV','ストライプメッシュ ホワイト×紺','fab','廃盤',40.0,0,2.0,38.0,'—'],
+ ['AT4265-BL','ビヨンメッシュ ブルー','fab','現行',88.0,39.0,0,49.0,'21日'],
+ ['AT4690-BK','DRY STATUS ブラック','fab','現行',110.0,18.0,0,92.0,'28日'],
+ ['CAP-MJ-NV','キャップ生地 メジャー型 ネイビー','fab','現行',26.0,24.0,0,2.0,'30日'],
+ ['ADJ-SNAP','アジャスター パッチン式','acc','現行',340,180,0,160,'10日'],
+ ['ADJ-RAIL','アジャスター レール式','acc','廃盤',25,20,0,5,'—'],
+ ['THR-WH','刺繍糸 ホワイト','acc','現行',48,12,0,36,'7日'],
+ ['THR-GD','刺繍糸 ゴールド','acc','現行',6,4,0,2,'7日'],
+ ['BTN-STD','ユニフォームボタン','acc','現行',1400,320,0,1080,'10日']
+];
+/* 所要量（デモ：この案件で必要な量） */
+const NEED={'EM-300-WBK':14.4,'EM-300-WNV':12.0,'CAP-MJ-NV':8.4,'THR-GD':3,'ADJ-RAIL':18};
+function judge(code,avail,status){
+  const need=NEED[code];
+  if(need===undefined) return ['<span class="tag">—</span>',false];
+  if(need<=avail) return ['<span class="tag">引当可</span>',false];
+  if(status==='廃盤') return ['<span class="tag k">要確認</span>',true];
+  return ['<span class="tag o">発注要</span>',true];
+}
+function drawMat(f='all'){
+  const rows=MATS.filter(m=>{
+    if(f==='fab')return m[2]==='fab';
+    if(f==='acc')return m[2]==='acc';
+    if(f==='short')return judge(m[0],m[7],m[3])[1];
+    return true;
+  });
+  $('matBody').innerHTML=rows.map(m=>{
+    const [tag,bad]=judge(m[0],m[7],m[3]);
+    const unit=m[2]==='fab'?'m':'個';
+    return `<tr${bad?' class="sel"':''}>
+      <td class="mono">${m[0]}</td><td>${esc(m[1])}</td>
+      <td class="c"><span class="tag">${m[2]==='fab'?'生地':'付属'}</span></td>
+      <td class="c">${m[3]==='廃盤'?'<span class="tag k">廃盤</span>':'<span class="tag">現行</span>'}</td>
+      <td class="r mono">${num(m[4])}${unit}</td><td class="r mono">${num(m[5])}</td>
+      <td class="r mono">${m[6]?num(m[6]):'-'}</td><td class="r mono"><b>${num(m[7])}</b></td>
+      <td class="c mono">${m[8]}</td><td class="c">${tag}</td></tr>`;
+  }).join('');
+}
+const SOLVE=[
+ ['代替素材に振替','元素材→代替素材を記録。代替マスタに育つ'],
+ ['分納する','在庫分の枚数と残りの見込み時期を記録'],
+ ['追加調達を試みる','打診先と回答期限を記録'],
+ ['デザイン変更を提案','変更内容を記録'],
+ ['お断りする','理由を記録']
+];
+function drawSolve(){
+  $('solveOpts').innerHTML=SOLVE.map((s,i)=>
+    `<button type="button" class="opt" data-i="${i}"><b>${esc(s[0])}</b><small>${esc(s[1])}</small></button>`).join('');
+  $('solveOpts').querySelectorAll('.opt').forEach(b=>b.onclick=()=>{
+    $('solveOpts').querySelectorAll('.opt').forEach(x=>x.classList.remove('on'));
+    b.classList.add('on');
+    const s=SOLVE[+b.dataset.i];
+    $('solveOut').innerHTML=`選択：<b>${esc(s[0])}</b>　→　${esc(s[1])}。案件履歴に記録され、営業に通知されます。`
+      +(b.dataset.i==='0'?'　<span style="color:var(--ink)"><b>この振替が代替候補マスタに反映されます。</b></span>':'');
+  });
+}
+
+/* ===== 発注 ===== */
+const POS=[
+ ['PO-26-0141','KCT3844-NV','マイクロメッシュ ネイビー','東洋紡績','120m','08/20','09/08','入荷待ち','JSD-2609-007'],
+ ['PO-26-0142','CAP-MJ-NV','キャップ生地 メジャー型','鳥取・K社','40m','08/12','08/30','遅延','JSD-2609-004'],
+ ['PO-26-0143','ADJ-SNAP','アジャスター パッチン式','副資材商社','500個','08/25','09/05','入荷待ち','—'],
+ ['PO-26-0144','FIT4861-WH','ストレートメッシュ ホワイト','東洋紡績','80m','08/28','09/18','入荷待ち','JSD-2609-007'],
+ ['PO-26-0145','THR-WH','刺繍糸 ホワイト','糸メーカー','24本','09/01','09/08','入荷待ち','—'],
+ ['PO-26-0146','AT4690-BK','DRY STATUS ブラック','東洋紡績','60m','09/01','09/29','入荷待ち','JSD-2609-008'],
+ ['PO-26-0147','BTN-STD','ユニフォームボタン','副資材商社','2000個','09/02','09/12','入荷待ち','—']
+];
+const RECS=[
+ ['CAP-MJ-NV','キャップ生地 メジャー型 ネイビー','2.0m','20.0m','30日','安全在庫割れ・LT長'],
+ ['THR-GD','刺繍糸 ゴールド','2本','10本','7日','安全在庫割れ']
+];
+const LOTS=[
+ ['KCT3844-NV','L-2024-0318','42.0m','30.0m','12.0m','2024年受注 8チーム'],
+ ['EM-300-WBK','L-2022-1104','12.0m','12.0m','0m','2022年受注 3チーム（廃盤）'],
+ ['AT4265-BL','L-2025-0620','49.0m','15.0m','34.0m','2025年受注 4チーム']
+];
+function drawPO(){
+  $('poBody').innerHTML=POS.map(p=>`<tr${p[7]==='遅延'?' class="sel"':''}>
+    <td class="mono">${p[0]}</td><td class="mono">${p[1]}</td><td>${esc(p[2])}</td><td>${esc(p[3])}</td>
+    <td class="r mono">${p[4]}</td><td class="mono">${p[5]}</td><td class="mono">${p[6]}</td>
+    <td class="c">${p[7]==='遅延'?'<span class="tag k">遅延</span>':'<span class="tag">入荷待ち</span>'}</td>
+    <td class="mono" style="font-size:11px">${p[8]}</td></tr>`).join('');
+  $('recBody').innerHTML=RECS.map(r=>`<tr>
+    <td class="mono">${r[0]}</td><td>${esc(r[1])}</td><td class="r mono"><b>${r[2]}</b></td>
+    <td class="r mono">${r[3]}</td><td class="c mono">${r[4]}</td><td>${esc(r[5])}</td>
+    <td class="c"><button class="mini">発注する</button></td></tr>`).join('');
+  $('lotBody').innerHTML=LOTS.map(l=>`<tr>
+    <td class="mono">${l[0]}</td><td class="mono">${l[1]}</td><td class="r mono">${l[2]}</td>
+    <td class="r mono"><b>${l[3]}</b></td><td class="r mono">${l[4]}</td><td>${esc(l[5])}</td></tr>`).join('');
+}
+
+/* ===== 案件詳細 ===== */
+const DETAIL_MAT={
+ 'JSD-2609-001':[['KCT3844-NV','マイクロメッシュ ネイビー','39.6m','ok'],
+   ['THR-WH','刺繍糸 ホワイト','4本','ok'],['BTN-STD','ユニフォームボタン','154個','ok'],
+   ['ADJ-SNAP','アジャスター パッチン式','22個','ok']],
+ 'JSD-2609-002':[['EM-300-WBK','ストライプメッシュ ホワイト×黒','14.4m','ng'],
+   ['THR-WH','刺繍糸 ホワイト','2本','ok'],['BTN-STD','ユニフォームボタン','56個','ok']],
+ 'JSD-2609-004':[['CAP-MJ-NV','キャップ生地 メジャー型 ネイビー','8.4m','ng'],
+   ['THR-WH','刺繍糸 ホワイト','2本','ok'],['ADJ-RAIL','アジャスター レール式','18個','ng']]
+};
+const HANDS={
+ 'JSD-2609-001':[['09/01 10:20','発送','岡山・T社（裁断）','22','松下'],
+   ['09/02 15:40','受領','岡山・T社（裁断）','22','山崎']],
+ 'JSD-2609-004':[['08/29 09:10','発送','鳥取・K社（裁断）','18','政川'],
+   ['09/03 —','受領予定','鳥取・K社（裁断）','18','—']],
+ 'JSD-2609-002':[]
+};
+function drawDetail(){
+  const id=$('ordPick').value, o=ORDERS.find(x=>x.id===id);
+  $('dSpec').innerHTML=`<tr><th>案件番号</th><td class="mono">${o.id}</td></tr>`
+    +`<tr><th>チーム</th><td>${esc(o.team)}様</td></tr>`
+    +`<tr><th>内容</th><td>${esc(o.item)}　<span class="mono">${o.qty}</span>点</td></tr>`
+    +`<tr><th>希望納期</th><td class="mono">2026/${o.due}</td></tr>`
+    +Object.entries(o.spec).map(([k,v])=>`<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('');
+  const mats=DETAIL_MAT[id]||[['—','この案件の資材データはダミー未設定','—','ok']];
+  $('dMat').innerHTML=mats.map(m=>`<tr><td class="mono">${m[0]}</td><td>${esc(m[1])}</td>
+    <td class="r mono">${m[2]}</td>
+    <td class="c">${m[3]==='ok'?'<span class="tag">引当済</span>':'<span class="tag k">不足</span>'}</td></tr>`).join('');
+  const labs=['資材手配','プリントデータ作成','転写','裁断','縫製','刺繍','検品','出荷'];
+  const stt=['未着手','進行中','完了','停止'];
+  $('dTL').innerHTML=o.st.map((s,i)=>s===-1?'':`<li>
+    <span class="tm">${s===2?'完了':s===1?'進行中':s===3?'停止':'—'}</span>
+    <span class="tb"><b>${labs[i]}</b><small>${
+      s===3?'資材不足のため停止中':s===2?'記録済み':s===1?'作業中':'着手待ち'}</small></span>
+    <span class="st ${s>=1?'on':''}">${stt[s]}</span></li>`).join('');
+  const h=HANDS[id]||[];
+  $('dHand').innerHTML=h.length?h.map(r=>`<tr><td class="mono">${r[0]}</td><td>${r[1]}</td>
+    <td>${esc(r[2])}</td><td class="r mono">${r[3]}</td><td>${r[4]}</td></tr>`).join('')
+    :'<tr><td colspan="5" style="color:var(--i40)">受け渡し記録なし</td></tr>';
+}
+
+/* ===== nav ===== */
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('nav button').forEach(x=>x.classList.remove('on'));
+  document.querySelectorAll('.page').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); $('p-'+b.dataset.p).classList.add('on');
+  window.scrollTo(0,0);
+});
+document.querySelectorAll('[data-f]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('[data-f]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); drawBoard(b.dataset.f);
+});
+document.querySelectorAll('[data-mf]').forEach(b=>b.onclick=()=>{
+  document.querySelectorAll('[data-mf]').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); drawMat(b.dataset.mf);
+});
+
+/* init */
+$('ordPick').innerHTML=ORDERS.map(o=>`<option value="${o.id}">${o.id}　${o.team}様</option>`).join('');
+$('ordPick').value='JSD-2609-004';
+$('ordPick').onchange=drawDetail;
+drawBoard(); drawGantt(); drawCap(); drawMat(); drawSolve(); drawPO(); drawDetail();
+</script>
+</body>
+</html>
