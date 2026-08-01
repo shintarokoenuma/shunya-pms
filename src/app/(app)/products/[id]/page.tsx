@@ -328,7 +328,7 @@ export default async function ProductDetailPage({
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">製作ラウンド</CardTitle>
+            <CardTitle className="text-base">サンプル製作ラウンド</CardTitle>
             <Button asChild size="sm">
               <Link href={`/samples/new?productId=${item.id}`}>
                 <Plus className="mr-1 h-4 w-4" />
