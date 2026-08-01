@@ -752,6 +752,9 @@ export async function updateProduct(
       | "deletedAt"
       | "sketchImages"
       | "sketchThumbPath"
+      // B-094: 縫製指示(sewingInstructions) は専用 action updateSewingInstructions が
+      //   専用 AuditLog で管理し updateProduct は触らないため、基本情報の監査スナップショットからは除外する。
+      | "sewingInstructions"
     >
 
     const beforeData = {

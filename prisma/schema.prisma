@@ -2031,6 +2031,12 @@ model Product {
   // B-027: 一覧/進行表用に先頭サムネ（sortOrder 最小）のパスを非正規化保持。0枚なら null。
   sketchThumbPath String? @map("sketch_thumb_path") @db.VarChar(500)
 
+  // B-094: 縫製指示（固定5項目＋縫製指示6項目）。候補値は enum 化せず文字列で保持
+  // （自由入力上書きを許可し、候補は運用で育てるため）。形は
+  // src/lib/types/sewing-instruction.ts の SewingInstruction 型 + Zod で保証。
+  // Specification.stitchSpec 等（休眠）とは別レイヤー（spec §3-1）。
+  sewingInstructions Json? @map("sewing_instructions")
+
   // リレーション
   inquiry         Inquiry?               @relation(fields: [inquiryId], references: [id])
   modelCode       ModelCode              @relation(fields: [modelCodeId], references: [id])

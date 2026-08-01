@@ -38,6 +38,8 @@ import { getProductionEstimateSection } from "@/lib/actions/production-estimates
 import { ProductOrdersSection } from "../_components/product-orders-section"
 import { getProductOrders } from "@/lib/actions/product-orders"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
+import { SewingInstructionSection } from "../_components/sewing-instruction-section"
+import { parseSewingInstruction } from "@/lib/validators/sewing-instruction"
 import { RoughEstimateSection } from "../_components/rough-estimate-section"
 import {
   listRoughEstimatesByProduct,
@@ -530,6 +532,19 @@ export default async function ProductDetailPage({
 
       {/* 資材所要量（B-067 D4ア・量産数×用尺の計算ビュー・read-only） */}
       <MaterialRequirementSection skus={skus} items={materialReqItems} />
+
+      {/* B-094: 縫製指示（固定5＋縫製指示6・Product.sewingInstructions Json） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">縫製指示</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SewingInstructionSection
+            productId={item.id}
+            value={parseSewingInstruction(item.sewingInstructions)}
+          />
+        </CardContent>
+      </Card>
 
       {/* ⑪概算量産見積（QE-1R・量産軸の提示価格） */}
       <Card>
