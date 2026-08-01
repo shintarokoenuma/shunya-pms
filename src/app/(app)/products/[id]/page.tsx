@@ -332,7 +332,7 @@ export default async function ProductDetailPage({
             <Button asChild size="sm">
               <Link href={`/samples/new?productId=${item.id}`}>
                 <Plus className="mr-1 h-4 w-4" />
-                サンプル作成
+                ラウンド追加
               </Link>
             </Button>
           </div>
