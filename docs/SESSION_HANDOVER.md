@@ -1,105 +1,142 @@
-# SESSION_HANDOVER.md（2026-08-01 締め / #113〜#116 の4本本番リリース・UI/帳票設計整理）
+# SESSION_HANDOVER.md（2026-08-02 締め / B-094 縫製指示 完走・B-099・設計追補）
 
 ## ⓪ プロジェクト棲み分け（毎回先頭・要目視確認）
 対象: shunya-pms（github.com/shintarokoenuma/shunya-pms / ~/shunya-production-system /
 本番 shunya-pms-web-production.up.railway.app）。saagara-v2 とは完全に別物。
 ★localhost:3000 は saagara-rebuild 使用中。shunya-pms の dev は PORT=3001。
-★複数 PR 並行時のローカル確認は必ず git branch --show-current から
-（本セッションで2回「変わってない」の原因が起動ブランチ違いだった）。
+★ローカル確認の第一手順は git branch --show-current。
+
+## ⓪-b 運用ルール追加（2026-08-02・慎太郎さん指示）
+**PR を提示するときは毎回、確認用コマンド一式を必ず添える**（省略しない）:
+
+    cd ~/shunya-production-system
+    git checkout <branch>
+    git pull
+    git branch --show-current   # ★対象ブランチであること
+    PORT=3001 npm run dev
+
+→ shunya-pr-url-checklist スキルへの恒久追加が必要（未実施・次セッションで対応）。
 
 ## ① 現在フェーズと完了状態
-- フェーズ: 業務トランザクション期。(B) 量産発注生成が本番稼働入り。
-- 本セッションで本番リリース（4本・すべて migration なし）:
-  - **PR #114（5b98206）**: B-088 チェックボックスクリック範囲修正（PE/QE-1R 別枠計上）。
-  - **PR #113（3e2e1d5）**: (B) 量産発注生成 Part1-8（PoItem.productColorwayId 配管＋
-    PO DRAFT 編集ゲート／B-074／生成コンテキスト／生成画面／生成パイプライン／
-    品番カルテ発注セクション／PO 詳細カラーウェイ表示／#orders 着地）。
-  - **PR #115（2154be0）**: 品番カルテ UI 再構成（セクション並び替え=ステータス→
-    製作ラウンド→基本情報→品番・分類→シーズン→数量・納期→絵型→カラー×数量→BOM→
-    マーキング→概算→量産見積→実績原価→発注／カラー展開＋数量マトリクス統合／
-    「サンプル製作」→「製作ラウンド」改名。統合時に色未設定 colorway クラッシュの
-    既存バグ修正込み）。
-  - **PR #116（236820f）**: B-095 グローバル検索（1窓統合・カテゴリ別結果・
-    Cmd+K パレット・ダッシュボード検索窓・伝票番号プレフィックス優先）。
-- 本番確認: #113/#114/#115 は慎太郎さん確認済み。#116 は本番 Cmd+K の軽い確認のみ残
-  （「PE-2026」「AOI」でヒット確認）。
+- フェーズ: 業務トランザクション期。B-094 縫製指示が本番稼働入り。
+- 本セッションで本番リリース:
+  - **PR #117（4e08220）**: B-094 縫製指示。migration 44本目
+    `20260801000000_sewing_instructions`（triple-gate 3ゲート完走）。
+  - **PR #118（cb16234）**: B-099 サンプル製作ラウンドの文言整理（3コミット・
+    見出し／ボタン／コメント）。migration なし。
+- docs 直 push: 77c730d（reference 2点）→ da21379（B-094 spec v1.0）→ fc78fbf（追補 v0.1）
+- **main HEAD（本メモ時点）: fc78fbf**
 
 ## ② 未マージ PR
 なし（open 0本）。
 
-## ③ dev DB の状態
-- dev = hopper.proxy.rlwy.net:12921。本番 = shuttle:16099（Claude Code 接続禁止）。
-- PO-2026-0005・WO-2026-0005「量産発注（PE-2026-0001）」が dev に現存
-  （慎太郎さんの確認用・削除しないこと）。PO/WO-2026-0003/0004 等の手動 DRAFT も現存。
-- PE-2026-0001（分母100・最終4200）/ PE-2026-0002（300枚見積もり）現存。
-- VERIFY 系残留 0。本番 DB: migration 43本・追加なし。
+## ③ DB の状態
+- dev = hopper.proxy.rlwy.net:12921 / 本番 = shuttle.proxy.rlwy.net:16099
+- **products.sewing_instructions JSONB NULL** を dev・本番とも適用済み。
+  既存行はすべて NULL・件数不変（dev 2件 / 本番 2件）。
+- 本番 migration: distinct 44・unfinished 0。schema↔本番DB 乖離ゼロ（empty migration 確認）。
+- ~/prod-url-tmp.txt は削除済み（確認済み）。
 
 ## ④ ナレッジ登録状況（鉄則4）
-- 新規 spec なし（本セッションは実装とバックログ整理のみ）。未同期なし。
-- B-094 着手時に仕様確認書を作る場合は保存＋ナレッジ登録を忘れないこと。
+- 本セッション確定 spec:
+  - `b-094-sewing-instruction-spec-confirmation-v1_0-2026-08-01.md`（da21379）
+  - `production-axis-spec-addendum-v0_1-2026-08-02.md`（fc78fbf）
+- **上記2本のプロジェクトナレッジ登録が必要**（B-094 spec は登録済みか要確認）。
+- reference 2点は docs/reference/＋ナレッジ両方に保存済み（77c730d・実体確認済み）。
 
 ## ⑤ 次セッションで最初にやること（優先順）
-1. **B-094 縫製指示（migration あり・項目確定済み）**: Product に Json 列1本。
-   - 固定フィールド（プルダウン既定候補＋自由入力上書き可）:
-     ネーム位置／洗濯ネーム位置／仕上げ方法／製品後加工／下げ札
-   - 縫製指示（5項目のみ）: 糸（地色・その他）／ステッチ（番手）／
-     柄合わせ（有・無）／差し込み（不可・組合せ・一方向）／生地方向（並・逆）
-   - 箇所別始末表は作らない（慎太郎さん確定 2026-08-01）。
-   - 配置は「マーキング」と「概算量産見積」の間（既定案・未異議）。
-   - 軽い仕様確認（列名・Json 形・プルダウン候補値）→ migration dry-run 停止点
-     → triple-gate の通常手順。
-2. B-054 段1「品番サマリー1枚 PDF」の設計（絵型＋ヘッダ＋色×サイズ＋BOM 附属
-   マトリクス・@react-pdf/renderer 流用・migration ほぼ不要）。B-091 ピクトグラムと
-   デザイン一貫で検討。
-3. 本番での (B) 初生成の立ち会い（実データの SKU 数量・相手先を揃えてから実施）。
-4. 進行表叩き台 HTML（生産進行_納期_資材管理_UI叩き台_v0_1.html・別案件の
-   UI プロトタイプ）を docs/reference/ ＋ project knowledge に保存
-   （shunya-reference-archive 手順・慎太郎さんの Mac ローカルパス確認待ち）。
-   あわせてウエスタンSH 縫製仕様書 Excel（26A-SH01・B-054 原本候補）の
-   保存も慎太郎さんに要否確認。
+1. **B-101 + B-096 の同時設計**（量産進行）。ProgressTask phase=PRODUCTION は
+   箱だけあって未実装。品番カルテのステータス履歴セクションを「進行」セクションに
+   拡張する方向（追補 §3）。B-096 進行表ボードと同じ ProgressTask を参照するため
+   必ず同時設計。着手時に仕様確認書。
+2. **B-054 段1「品番サマリー1枚 PDF」**。B-094 の縫製指示を載せる前提で Json 形・
+   ラベル定数を設計済み（SEWING_INSTRUCTION_LABELS を流用）。B-091 と一貫デザイン。
+3. **B-102 リピート系譜**（追補 §2 の要件を仕様確認書で詰める）。
+4. shunya-pr-url-checklist スキルへの⓪-b 追加。
+5. 本番での (B) 量産発注 初生成の立ち会い（実データが揃ってから）。
 
-## ⑥ 申し送り・バックログ（本セッション起票・更新分）
-- **B-090（新規）**: カルテ一覧の2段表示化（1段目=絵型大・品名・品番等／2段目=
-  カラー・数量・進行状況。一覧から進行状況を更新できる操作性まで含む）。
-  北極星: 「詳細に行かずカルテ一覧だけで大枠把握と進行管理」。B-082a（サムネ拡大）
-  と同時設計。着手時に仕様確認書。次フェーズ送り可（慎太郎さん）。
-- **B-091（新規）**: ピクトグラム/アイコンでの視認性向上（DRAFT/量産/PO/WO 等を
-  マーク＋色で）。B-054 段1 と一貫デザイン。
-- **B-092（新規）**: サイドバー自動折りたたみ（通常アイコン帯・ホバー展開）。
-- **B-093（新規）**: モバイル対応（レスポンシブ）。
-- **B-094**: 縫製指示（⑤-1 参照・次セッション最優先）。
-- **B-095**: グローバル検索 → PR #116 で完了・クローズ。
-- **B-096（新規）**: 進行表ボード（品番×工程マトリクス）。既存 ProgressTask の
-  status をドット表示（未着手/進行中/完了/SKIPPED=対象外）・遅延行ハイライト・
-  フィルタ。v1 は migration なしで既存データのみ、ガント/タスク期日追加は v2。
-  B-090 と統合設計・優先度は B-094→B-054 段1 の後。参考: 進行表叩き台 HTML
-  （⑤-4 で reference 保存予定）。在庫引当タブの設計思想（動的判定・警告の
-  重み分け）は将来の在庫系（B-023 系）の一級参考資料。
-- **B-089**: PO/WO update action の DRAFT ガード（直リクエスト対策）。優先度中。
-- **B-087**: BOM 素材 Select の SearchableSelect 化（個別設計）。
-- (B) 後続の種: procurementRoute の PoItem/WoItem への値運搬・生成 UX 改善続き
-  （生成結果サマリ画面案・生成画面2段化案は未議論のまま持ち越し）。
-- 既存: B-072〜B-077・B-082a/b・B-084・B-086。
-- B-054 メモ: 現場 Excel 様式（ウエスタンSH 縫製仕様書）を 2026-07-31 に受領・
-  構造は 20260713_輸出入書類と縫製仕様書_構造メモ.md §3 と同型確認済み。
+## ⑥ 本セッションの主要な学び・事故と対策
 
-## ⑦ 本日マージした PR
-- PR #114: fix/b088-checkbox-click-area → 5b98206
-- PR #113: feat/b-production-order-generation → 3e2e1d5
-- PR #115: feat/product-page-reorder → 2154be0
-- PR #116: feat/b095-global-search → 236820f
+### 「保存済みと言って保存されていない」事故の原因究明と恒久対策
+前セッションのメモ④⑤-4 に「reference 2点を保存済み」と書いたが、実際には
+docs/reference/ に存在せず commit もされていなかった。原因は3つとも構造的:
+1. **指示文と本文をコードブロック2つに分けた** → 貼り漏れが物理的に起こる。
+   実際に本セッションでも Claude Code が「本文が含まれていません」と聞き返した。
+2. **「指示を出した」を「完了した」として転記した** → live 確認を挟んでいない。
+3. **バイナリはチャット添付から Claude Code に届かない** → 原本パス未確定のまま指示。
+→ **新スキル `file-write-verification` を作成し慎太郎さんが登録済み**。
+   鉄則: (1) 1指示=1コードブロック（cat <<'EOF' に本文全文埋め込み）
+        (2) 検証コマンド同梱・raw 出力を見るまで「完了」と書かない
+        (3) バイナリは Claude.ai 側から present_files で配布（経路A）
+   本セッションはこのスキルに従い、全保存で検証4点（ls/wc/git log/unpushed）を確認した。
 
-## ⑧ 設計確定事項（本セッション）
-- 品番カルテ並び順・セクション名「製作ラウンド」・カラー×数量統合（PR #115 で実装済み）。
-- B-094 の項目構成（⑤-1 のとおり・箇所別始末表なし）。
-- グローバル検索は1窓統合＋Cmd+K 常設（2窓分離は不採用・慎太郎さん承認）。
-- カルテ一覧の北極星: 一覧だけで大枠把握＋進行管理（B-090 の設計軸）。
+### migration 検証の環境固有事項
+- **`prisma db execute` は prisma.config.ts の都合で `--url` 必須**。
+  migration 検証は最初から psql を使うこと。
+- **`SHADOW_DATABASE_URL` 未設定**（env・.env とも）。`migrate diff --from-migrations`
+  は shadow 必須のため使えない。代替: `--from-schema-datamodel`（shadow 不要・静的）で
+  「変更前 schema → 変更後 schema」の差分 SQL を出し、手書き SQL と突き合わせる。
+  実際の手順:
+      git show HEAD:prisma/schema.prisma > /tmp/schema_before.prisma
+      npx prisma migrate diff --from-schema-datamodel /tmp/schema_before.prisma \
+        --to-schema-datamodel prisma/schema.prisma --script
+  → **B-097: shadow DB 整備**として起票（型変更・制約追加を伴う migration で必要になる）。
 
-## ⑨ 運用の教訓（本セッション追加）
-- **ローカル確認の第一手順は git branch --show-current**。本セッションで2回、
-  「機能が無い/変わってない」の原因が起動ブランチ違いだった。確認案内には
-  毎回ブランチ確認を含める（⓪にも恒久記載）。
-- 完了報告と実画面が食い違ったら (a) 起動ブランチ (b) 報告乖離 の順で切り分ける。
-  今回は2回とも (a) だった。
-- 統合系リファクタでは「表示項目の差分一覧を PR 本文に記載」が有効だった
-  （情報欠落ゼロの検収がしやすい）。
+### 本番 _prisma_migrations の 60 vs 43 は無害（調査済み）
+- total 60 / distinct_names 43 / unfinished 0 / rolled_back 0。
+- 初期17本（20260516_init 〜 20260528_add_material_category_status_level_indexes）が
+  各2回記録された重複。過去の baseline 二重記録。schema 状態に影響なし。
+- `migrate deploy` は migration_name 単位判定のため影響を受けない
+  （実際 B-094 の1本のみ適用された）。
+- **起票不要**（当初 B-098 として起票予定だったが取り下げ）。
+
+### ProductAuditField のコンパイル時ゲート
+Product にスカラを足すと `satisfies Record<ProductAuditField, unknown>` が
+ビルド失敗する = 「監査に載せるか除外するか必ず決めよ」という意図的な保険。
+B-094 では B-027（sketchImages）と同型で **Exclude** を選択。
+→ **専用 action の専用 AuditLog が必須**。B-094 では updateSewingInstructions に実装済み。
+
+## ⑦ 本セッションの設計確定（詳細は追補 v0.1 を参照）
+- **量産に「ラウンド」概念は無い**。PR #115 のコメント「量産ラウンドも含む」を撤回。
+- **品番カルテ ⊃ サンプル製作ラウンド群 + 量産1回**。「カルテ＝量産1回分」ではない。
+- **追加生産は別 Product 派生**（単純な数量追加も含む）。先方品番は据え置き
+  （clientProductCode に一意制約なし）。親子は ProductRepetitionLineage。
+- 判断基準は「先方の発注書が別か」ではなく「**原価と納期を別に管理する必要があるか**」。
+- リピート時: 仕様・BOM 生地・付属は**コピー**／納期・数量は**ブランク**／
+  **コストはコピーではなく参照表示**（値上がり・小ロット割増の見落とし防止）。
+
+## ⑧ B-094 の実装内容（完了）
+- `Product.sewingInstructions Json? @map("sewing_instructions")`（@db 指定なし）
+- 固定5項目: ネーム位置／洗濯ネーム位置／仕上げ方法／製品後加工／下げ札
+- 縫製指示6項目: 裏／糸／ステッチ／柄合わせ／差し込み／生地方向
+  （※当初5項目だったが「裏」を追加して6項目で確定）
+- 候補値は **enum 化しない**（自由入力上書き可・運用で育てる）。
+  `src/lib/types/sewing-instruction.ts` に型＋LABELS／OPTIONS／ORDER／EMPTY 定数。
+- 差し込みは3値（不可／組合せ／一方向）。現物の「可」「着内一方」は不採用。
+- スコープ外: 肩パット／釦穴種別／芯使用箇所／箇所別始末表。Json なので後から追加可
+  （追加時は version を 2 に上げる）。
+- `Specification` モデル（stitchSpec 等）は **src 参照ゼロ＝完全休眠**を確認し、
+  相乗りせず Product 新設を選択（B-027 の前例に揃える）。
+- 配置: BOM → マーキング実測 → 資材所要量 → **縫製指示** → 概算量産見積。
+
+## ⑨ バックログ（本セッション更新分）
+- **B-097（新規）**: SHADOW_DATABASE_URL 未設定の整備。
+- **B-101（新規）**: 量産進行＝ステータス履歴セクションの「進行」セクション化。
+  B-096 と同時設計。
+- **B-102（新規）**: リピート系譜の実装（ProductRepetitionLineage・コピー機能・
+  前回コスト参照表示・ModelCode 累積更新）。
+- **B-099**: 完了（PR #118）。
+- **B-094**: 完了（PR #117）。
+- 既存: B-054 段1 / B-090 / B-091 / B-092 / B-093 / B-096 / B-089 / B-087 /
+  B-072〜B-077 / B-082a/b / B-084 / B-086 / B-023 / B-024 / B-020 / B-065 redesign。
+- **B-098 は欠番**（_prisma_migrations 調査の結果、起票不要と判断）。
+
+## ⑩ 本日のコミット
+- 77c730d docs: 現場資料2点を reference 保存
+- da21379 docs: B-094 仕様確認書 v1.0
+- e28fc26 feat(b094): schema + 中立型（feature ブランチ）
+- e52bacc feat(b094): UI + 専用action（feature ブランチ）
+- 4e08220 PR #117 マージ（B-094）
+- 99f4484 / 5719ba0 / 6e48caa fix(b099)（feature ブランチ）
+- cb16234 PR #118 マージ（B-099）
+- fc78fbf docs: production-axis 追補 v0.1
