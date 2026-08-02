@@ -324,15 +324,17 @@ export default async function ProductDetailPage({
         </CardContent>
       </Card>
 
-      {/* ②製作ラウンド（旧「サンプル製作セット」・量産ラウンドも含む実態に合わせ改名・S-2） */}
+      {/* ②サンプル製作ラウンド（SampleProduction・1st/2nd/3rd）。
+          量産に「ラウンド」概念は無い（追加生産は ProductRepetitionLineage で
+          別 Product として派生する設計）ため、本セクションはサンプル専用・S-2 */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">製作ラウンド</CardTitle>
+            <CardTitle className="text-base">サンプル製作ラウンド</CardTitle>
             <Button asChild size="sm">
               <Link href={`/samples/new?productId=${item.id}`}>
                 <Plus className="mr-1 h-4 w-4" />
-                サンプル作成
+                ラウンド追加
               </Link>
             </Button>
           </div>
