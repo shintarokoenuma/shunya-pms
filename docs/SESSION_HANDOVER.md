@@ -171,3 +171,90 @@ PR #115 のコメント「量産ラウンドも含む」を本セッションで
 - fc78fbf docs: production-axis 追補 v0.1
 - 7842810 docs: 引き継ぎメモ（午前分）
 - 0d64edf docs: B-101+B-096 仕様確認書 v0.1
+
+---
+
+# 【重要訂正】2026-08-04 追記 — migration は本番デプロイ時に自動適用される
+
+## 判明した事実（実測）
+
+`package.json` の scripts:
+
+    "start": "prisma migrate deploy && next start"
+
+`railway.json` / `railway.toml` / `nixpacks.toml` / `Dockerfile` / `Procfile` は
+**すべて未設定** → Railway は nixpacks 既定で `npm start` を使う。
+リポジトリ内で `prisma migrate deploy` の記述は**この1箇所のみ**（全体 grep 済み）。
+
+→ **本番コンテナ起動のたびに未適用 migration が自動適用され、その後アプリが起動する。**
+→ **PR のマージ = Railway 自動デプロイ = migration 自動適用。**
+
+## これまでの記述は誤りだった
+
+旧メモの triple-gate「dev 適用 → マージ → 本番 dry-run → 本番 `migrate deploy`」は
+**順序が誤っている**。マージ後に dry-run を打っても手遅れ。
+
+実証（B-101 PR1 / migration 45）:
+- PR #119 を 2026-08-03 にマージ
+- 本番 `_prisma_migrations.finished_at` = **2026-08-03 22:57:25 UTC**（マージ後デプロイ時刻）
+- マージ後に dry-run を実行 → `ERROR: enum label "CUTTING" already exists`
+- `enum_range` は既に **17値**、`distinct_names` は 44 → **45**
+
+今回は enum 追加（非破壊・DML なし）だったため実害ゼロ。
+**破壊的 migration だったら検証前に本番へ入っていた。**
+
+`B-094`（migration 44）の「triple-gate 3ゲート完走」という記述も、
+`finished_at` = 2026-08-01 15:40 がデプロイ時刻と一致するため、
+**3つ目のゲートは実際には no-op（適用済みで何も起きなかった）だった可能性が高い。**
+
+## 正しい 4 ゲート（以後これに従う）
+
+- **ゲート1: dev 適用**
+  dev は `_prisma_migrations` を持たない（db push 由来）ため `migrate dev` は使えない
+  （drift 検知で reset を要求される）。静的 diff → 手書き migration → psql 適用。
+
+      git show HEAD:prisma/schema.prisma > /tmp/schema_before.prisma
+      npx prisma migrate diff --from-schema-datamodel /tmp/schema_before.prisma \
+        --to-schema-datamodel prisma/schema.prisma --script
+
+- **ゲート2: 本番 dry-run【★マージ前に実施★】**
+  Railway psql Console で `BEGIN` → 対象 SQL → `ROLLBACK`。
+  構造と影響行数（0件）を確認。**COMMIT しない。**
+
+- **ゲート3: マージ**
+  ★マージ = 自動デプロイ = migration 自動適用。**マージボタンが本番適用ボタン。**
+
+- **ゲート4: 適用結果の確認**
+  `_prisma_migrations` の `finished_at` / `applied_steps_count` / `rolled_back_at`
+  ＋ 対象オブジェクト（enum 値・カラム等）の実測。
+
+## 是正方針（慎太郎さん確定 2026-08-04）
+
+`start` から `migrate deploy` は**外さない**。外すとデプロイのたびに
+コードとスキーマが乖離するリスクが出てかえって危険。
+**ゲートの順序を入れ替えることで対処する。**
+
+## 環境の追加事実
+
+- **dev DB には `_prisma_migrations` テーブルが存在しない**（db push 由来）。
+  これが `migrate dev` が reset を要求する原因。dev への migration 履歴記録は不要。
+  → B-097（SHADOW_DATABASE_URL 整備）と同根の環境課題として扱う。
+- **`shunya-pr-url-checklist` スキルが未インストールだった**
+  （`~/.claude/skills/` ディレクトリ自体が不在。zip バックアップのみ存在）。
+  2026-08-04 に `shunya-backups/archives/` から復元し、4ゲート節を追記（113→147行）。
+  → **他のスキルも消えている可能性がある。棚卸しが必要（未実施）。**
+
+## B-101 PR1 の状態（完了）
+
+- PR #119 マージ済み（**d81c8de**）。migration 45 適用済み・`rolled_back_at` NULL。
+- 本番 enum 17値。本番 `progress_tasks` は SAMPLE 25 のみ（PRODUCTION 未生成＝正常）。
+- dev 実測: PRODUCTION タスク11行・冪等ガード実証（2 PE 生成でも11行のまま）・SAMPLE 58 無傷。
+- 次: PR2（進行セクション UI）→ PR3（自動算出）。
+
+## 残っている宿題
+
+- **⓪-b の スキル追記**（PR 提示時の確認コマンド一式）— 今回も未実施。
+- **スキルの棚卸し**（他スキルの存在確認・必要なら復元）。
+- **B-086 の再定義**: PDF は全て「全ページプレビュー確認 → 承認後 DL」に変更
+  （慎太郎さん指示 2026-08-04）。対象は見積 PDF・発注 PDF・PE 見積 PDF など全 PDF 導線。
+- **同一品番の生地が PO 生成時に合算されるか**の確認（慎太郎さん質問 2026-08-04・未調査）。
