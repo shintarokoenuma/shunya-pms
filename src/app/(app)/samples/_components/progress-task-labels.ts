@@ -20,6 +20,10 @@ export const PROGRESS_TASK_TYPE_LABELS: Record<ProgressTaskType, string> = {
   SHIPPING: "出荷明細",
   DELIVERY: "納品書",
   INVOICE: "請求書",
+  // B-101: 量産進行タスク用
+  CUTTING: "裁断",
+  FINISHING: "仕上げ",
+  PACKING: "梱包",
 }
 
 export const PROGRESS_TASK_STATUS_LABELS: Record<ProgressTaskStatus, string> = {
