@@ -1,6 +1,12 @@
 "use server"
 
-import { WorkOrderType, WorkOrderCategory } from "@prisma/client"
+import {
+  WorkOrderType,
+  WorkOrderCategory,
+  ProgressTaskPhase,
+} from "@prisma/client"
+import { prisma } from "@/lib/prisma"
+import { auth } from "@/lib/auth"
 import {
   getProductionOrderGenerationContext,
   type ActionResult,
@@ -8,6 +14,7 @@ import {
 } from "@/lib/actions/production-estimates"
 import { createPurchaseOrder } from "@/lib/actions/purchase-orders"
 import { createWorkOrder } from "@/lib/actions/work-orders"
+import { buildProductionTaskRows } from "@/lib/progress-task-template"
 import {
   generateProductionOrdersInputSchema,
   type GenerateProductionOrdersInput,
@@ -325,6 +332,43 @@ export async function generateProductionOrders(
       }
     }
     createdWos.push(r.data)
+  }
+
+  // B-101: 量産進行タスクを生成（冪等・失敗しても PO/WO 生成を巻き込まない）。
+  try {
+    const session = await auth()
+    const companyId = session?.user?.companyId
+    const userId = session?.user?.id
+    if (companyId) {
+      const existing = await prisma.progressTask.count({
+        where: {
+          companyId,
+          productId: ctx.pe.productId,
+          phase: ProgressTaskPhase.PRODUCTION,
+          deletedAt: null,
+        },
+      })
+      if (existing === 0) {
+        const rows = buildProductionTaskRows(companyId, ctx.pe.productId)
+        await prisma.progressTask.createMany({ data: rows })
+        await prisma.auditLog.create({
+          data: {
+            companyId,
+            userId,
+            action: "CREATE",
+            entityType: "ProgressTask",
+            entityId: ctx.pe.productId,
+            afterData: {
+              generated: rows.length,
+              productId: ctx.pe.productId,
+              phase: "PRODUCTION",
+            },
+          },
+        })
+      }
+    }
+  } catch {
+    // B-101: タスク生成の失敗は PO/WO 生成を巻き込まない（通常 return へ）。
   }
 
   return {

@@ -1,4 +1,8 @@
-import { Prisma, ProgressTaskType } from "@prisma/client"
+import {
+  Prisma,
+  ProgressTaskType,
+  ProgressTaskEvidenceMode,
+} from "@prisma/client"
 
 /**
  * S-3: 進行チェックリストの SAMPLE phase 定型テンプレート（A-2＝ラウンド単位）。
@@ -79,3 +83,58 @@ export const DOC_DRIVEN_TASK_TYPES: ReadonlySet<ProgressTaskType> = new Set([
   ProgressTaskType.SEWING,
   ProgressTaskType.PROCESSING,
 ])
+
+// =============================================================================
+// B-101: PRODUCTION phase 定型テンプレート（spec §9）
+// 量産発注生成（generateProductionOrders）成功時に自動生成する 11 種。
+// SAMPLE 側とは別テンプレート（行ごとに evidenceMode を明示）。
+// PROCESSING は含めない（PR2 でチェックリスト画面から都度追加・sortOrder 55 起点）。
+// =============================================================================
+
+/** PRODUCTION の PROCESSING 行 sortOrder 起点（INSPECTION(60) の手前） */
+export const PRODUCTION_PROCESSING_SORT_ORDER_BASE = 55
+
+export type ProductionTaskTemplateRow = {
+  taskType: ProgressTaskType
+  sortOrder: number
+  evidenceMode: ProgressTaskEvidenceMode
+  /** FABRIC / TRIM のみ「発注済み ≠ 入荷済み」を別状態で持つため false 初期化。それ以外は null */
+  isReceived: boolean | null
+}
+
+/** PRODUCTION phase 定型 11 種（PROCESSING 除く）。表示は常に sortOrder ASC。 */
+export const PRODUCTION_TASK_TEMPLATE: readonly ProductionTaskTemplateRow[] = [
+  { taskType: ProgressTaskType.FABRIC, sortOrder: 10, evidenceMode: ProgressTaskEvidenceMode.AUTO_FROM_DOC, isReceived: false },
+  { taskType: ProgressTaskType.TRIM, sortOrder: 20, evidenceMode: ProgressTaskEvidenceMode.AUTO_FROM_DOC, isReceived: false },
+  { taskType: ProgressTaskType.GRADING, sortOrder: 30, evidenceMode: ProgressTaskEvidenceMode.AUTO_FROM_DOC, isReceived: null },
+  { taskType: ProgressTaskType.CUTTING, sortOrder: 40, evidenceMode: ProgressTaskEvidenceMode.AUTO_FROM_DOC, isReceived: null },
+  { taskType: ProgressTaskType.SEWING, sortOrder: 50, evidenceMode: ProgressTaskEvidenceMode.AUTO_FROM_DOC, isReceived: null },
+  { taskType: ProgressTaskType.INSPECTION, sortOrder: 60, evidenceMode: ProgressTaskEvidenceMode.MANUAL, isReceived: null },
+  { taskType: ProgressTaskType.FINISHING, sortOrder: 70, evidenceMode: ProgressTaskEvidenceMode.AUTO_FROM_DOC, isReceived: null },
+  { taskType: ProgressTaskType.PACKING, sortOrder: 80, evidenceMode: ProgressTaskEvidenceMode.MANUAL, isReceived: null },
+  { taskType: ProgressTaskType.SHIPPING, sortOrder: 90, evidenceMode: ProgressTaskEvidenceMode.MANUAL, isReceived: null },
+  { taskType: ProgressTaskType.DELIVERY, sortOrder: 100, evidenceMode: ProgressTaskEvidenceMode.MANUAL, isReceived: null },
+  { taskType: ProgressTaskType.INVOICE, sortOrder: 110, evidenceMode: ProgressTaskEvidenceMode.MANUAL, isReceived: null },
+]
+
+/**
+ * PRODUCTION 定型 11 行を createMany 用データに展開する。
+ * generateProductionOrders の生成フックから使う（productId は必須・SP には紐付けない）。
+ */
+export function buildProductionTaskRows(
+  companyId: string,
+  productId: string,
+): Prisma.ProgressTaskCreateManyInput[] {
+  return PRODUCTION_TASK_TEMPLATE.map((t) => ({
+    companyId,
+    productId,
+    sampleProductionId: null,
+    taskType: t.taskType,
+    phase: "PRODUCTION",
+    status: "NOT_STARTED",
+    evidenceMode: t.evidenceMode,
+    processingTypeId: null,
+    sortOrder: t.sortOrder,
+    isReceived: t.isReceived,
+  }))
+}
