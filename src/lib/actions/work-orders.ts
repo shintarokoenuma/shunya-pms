@@ -21,7 +21,10 @@ import {
   type WorkOrderInput,
   type WorkOrderListParams,
 } from "@/lib/validators/work-order"
-import { recomputeTaskStatus } from "./progress-tasks"
+import {
+  recomputeTaskStatus,
+  recomputeProductionTasksForProduct,
+} from "./progress-tasks"
 import { recomputeSampleProductionCosts } from "./sample-production-costs"
 
 /** S-4c-1(G4): 伝票変更後に紐づくタスク status とラウンドのコスト集計を再計算する補助。 */
@@ -1042,6 +1045,8 @@ export async function updateWorkOrderStatus(
         status: true,
         progressTaskId: true,
         samplProductionId: true,
+        productId: true,
+        workCategory: true,
       },
     })
     if (!existing) return { ok: false, error: "作業発注が見つかりません" }
@@ -1063,10 +1068,20 @@ export async function updateWorkOrderStatus(
 
     await recomputeLinks([existing.progressTaskId], [existing.samplProductionId])
 
+    // B-101: 量産進行（PRODUCTION・案C 導出照合）。progressTaskId を持たない WO でも
+    // productId + workCategory + workType で該当タスクを IN_PROGRESS へ昇格させる。
+    if (
+      existing.workCategory === WorkOrderCategory.PRODUCTION &&
+      existing.productId
+    ) {
+      await recomputeProductionTasksForProduct(existing.productId)
+    }
+
     revalidatePath("/work-orders")
     revalidatePath(`/work-orders/${id}`)
     if (existing.samplProductionId)
       revalidatePath(`/samples/${existing.samplProductionId}`)
+    if (existing.productId) revalidatePath(`/products/${existing.productId}`)
     return { ok: true, data: { id } }
   } catch (e) {
     return {

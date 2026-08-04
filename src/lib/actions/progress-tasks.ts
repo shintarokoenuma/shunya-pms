@@ -5,6 +5,8 @@ import {
   ProgressTaskStatus,
   ProgressTaskType,
   WorkOrderStatus,
+  WorkOrderCategory,
+  WorkOrderType,
   type ProgressTask,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
@@ -15,6 +17,7 @@ import {
   PROCESSING_SORT_ORDER_BASE,
   PRODUCTION_PROCESSING_SORT_ORDER_BASE,
 } from "@/lib/progress-task-template"
+import { PRODUCTION_WO_TYPE_MAP } from "@/lib/progress-task-production"
 import {
   updateTaskStatusSchema,
   updateTaskSchema,
@@ -438,7 +441,7 @@ export async function updateTaskStatus(
 
     const existing = await prisma.progressTask.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
-      select: { id: true, status: true, sampleProductionId: true },
+      select: { id: true, status: true, sampleProductionId: true, productId: true },
     })
     if (!existing) {
       return { ok: false, error: "タスクが見つかりません" }
@@ -469,6 +472,7 @@ export async function updateTaskStatus(
     if (existing.sampleProductionId) {
       revalidatePath(`/samples/${existing.sampleProductionId}`)
     }
+    revalidatePath(`/products/${existing.productId}`)
     return { ok: true, data: { id } }
   } catch (e) {
     return {
@@ -498,7 +502,7 @@ export async function updateTask(
 
     const existing = await prisma.progressTask.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
-      select: { id: true, sampleProductionId: true },
+      select: { id: true, sampleProductionId: true, productId: true },
     })
     if (!existing) {
       return { ok: false, error: "タスクが見つかりません" }
@@ -535,6 +539,7 @@ export async function updateTask(
     if (existing.sampleProductionId) {
       revalidatePath(`/samples/${existing.sampleProductionId}`)
     }
+    revalidatePath(`/products/${existing.productId}`)
     return { ok: true, data: { id } }
   } catch (e) {
     return {
@@ -556,7 +561,7 @@ export async function removeProcessingTask(
 
     const existing = await prisma.progressTask.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
-      select: { id: true, taskType: true, sampleProductionId: true },
+      select: { id: true, taskType: true, sampleProductionId: true, productId: true },
     })
     if (!existing) {
       return { ok: false, error: "タスクが見つかりません" }
@@ -584,6 +589,7 @@ export async function removeProcessingTask(
     if (existing.sampleProductionId) {
       revalidatePath(`/samples/${existing.sampleProductionId}`)
     }
+    revalidatePath(`/products/${existing.productId}`)
     return { ok: true, data: { id } }
   } catch (e) {
     return {
@@ -717,6 +723,7 @@ export async function recomputeTaskStatus(taskId: string): Promise<void> {
       select: {
         id: true,
         companyId: true,
+        productId: true,
         taskType: true,
         status: true,
         isReceived: true,
@@ -797,6 +804,105 @@ export async function recomputeTaskStatus(taskId: string): Promise<void> {
     if (task.sampleProductionId) {
       revalidatePath(`/samples/${task.sampleProductionId}`)
     }
+    // B-101: 量産進行（品番カルテ）側にも反映
+    revalidatePath(`/products/${task.productId}`)
+  } catch {
+    // 自動算出の失敗は親アクションを巻き込まない（forward-only の補助処理）
+    return
+  }
+}
+
+// =============================================================================
+// B-101 §4-1: 量産進行の自動算出（案C 導出照合）。
+// progressTaskId を使わず productId + workCategory=PRODUCTION + workType で WO を引く。
+// NOT_STARTED → IN_PROGRESS への昇格のみ（DONE は人が押す・spec P16）。
+// 既存 recomputeTaskStatus（SAMPLE 用・progressTaskId 照合）とは別関数として温存。
+// =============================================================================
+export async function recomputeProductionTasksForProduct(
+  productId: string,
+): Promise<void> {
+  try {
+    const session = await auth()
+    const companyId = session?.user?.companyId
+    if (!companyId) return
+
+    const tasks = await prisma.progressTask.findMany({
+      where: {
+        companyId,
+        productId,
+        phase: "PRODUCTION",
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        taskType: true,
+        status: true,
+        evidenceMode: true,
+        processingTypeId: true,
+      },
+    })
+    if (tasks.length === 0) return
+
+    // PROCESSING 行の processingTypeId → workType を一括解決（N+1 回避）
+    const ptIds = [
+      ...new Set(
+        tasks
+          .map((t) => t.processingTypeId)
+          .filter((v): v is string => !!v),
+      ),
+    ]
+    const ptWorkTypeMap = new Map<string, WorkOrderType>()
+    if (ptIds.length > 0) {
+      const pts = await prisma.processingType.findMany({
+        where: { id: { in: ptIds }, companyId },
+        select: { id: true, workType: true },
+      })
+      for (const p of pts) ptWorkTypeMap.set(p.id, p.workType)
+    }
+
+    let changed = false
+    for (const task of tasks) {
+      // IN_PROGRESS への昇格のみ。NOT_STARTED 以外は触らない（SKIPPED/BLOCKED/DONE 含む）。
+      if (task.status !== ProgressTaskStatus.NOT_STARTED) continue
+      if (task.evidenceMode !== "AUTO_FROM_DOC") continue
+
+      const workType =
+        task.taskType === ProgressTaskType.PROCESSING
+          ? task.processingTypeId
+            ? ptWorkTypeMap.get(task.processingTypeId)
+            : undefined
+          : PRODUCTION_WO_TYPE_MAP[task.taskType]
+      if (!workType) continue
+
+      const woCount = await prisma.workOrder.count({
+        where: {
+          companyId,
+          productId,
+          workCategory: WorkOrderCategory.PRODUCTION,
+          workType,
+          deletedAt: null,
+        },
+      })
+      if (woCount < 1) continue
+
+      await prisma.progressTask.update({
+        where: { id: task.id },
+        data: { status: ProgressTaskStatus.IN_PROGRESS },
+      })
+      await prisma.auditLog.create({
+        data: {
+          companyId,
+          action: "STATUS_CHANGE",
+          entityType: "ProgressTask",
+          entityId: task.id,
+          beforeData: { status: "NOT_STARTED", auto: true },
+          afterData: { status: "IN_PROGRESS", auto: true },
+        },
+      })
+      changed = true
+    }
+
+    if (changed) revalidatePath(`/products/${productId}`)
   } catch {
     // 自動算出の失敗は親アクションを巻き込まない（forward-only の補助処理）
     return
