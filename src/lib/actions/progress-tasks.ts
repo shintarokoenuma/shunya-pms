@@ -13,6 +13,7 @@ import { runWithoutTenantContext } from "@/lib/tenant-context"
 import {
   buildSampleTaskRows,
   PROCESSING_SORT_ORDER_BASE,
+  PRODUCTION_PROCESSING_SORT_ORDER_BASE,
 } from "@/lib/progress-task-template"
 import {
   updateTaskStatusSchema,
@@ -86,6 +87,58 @@ export async function listTasks(params: {
       where: {
         companyId: sess.companyId,
         sampleProductionId: params.sampleProductionId,
+        deletedAt: null,
+      },
+      orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+    })
+
+    const ptIds = [
+      ...new Set(
+        rows
+          .map((r) => r.processingTypeId)
+          .filter((v): v is string => !!v),
+      ),
+    ]
+    const ptMap = new Map<string, string>()
+    if (ptIds.length > 0) {
+      const pts = await prisma.processingType.findMany({
+        where: { id: { in: ptIds }, companyId: sess.companyId },
+        select: { id: true, name: true },
+      })
+      for (const p of pts) ptMap.set(p.id, p.name)
+    }
+
+    const items: ProgressTaskItem[] = rows.map((r) => ({
+      ...r,
+      processingTypeName: r.processingTypeId
+        ? ptMap.get(r.processingTypeId) ?? null
+        : null,
+    }))
+
+    return { ok: true, data: { items } }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "一覧取得に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
+// 1-b. 量産進行の一覧（B-101・品番カルテ。productId + phase=PRODUCTION で引く）
+// =============================================================================
+export async function listProductionTasks(
+  productId: string,
+): Promise<ActionResult<{ items: ProgressTaskItem[] }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const rows = await prisma.progressTask.findMany({
+      where: {
+        companyId: sess.companyId,
+        productId,
+        phase: "PRODUCTION",
         deletedAt: null,
       },
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
@@ -273,6 +326,90 @@ export async function addProcessingTasks(
     })
 
     revalidatePath(`/samples/${sampleProductionId}`)
+    return { ok: true, data: { added: validIds.length } }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "加工の追加に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
+// 4-b. 量産進行の加工行追加（B-101・品番カルテ。addProcessingTasks の写経）
+// =============================================================================
+export async function addProductionProcessingTasks(
+  productId: string,
+  processingTypeIds: string[],
+): Promise<ActionResult<{ added: number }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const parsed = addProcessingTasksSchema.safeParse({ processingTypeIds })
+    if (!parsed.success) {
+      const first = parsed.error.issues[0]
+      return { ok: false, error: first?.message ?? "入力内容に誤りがあります" }
+    }
+
+    const product = await prisma.product.findFirst({
+      where: { id: productId, companyId: sess.companyId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!product) {
+      return { ok: false, error: "品番が見つかりません" }
+    }
+
+    // 指定された ProcessingType が自社・有効か検証
+    const valid = await prisma.processingType.findMany({
+      where: {
+        id: { in: parsed.data.processingTypeIds },
+        companyId: sess.companyId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    })
+    const validIds = valid.map((v) => v.id)
+    if (validIds.length === 0) {
+      return { ok: false, error: "有効な加工種別が指定されていません" }
+    }
+
+    // PROCESSING 行の sortOrder 起点（既存 PROCESSING 件数ぶん後ろにずらす）
+    const existingProcessing = await prisma.progressTask.count({
+      where: {
+        companyId: sess.companyId,
+        productId,
+        phase: "PRODUCTION",
+        taskType: ProgressTaskType.PROCESSING,
+        deletedAt: null,
+      },
+    })
+
+    const rows = validIds.map((processingTypeId, i) => ({
+      companyId: sess.companyId,
+      productId,
+      taskType: ProgressTaskType.PROCESSING,
+      phase: "PRODUCTION" as const,
+      status: ProgressTaskStatus.NOT_STARTED,
+      // S-4c-1(G2): PROCESSING は伝票駆動の自動算出対象
+      evidenceMode: "AUTO_FROM_DOC" as const,
+      processingTypeId,
+      sortOrder: PRODUCTION_PROCESSING_SORT_ORDER_BASE + existingProcessing + i,
+    }))
+    await prisma.progressTask.createMany({ data: rows })
+
+    await prisma.auditLog.create({
+      data: {
+        companyId: sess.companyId,
+        userId: sess.userId,
+        action: "CREATE",
+        entityType: "ProgressTask",
+        entityId: productId,
+        afterData: { addedProcessing: validIds.length, processingTypeIds: validIds },
+      },
+    })
+
+    revalidatePath(`/products/${productId}`)
     return { ok: true, data: { added: validIds.length } }
   } catch (e) {
     return {

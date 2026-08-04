@@ -40,6 +40,11 @@ import { getProductOrders } from "@/lib/actions/product-orders"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
 import { SewingInstructionSection } from "../_components/sewing-instruction-section"
 import { parseSewingInstruction } from "@/lib/validators/sewing-instruction"
+import {
+  listProductionTasks,
+  listActiveProcessingTypesForSelect,
+} from "@/lib/actions/progress-tasks"
+import { ProductionProgressChecklist } from "../_components/production-progress-checklist"
 import { RoughEstimateSection } from "../_components/rough-estimate-section"
 import {
   listRoughEstimatesByProduct,
@@ -224,6 +229,15 @@ export default async function ProductDetailPage({
     }),
   )
 
+  // B-101: 量産進行（PRODUCTION タスク＋加工マスター）
+  const [productionTasksResult, processingOptions] = await Promise.all([
+    listProductionTasks(id),
+    listActiveProcessingTypesForSelect(),
+  ])
+  const productionTasks = productionTasksResult.ok
+    ? productionTasksResult.data.items
+    : []
+
   return (
     <div className="space-y-6 p-6">
       <EntityBreadcrumb
@@ -282,45 +296,58 @@ export default async function ProductDetailPage({
         </div>
       </div>
 
-      {/* ①ステータス履歴 */}
+      {/* ①進行（B-101・上段: 量産進行チェックリスト / 下段: ステータス履歴） */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">ステータス履歴</CardTitle>
+          <CardTitle className="text-base">進行</CardTitle>
         </CardHeader>
-        <CardContent>
-          {item.statusHistory.length === 0 ? (
-            <p className="text-sm text-muted-foreground">履歴がありません</p>
-          ) : (
-            <ul className="space-y-2 text-sm">
-              {item.statusHistory.map((h) => (
-                <li
-                  key={h.id}
-                  className="flex flex-wrap items-center gap-2 border-b pb-2 last:border-b-0 last:pb-0"
-                >
-                  <span className="text-muted-foreground">
-                    {new Date(h.changedAt).toLocaleString("ja-JP")}
-                  </span>
-                  <span>
-                    {h.fromStatus
-                      ? PRODUCT_STATUS_LABELS[h.fromStatus]
-                      : "（新規）"}
-                    {" → "}
-                    <Badge
-                      variant={PRODUCT_STATUS_BADGE_VARIANT[h.toStatus]}
-                      className="ml-1"
-                    >
-                      {PRODUCT_STATUS_LABELS[h.toStatus]}
-                    </Badge>
-                  </span>
-                  {h.changeReason && (
+        <CardContent className="space-y-6">
+          {/* 上段: 量産進行チェックリスト */}
+          <div>
+            <h3 className="mb-2 text-sm font-medium">量産進行</h3>
+            <ProductionProgressChecklist
+              productId={item.id}
+              tasks={productionTasks}
+              processingOptions={processingOptions}
+            />
+          </div>
+          {/* 下段: ステータス履歴（既存 JSX をそのまま移設・read-only） */}
+          <div>
+            <h3 className="mb-2 text-sm font-medium">ステータス履歴</h3>
+            {item.statusHistory.length === 0 ? (
+              <p className="text-sm text-muted-foreground">履歴がありません</p>
+            ) : (
+              <ul className="space-y-2 text-sm">
+                {item.statusHistory.map((h) => (
+                  <li
+                    key={h.id}
+                    className="flex flex-wrap items-center gap-2 border-b pb-2 last:border-b-0 last:pb-0"
+                  >
                     <span className="text-muted-foreground">
-                      （{h.changeReason}）
+                      {new Date(h.changedAt).toLocaleString("ja-JP")}
                     </span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+                    <span>
+                      {h.fromStatus
+                        ? PRODUCT_STATUS_LABELS[h.fromStatus]
+                        : "（新規）"}
+                      {" → "}
+                      <Badge
+                        variant={PRODUCT_STATUS_BADGE_VARIANT[h.toStatus]}
+                        className="ml-1"
+                      >
+                        {PRODUCT_STATUS_LABELS[h.toStatus]}
+                      </Badge>
+                    </span>
+                    {h.changeReason && (
+                      <span className="text-muted-foreground">
+                        （{h.changeReason}）
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </CardContent>
       </Card>
 
