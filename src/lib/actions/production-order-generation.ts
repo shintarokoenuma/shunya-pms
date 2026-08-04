@@ -15,6 +15,7 @@ import {
 import { createPurchaseOrder } from "@/lib/actions/purchase-orders"
 import { createWorkOrder } from "@/lib/actions/work-orders"
 import { buildProductionTaskRows } from "@/lib/progress-task-template"
+import { recomputeProductionTasksForProduct } from "@/lib/actions/progress-tasks"
 import {
   generateProductionOrdersInputSchema,
   type GenerateProductionOrdersInput,
@@ -366,6 +367,8 @@ export async function generateProductionOrders(
           },
         })
       }
+      // B-101 PR3: 生成済み・未生成のどちらでも WO の状況を反映（NOT_STARTED→IN_PROGRESS）。
+      await recomputeProductionTasksForProduct(ctx.pe.productId)
     }
   } catch {
     // B-101: タスク生成の失敗は PO/WO 生成を巻き込まない（通常 return へ）。
