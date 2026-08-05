@@ -1,0 +1,107 @@
+# B-086 PDF プレビュー統一 仕様確認書 v1.0（2026-08-05・確定）
+
+## 0. 本書の前提
+- 2026-08-05 に live コードを read-only で全数確認して起草（記憶からの再構成ではない）。
+- **重要な発見: プレビュー基盤は既に完成しており、4箇所で稼働している。**
+  B-086 は新規開発ではなく **PO/WO を旧方式から新方式へ移行する作業**である。
+- 確認済みファイル: `src/components/pdf/pdf-preview-dialog.tsx`（全文）/
+  PDF route 4本（全文）/ `src/lib/gcs.ts` の `uploadOrderPdf`／
+  PO・WO 詳細ページの DL 導線。
+
+## 1. 現状（実測・2026-08-05）
+
+| 帳票 | route | 方式 | GCS 控え | プレビュー |
+|---|---|---|---|---|
+| 見積書 | `POST /api/quotations/pdf` `{ids}` | 新 | **保存しない** | ✅ |
+| 量産見積 | `POST /api/production-estimates/pdf` `{ids}` | 新 | **保存しない** | ✅ |
+| 発注書 PO | `GET /api/purchase-orders/[id]/pdf` | 旧 | **保存する** | ❌ 直 DL |
+| 作業発注 WO | `GET /api/work-orders/[id]/pdf` | 旧 | **保存する** | ❌ 直 DL |
+
+- **方式の違いと控えの有無が裏返っている。** プレビューがある方は控えを取らず、
+  控えを取る方はプレビューがない。単純統一すると PO/WO の控えが消えるため §3 で扱う。
+- 新方式の稼働箇所4つ: `rough-estimate-section.tsx` / `production-estimate-section.tsx` /
+  `quotations-list.tsx` / `production-estimates-list.tsx`。
+- 旧方式の導線: `purchase-orders/[id]/page.tsx:102` / `work-orders/[id]/page.tsx:100` の
+  `<a href={...} target="_blank">`。
+
+## 2. 既存プレビュー基盤（`pdf-preview-dialog.tsx`・唯一のファイル）
+- `usePdfPreview().open(endpoint, ids, fallbackName)`:
+  `POST {ids}` → `blob` → `URL.createObjectURL` → `Content-Disposition` からファイル名抽出。
+  `close()` で `revokeObjectURL`。
+- `PdfPreviewDialog`: `<iframe src={objectUrl}>` による**全ページプレビュー**
+  （94vh × 96vw の大型モーダル）＋「ダウンロード」（`<a download>`）＋「閉じる」。
+- **これが B-086 の要件「全ページプレビュー → 承認後 DL」そのもの。** 作り直さない。
+
+## 3. GCS 控えの保存タイミング（✓ 確定・案B）
+
+### 決定
+**ダウンロードボタン押下時に保存する。** プレビュー生成時には保存しない。
+
+### 根拠
+- 現行（GET 時保存）は「**開いただけで控えが残る**」。同じ伝票を5回開けば
+  `{kind}/{orderNumber}/{stamp}.pdf` が5本でき、どれが実際に渡したものか判別できない。
+- **DL していない = 相手に渡していない**ため、渡した記録が無くて困る場面は原理上生じない。
+- 案B は控えを減らす変更ではなく、**控えの精度を上げる**変更である。
+
+### 失われないもの（慎太郎さん確認済み・2026-08-05）
+- PDF は DB から**都度生成**しているため、控えが無くても内容の確認・PDF の再作成は
+  いつでもできる。**「伝票が確認できなくなる」ことは起きない。**
+- 控えが持つのは「**その日その内容で相手に渡した**」という凍結記録のみ。
+  発行後に単価・数量を編集すると再生成 PDF は送付物と異なるため、その突合のために残す。
+
+### 実装方式
+- `usePdfPreview` に **DL 時コールバック**を追加する。
+  `<a download>` はクライアント側 blob を保存するだけでサーバーに戻らないため、
+  DL ボタン押下時に別途 API（控え保存用）を叩く。
+- 控え保存 API の失敗は **DL をブロックしない**（現行 `uploadOrderPdf` が
+  失敗時 null を返して継続する作法を踏襲）。
+- 見積・PE は現状どおり**控えを保存しない**（変更しない）。
+
+### 申し送り
+- 旧 GET 方式で溜まった「開いただけの控え」は GCS に残る。
+  **v1 では触らない**（削除は不可逆で危険）。過去分の掃除は **B-115** として起票。
+
+## 4. リクエスト形式の統一（✓ 確定）
+- **PO/WO も `POST {ids}` 形式に揃える**（複数を1PDFに縦積み可能にする）。
+- 根拠: `usePdfPreview` のシグネチャが `(endpoint, ids, fallbackName)` で既に配列前提。
+  単一 ID だけ特別扱いすると呼び出し側が歪む。
+- これにより「今月の発注書をまとめて1本」が将来可能になる。
+- 縦積み時のバリデーション（宛先混在の可否等）は見積の `MIXED_CLIENT` を写経する。
+  **PO/WO は仕入先/外注先が宛先**のため、混在時の扱いは実装時に決める（§7 申し送り）。
+
+## 5. 移行後の到達点
+
+| 帳票 | route | GCS 控え |
+|---|---|---|
+| 見積書 | `POST {ids}` | 保存しない（現状維持） |
+| 量産見積 | `POST {ids}` | 保存しない（現状維持） |
+| 発注書 PO | `POST {ids}` | **DL 時に保存**（変更） |
+| 作業発注 WO | `POST {ids}` | **DL 時に保存**（変更） |
+| 納品書 DLV | `POST {ids}` | DL 時に保存（B-108 PR3 で新規） |
+
+## 6. 作業範囲
+1. `usePdfPreview` に DL 時コールバックを追加（`pdf-preview-dialog.tsx`）。
+2. 控え保存 API を新設（PO/WO 共通・`uploadOrderPdf` を呼ぶだけ）。
+3. `POST /api/purchase-orders/pdf` `{ids}` を新設。既存 `GET [id]/pdf` は**残す**
+   （外部から直リンクされている可能性・削除は別 PR）。
+4. `POST /api/work-orders/pdf` `{ids}` を同様に新設。
+5. PO/WO 詳細ページの `<a href target="_blank">` を
+   `usePdfPreview().open()` ＋ `PdfPreviewDialog` に差し替え。
+6. 旧 GET route から `uploadOrderPdf` 呼び出しを**外す**（開いただけで控えが残る問題の解消）。
+
+- **migration なし・schema 変更なし。** PR 1本で収まる見込み。
+- 一覧からの複数選択 DL（PO/WO 一覧）は本 PR に**含めない**。route が `{ids}` を
+  受けられる状態にするところまで。UI は後続。
+
+## 7. 未確定・実装時に決めること
+- PO/WO を縦積みする際の宛先混在バリデーション（見積の `MIXED_CLIENT` 相当を置くか）。
+- 控え保存 API のパス・認可（`session.user.companyId` で伝票の所有を必ず検証すること）。
+- 旧 `GET [id]/pdf` をいつ削除するか（本 PR では残す）。
+
+## 8. B 起票
+- **B-115**: 旧方式で溜まった GCS 控えの棚卸し・掃除（不可逆のため慎重に）。
+- **B-116**: PO/WO 一覧からの複数選択 → まとめて1PDF（本書 §6 の後続 UI）。
+
+## 9. 関連
+- **B-108 §11** は本書に依存する。納品書 PDF は最初から新方式で作る。
+  実装順は **B-086 → B-108 PR3**。
