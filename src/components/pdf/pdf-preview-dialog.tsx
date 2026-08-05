@@ -84,8 +84,12 @@ export function PdfPreviewDialog({
   url: string | null
   filename: string
   onClose: () => void
-  /** B-086: ダウンロード押下時のコールバック（GCS 控え保存 API を叩く等）。未指定でも動く。 */
-  onDownload?: () => void
+  /**
+   * B-086/B-117: ダウンロード押下時のコールバック（GCS 控え保存 API を叩く等）。未指定でも動く。
+   * B-117: プレビュー時に確定した filename（`{docNumber}_{stamp}.pdf`）を渡す。控え側が
+   * 新規に時刻を生成せず、この stamp を使って B-055 の突合（DL 名 = 控え名）を保つため。
+   */
+  onDownload?: (filename: string) => void
 }) {
   return (
     <Dialog
@@ -114,7 +118,7 @@ export function PdfPreviewDialog({
           </Button>
           {url && (
             <Button asChild>
-              <a href={url} download={filename} onClick={() => onDownload?.()}>
+              <a href={url} download={filename} onClick={() => onDownload?.(filename)}>
                 <Download className="mr-1 h-4 w-4" />
                 ダウンロード
               </a>
