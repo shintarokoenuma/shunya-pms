@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ChevronLeft, FileText, Pencil } from "lucide-react"
+import { ChevronLeft, Pencil } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -11,6 +11,7 @@ import { buildDocBreadcrumb } from "@/lib/nav/breadcrumb"
 import { EntityBreadcrumb } from "../../_components/entity-breadcrumb"
 import { WorkOrderDeleteButton } from "../_components/work-order-delete-button"
 import { WorkOrderStatusControl } from "../_components/work-order-status-control"
+import { OrderPdfPreviewButton } from "@/components/pdf/order-pdf-preview-button"
 import { WORK_ORDER_TYPE_LABELS } from "@/lib/constants/work-order-types"
 import {
   WORK_ORDER_STATUS_LABELS,
@@ -96,12 +97,12 @@ export default async function WorkOrderDetailPage({
                 </Link>
               </Button>
             )}
-            <Button asChild variant="outline" size="sm">
-              <a href={`/api/work-orders/${wo.id}/pdf`} target="_blank" rel="noopener">
-                <FileText className="mr-1 h-4 w-4" />
-                発注書 PDF
-              </a>
-            </Button>
+            <OrderPdfPreviewButton
+              endpoint="/api/work-orders/pdf"
+              kind="work-order"
+              id={wo.id}
+              fallbackName={`${wo.woNumber}.pdf`}
+            />
             <WorkOrderDeleteButton id={wo.id} woNumber={wo.woNumber} />
           </div>
         </div>
