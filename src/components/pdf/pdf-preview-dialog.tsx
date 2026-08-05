@@ -79,10 +79,13 @@ export function PdfPreviewDialog({
   url,
   filename,
   onClose,
+  onDownload,
 }: {
   url: string | null
   filename: string
   onClose: () => void
+  /** B-086: ダウンロード押下時のコールバック（GCS 控え保存 API を叩く等）。未指定でも動く。 */
+  onDownload?: () => void
 }) {
   return (
     <Dialog
@@ -111,7 +114,7 @@ export function PdfPreviewDialog({
           </Button>
           {url && (
             <Button asChild>
-              <a href={url} download={filename}>
+              <a href={url} download={filename} onClick={() => onDownload?.()}>
                 <Download className="mr-1 h-4 w-4" />
                 ダウンロード
               </a>

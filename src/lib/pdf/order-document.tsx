@@ -94,11 +94,11 @@ function fmtDate(d: Date | null): string {
   return new Date(d).toLocaleDateString("ja-JP")
 }
 
-export function OrderDocument({ data }: { data: OrderPdfData }) {
+/** 発注書1件ぶんの Page。単票（OrderDocument）と縦積み（OrderDocumentMulti）で共有。 */
+function OrderPage({ data }: { data: OrderPdfData }) {
   const c = data.currency
   return (
-    <Document>
-      <Page size="A4" style={styles.page} wrap>
+    <Page size="A4" style={styles.page} wrap>
         {/* ヘッダ */}
         <View style={styles.titleRow}>
           <Text style={styles.title}>発注書</Text>
@@ -182,7 +182,28 @@ export function OrderDocument({ data }: { data: OrderPdfData }) {
           <Text>希望納期: {fmtDate(data.expectedDeliveryDate)}</Text>
           {data.description ? <Text>備考: {data.description}</Text> : null}
         </View>
-      </Page>
+    </Page>
+  )
+}
+
+export function OrderDocument({ data }: { data: OrderPdfData }) {
+  return (
+    <Document>
+      <OrderPage data={data} />
+    </Document>
+  )
+}
+
+/**
+ * B-086: 複数発注書を1つの PDF に縦積み（発注ごとに改ページ・案B）。
+ * 各ページは独立した正式発注書のため宛先（仕入先/工場/外注先）の混在を許容する。
+ */
+export function OrderDocumentMulti({ dataList }: { dataList: OrderPdfData[] }) {
+  return (
+    <Document>
+      {dataList.map((data, i) => (
+        <OrderPage key={i} data={data} />
+      ))}
     </Document>
   )
 }

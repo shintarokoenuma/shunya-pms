@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ChevronLeft, Pencil, FileText } from "lucide-react"
+import { ChevronLeft, Pencil } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +12,7 @@ import { buildDocBreadcrumb } from "@/lib/nav/breadcrumb"
 import { EntityBreadcrumb } from "../../_components/entity-breadcrumb"
 import { PurchaseOrderDeleteButton } from "../_components/purchase-order-delete-button"
 import { PurchaseOrderStatusControl } from "../_components/purchase-order-status-control"
+import { OrderPdfPreviewButton } from "@/components/pdf/order-pdf-preview-button"
 import {
   PURCHASE_ORDER_STATUS_LABELS,
   PURCHASE_ORDER_STATUS_BADGE_VARIANT,
@@ -98,12 +99,12 @@ export default async function PurchaseOrderDetailPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <PurchaseOrderStatusControl id={po.id} status={po.status} />
-            <Button asChild variant="outline" size="sm">
-              <a href={`/api/purchase-orders/${po.id}/pdf`} target="_blank" rel="noopener">
-                <FileText className="mr-1 h-4 w-4" />
-                発注書 PDF
-              </a>
-            </Button>
+            <OrderPdfPreviewButton
+              endpoint="/api/purchase-orders/pdf"
+              kind="purchase-order"
+              id={po.id}
+              fallbackName={`${po.poNumber}.pdf`}
+            />
             {po.status === "DRAFT" && (
               <Button asChild variant="outline" size="sm">
                 <Link href={`/purchase-orders/${id}/edit`}>
