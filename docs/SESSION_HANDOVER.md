@@ -157,6 +157,7 @@ pr-url-checklist(147) / reference-archive(63) / session-handover(101)
 - **B-115**: 旧方式で溜まった GCS 控えの棚卸し・掃除（不可逆のため慎重に）
 - **B-116**: PO/WO 一覧からの複数選択 → まとめて1PDF
 - **B-117**: 完了済（stamp 突合）
+- **B-118**: Windows Chrome で入力ボックスがフォーカス時に最下部へスクロール（再発監視・自然解消済み）→ `docs/b-118-windows-chrome-focus-scroll-watch-2026-08-07.md`
 
 ## 取り下げ
 - **B-112**（DeliveryDestination の Buyer 必須緩和）→ `Client.shipping*` で足りるため不要
