@@ -10,6 +10,7 @@ import {
   deliveryNoteListParamsSchema,
   DELIVERY_NOTE_STATUS_UI_VALUES,
   type DeliveryNoteListParams,
+  type DeliveryNoteInput,
 } from "@/lib/validators/delivery-note"
 
 /**
@@ -318,6 +319,210 @@ export async function getDeliveryNote(id: string) {
 }
 
 // =============================================================================
+// create / update 共有の準備処理
+// - clientId 実在・buyer/destination の companyId スコープ・明細 productId の自社検証
+// - §4-2/§4-3: 送り先解決（destination → buyer → client.shipping* → client 基本・上書き優先）
+// - §6: 金額計算（showAmounts のときのみ）と警告
+// =============================================================================
+async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
+  // クライアント（必須）を companyId スコープで解決。
+  const client = await prisma.client.findFirst({
+    where: { id: data.clientId, companyId, deletedAt: null },
+    select: {
+      id: true,
+      postalCode: true,
+      prefecture: true,
+      city: true,
+      address: true,
+      addressLine2: true,
+      phone: true,
+      shippingPostalCode: true,
+      shippingPrefecture: true,
+      shippingCity: true,
+      shippingAddress: true,
+      shippingAddressLine2: true,
+      primaryContactId: true,
+    },
+  })
+  if (!client) {
+    return { ok: false as const, error: "指定されたクライアントが見つかりません" }
+  }
+
+  // 任意の buyer / destination（companyId スコープ）。
+  const buyer = data.buyerId
+    ? await prisma.buyer.findFirst({
+        where: { id: data.buyerId, companyId, deletedAt: null },
+        select: {
+          id: true,
+          postalCode: true,
+          prefecture: true,
+          city: true,
+          address: true,
+          addressLine2: true,
+          contactPerson: true,
+          phone: true,
+        },
+      })
+    : null
+  if (data.buyerId && !buyer) {
+    return { ok: false as const, error: "指定されたバイヤーが見つかりません" }
+  }
+
+  const destination = data.deliveryDestinationId
+    ? await prisma.deliveryDestination.findFirst({
+        where: {
+          id: data.deliveryDestinationId,
+          companyId,
+          deletedAt: null,
+        },
+        select: {
+          id: true,
+          postalCode: true,
+          prefecture: true,
+          city: true,
+          address: true,
+          addressLine2: true,
+          contactPerson: true,
+          phone: true,
+        },
+      })
+    : null
+  if (data.deliveryDestinationId && !destination) {
+    return { ok: false as const, error: "指定された納品先が見つかりません" }
+  }
+
+  // 明細の品番が自社のものか検証（productId は NOT NULL・§3-1）。
+  const productIds = [...new Set(data.items.map((i) => i.productId))]
+  const validProducts = await prisma.product.findMany({
+    where: { id: { in: productIds }, companyId, deletedAt: null },
+    select: { id: true },
+  })
+  const validProductIds = new Set(validProducts.map((p) => p.id))
+  const invalid = data.items.find((i) => !validProductIds.has(i.productId))
+  if (invalid) {
+    return { ok: false as const, error: "明細に無効な品番が含まれています" }
+  }
+
+  // §4-2 / §4-3: 宛先を解決して値コピー。フォームで上書きがあればそれを優先。
+  let resolvedAddress = ""
+  let resolvedContact: string | null = null
+  let resolvedPhone: string | null = null
+  if (destination) {
+    resolvedAddress = composeAddress(destination)
+    resolvedContact = destination.contactPerson
+    resolvedPhone = destination.phone
+  }
+  if (!resolvedAddress && buyer) {
+    resolvedAddress = composeAddress(buyer)
+    resolvedContact = resolvedContact ?? buyer.contactPerson
+    resolvedPhone = resolvedPhone ?? buyer.phone
+  }
+  if (!resolvedAddress) {
+    const shipping = composeAddress({
+      postalCode: client.shippingPostalCode,
+      prefecture: client.shippingPrefecture,
+      city: client.shippingCity,
+      address: client.shippingAddress,
+      addressLine2: client.shippingAddressLine2,
+    })
+    resolvedAddress = shipping || composeAddress(client)
+  }
+  if (!resolvedContact) {
+    const contact = client.primaryContactId
+      ? await prisma.clientContact.findFirst({
+          where: { id: client.primaryContactId, companyId },
+          select: { displayName: true, lastName: true, firstName: true },
+        })
+      : await prisma.clientContact.findFirst({
+          where: {
+            clientId: client.id,
+            companyId,
+            isPrimary: true,
+            deletedAt: null,
+          },
+          select: { displayName: true, lastName: true, firstName: true },
+        })
+    if (contact) {
+      resolvedContact =
+        contact.displayName ??
+        ([contact.lastName, contact.firstName].filter(Boolean).join(" ") ||
+          null)
+    }
+  }
+  resolvedPhone = resolvedPhone ?? client.phone
+
+  const shipToAddress = data.shipToAddress ?? resolvedAddress ?? ""
+  const shipToContact = data.shipToContact ?? resolvedContact
+  const shipToPhone = data.shipToPhone ?? resolvedPhone
+
+  // §6: 金額。showAmounts のときのみ計算。単価未入力の行があれば警告（ブロックしない）。
+  const warnings: string[] = []
+  const itemRows = data.items.map((it, i) => {
+    const subtotal =
+      it.unitPrice != null ? Math.round(it.quantity * it.unitPrice) : null
+    return {
+      itemOrder: i,
+      skuId: null,
+      productId: it.productId,
+      clientProductCode: it.clientProductCode,
+      productName: it.productName,
+      colorCode: it.colorCode,
+      colorName: it.colorName,
+      size: it.size,
+      quantity: it.quantity,
+      unit: it.unit || "枚",
+      unitPrice:
+        it.unitPrice != null ? new Prisma.Decimal(it.unitPrice) : null,
+      subtotal: subtotal != null ? new Prisma.Decimal(subtotal) : null,
+      currency: data.currency,
+      notes: null,
+    }
+  })
+
+  const totalQuantity = data.items.reduce((a, it) => a + it.quantity, 0)
+
+  let subtotalAmount: Prisma.Decimal | null = null
+  let taxAmount: Prisma.Decimal | null = null
+  let totalAmount: Prisma.Decimal | null = null
+  if (data.showAmounts) {
+    if (data.items.some((it) => it.unitPrice == null)) {
+      warnings.push("単価未入力の明細があります（金額表示ONのまま保存しました）")
+    }
+    const sub = data.items.reduce(
+      (a, it) => a + (it.unitPrice != null ? it.quantity * it.unitPrice : 0),
+      0,
+    )
+    const tax = Math.round((sub * data.taxRatePercent) / 100)
+    subtotalAmount = new Prisma.Decimal(Math.round(sub))
+    taxAmount = new Prisma.Decimal(tax)
+    totalAmount = new Prisma.Decimal(Math.round(sub) + tax)
+  }
+
+  return {
+    ok: true as const,
+    prepared: {
+      clientId: data.clientId,
+      buyerId: data.buyerId,
+      deliveryDestinationId: data.deliveryDestinationId,
+      shipToAddress,
+      shipToContact,
+      shipToPhone,
+      deliveryDate: new Date(data.deliveryDate),
+      totalQuantity,
+      showAmounts: data.showAmounts,
+      subtotalAmount,
+      taxAmount,
+      totalAmount,
+      currency: data.currency,
+      internalNotes: data.internalNotes,
+      clientNotes: data.clientNotes,
+      itemRows,
+      warnings,
+    },
+  }
+}
+
+// =============================================================================
 // 新規（採番 + DeliveryNote + DeliveryNoteItem 群を同一 tx・P2002 リトライ）
 // =============================================================================
 const CREATE_MAX_RETRIES = 3
@@ -336,172 +541,9 @@ export async function createDeliveryNote(
     }
     const data = parsed.data
 
-    // クライアント（必須）を companyId スコープで解決。
-    const client = await prisma.client.findFirst({
-      where: { id: data.clientId, companyId: sess.companyId, deletedAt: null },
-      select: {
-        id: true,
-        postalCode: true,
-        prefecture: true,
-        city: true,
-        address: true,
-        addressLine2: true,
-        phone: true,
-        shippingPostalCode: true,
-        shippingPrefecture: true,
-        shippingCity: true,
-        shippingAddress: true,
-        shippingAddressLine2: true,
-        primaryContactId: true,
-      },
-    })
-    if (!client) return { ok: false, error: "指定されたクライアントが見つかりません" }
-
-    // 任意の buyer / destination（companyId スコープ）。
-    const buyer = data.buyerId
-      ? await prisma.buyer.findFirst({
-          where: { id: data.buyerId, companyId: sess.companyId, deletedAt: null },
-          select: {
-            id: true,
-            postalCode: true,
-            prefecture: true,
-            city: true,
-            address: true,
-            addressLine2: true,
-            contactPerson: true,
-            phone: true,
-          },
-        })
-      : null
-    if (data.buyerId && !buyer) return { ok: false, error: "指定されたバイヤーが見つかりません" }
-
-    const destination = data.deliveryDestinationId
-      ? await prisma.deliveryDestination.findFirst({
-          where: {
-            id: data.deliveryDestinationId,
-            companyId: sess.companyId,
-            deletedAt: null,
-          },
-          select: {
-            id: true,
-            postalCode: true,
-            prefecture: true,
-            city: true,
-            address: true,
-            addressLine2: true,
-            contactPerson: true,
-            phone: true,
-          },
-        })
-      : null
-    if (data.deliveryDestinationId && !destination)
-      return { ok: false, error: "指定された納品先が見つかりません" }
-
-    // 明細の品番が自社のものか検証（productId は NOT NULL・§3-1）。
-    const productIds = [...new Set(data.items.map((i) => i.productId))]
-    const validProducts = await prisma.product.findMany({
-      where: { id: { in: productIds }, companyId: sess.companyId, deletedAt: null },
-      select: { id: true },
-    })
-    const validProductIds = new Set(validProducts.map((p) => p.id))
-    const invalid = data.items.find((i) => !validProductIds.has(i.productId))
-    if (invalid) return { ok: false, error: "明細に無効な品番が含まれています" }
-
-    // §4-2 / §4-3: 宛先を解決して値コピー（destination → buyer → client.shipping* → client 基本）。
-    // フォームで上書きがあればそれを優先。
-    let resolvedAddress = ""
-    let resolvedContact: string | null = null
-    let resolvedPhone: string | null = null
-    if (destination) {
-      resolvedAddress = composeAddress(destination)
-      resolvedContact = destination.contactPerson
-      resolvedPhone = destination.phone
-    }
-    if (!resolvedAddress && buyer) {
-      resolvedAddress = composeAddress(buyer)
-      resolvedContact = resolvedContact ?? buyer.contactPerson
-      resolvedPhone = resolvedPhone ?? buyer.phone
-    }
-    if (!resolvedAddress) {
-      const shipping = composeAddress({
-        postalCode: client.shippingPostalCode,
-        prefecture: client.shippingPrefecture,
-        city: client.shippingCity,
-        address: client.shippingAddress,
-        addressLine2: client.shippingAddressLine2,
-      })
-      resolvedAddress = shipping || composeAddress(client)
-    }
-    if (!resolvedContact) {
-      const contact = client.primaryContactId
-        ? await prisma.clientContact.findFirst({
-            where: { id: client.primaryContactId, companyId: sess.companyId },
-            select: { displayName: true, lastName: true, firstName: true },
-          })
-        : await prisma.clientContact.findFirst({
-            where: {
-              clientId: client.id,
-              companyId: sess.companyId,
-              isPrimary: true,
-              deletedAt: null,
-            },
-            select: { displayName: true, lastName: true, firstName: true },
-          })
-      if (contact) {
-        resolvedContact =
-          contact.displayName ??
-          ([contact.lastName, contact.firstName].filter(Boolean).join(" ") ||
-            null)
-      }
-    }
-    resolvedPhone = resolvedPhone ?? client.phone
-
-    const shipToAddress = data.shipToAddress ?? resolvedAddress ?? ""
-    const shipToContact = data.shipToContact ?? resolvedContact
-    const shipToPhone = data.shipToPhone ?? resolvedPhone
-
-    // §6: 金額。showAmounts のときのみ計算。単価未入力の行があれば警告（ブロックしない）。
-    const warnings: string[] = []
-    const itemRows = data.items.map((it, i) => {
-      const subtotal =
-        it.unitPrice != null ? Math.round(it.quantity * it.unitPrice) : null
-      return {
-        itemOrder: i,
-        skuId: null,
-        productId: it.productId,
-        clientProductCode: it.clientProductCode,
-        productName: it.productName,
-        colorCode: it.colorCode,
-        colorName: it.colorName,
-        size: it.size,
-        quantity: it.quantity,
-        unit: it.unit || "枚",
-        unitPrice:
-          it.unitPrice != null ? new Prisma.Decimal(it.unitPrice) : null,
-        subtotal: subtotal != null ? new Prisma.Decimal(subtotal) : null,
-        currency: data.currency,
-        notes: null,
-      }
-    })
-
-    const totalQuantity = data.items.reduce((a, it) => a + it.quantity, 0)
-
-    let subtotalAmount: Prisma.Decimal | null = null
-    let taxAmount: Prisma.Decimal | null = null
-    let totalAmount: Prisma.Decimal | null = null
-    if (data.showAmounts) {
-      if (data.items.some((it) => it.unitPrice == null)) {
-        warnings.push("単価未入力の明細があります（金額表示ONのまま保存しました）")
-      }
-      const sub = data.items.reduce(
-        (a, it) => a + (it.unitPrice != null ? it.quantity * it.unitPrice : 0),
-        0,
-      )
-      const tax = Math.round((sub * data.taxRatePercent) / 100)
-      subtotalAmount = new Prisma.Decimal(Math.round(sub))
-      taxAmount = new Prisma.Decimal(tax)
-      totalAmount = new Prisma.Decimal(Math.round(sub) + tax)
-    }
+    const prep = await prepareDeliveryNote(sess.companyId, data)
+    if (!prep.ok) return prep
+    const p = prep.prepared
 
     const prefix = deliveryNumberPrefix(new Date().getFullYear())
     let created: { id: string; deliveryNumber: string } | null = null
@@ -521,30 +563,30 @@ export async function createDeliveryNote(
                 companyId: sess.companyId,
                 deliveryNumber,
                 // §3-1: 代表 productId は入れない（明細側 productId で引く）。
-                clientId: data.clientId,
-                buyerId: data.buyerId,
-                deliveryDestinationId: data.deliveryDestinationId,
+                clientId: p.clientId,
+                buyerId: p.buyerId,
+                deliveryDestinationId: p.deliveryDestinationId,
                 shipFromAddress: SHIP_FROM_ADDRESS,
                 shipFromContact: COMPANY_PROFILE.name,
-                shipToAddress,
-                shipToContact,
-                shipToPhone,
-                deliveryDate: new Date(data.deliveryDate),
-                totalQuantity,
-                showAmounts: data.showAmounts,
-                subtotalAmount,
-                taxAmount,
-                totalAmount,
-                currency: data.currency,
+                shipToAddress: p.shipToAddress,
+                shipToContact: p.shipToContact,
+                shipToPhone: p.shipToPhone,
+                deliveryDate: p.deliveryDate,
+                totalQuantity: p.totalQuantity,
+                showAmounts: p.showAmounts,
+                subtotalAmount: p.subtotalAmount,
+                taxAmount: p.taxAmount,
+                totalAmount: p.totalAmount,
+                currency: p.currency,
                 status: DeliveryNoteStatus.DRAFT,
                 createdByUserId: sess.userId,
-                internalNotes: data.internalNotes,
-                clientNotes: data.clientNotes,
+                internalNotes: p.internalNotes,
+                clientNotes: p.clientNotes,
               },
               select: { id: true, deliveryNumber: true },
             })
             await tx.deliveryNoteItem.createMany({
-              data: itemRows.map((r) => ({ ...r, deliveryNoteId: dn.id })),
+              data: p.itemRows.map((r) => ({ ...r, deliveryNoteId: dn.id })),
             })
             return dn
           },
@@ -582,7 +624,7 @@ export async function createDeliveryNote(
         entityId: created.id,
         afterData: {
           deliveryNumber: created.deliveryNumber,
-          itemCount: itemRows.length,
+          itemCount: p.itemRows.length,
         },
       },
     })
@@ -593,13 +635,113 @@ export async function createDeliveryNote(
       data: {
         id: created.id,
         deliveryNumber: created.deliveryNumber,
-        warnings,
+        warnings: p.warnings,
       },
     }
   } catch (e) {
     return {
       ok: false,
       error: e instanceof Error ? e.message : "納品書の作成に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
+// 編集（B-108 PR1b 追補: DRAFT のみ・deliveryNumber は再採番しない）
+// =============================================================================
+export async function updateDeliveryNote(
+  id: string,
+  input: unknown,
+): Promise<
+  ActionResult<{ id: string; deliveryNumber: string; warnings: string[] }>
+> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const parsed = deliveryNoteInputSchema.safeParse(input)
+    if (!parsed.success) {
+      const first = parsed.error.issues[0]
+      return { ok: false, error: first?.message ?? "入力内容に誤りがあります" }
+    }
+    const data = parsed.data
+
+    const existing = await prisma.deliveryNote.findFirst({
+      where: { id, companyId: sess.companyId, deletedAt: null },
+      select: { id: true, status: true, deliveryNumber: true },
+    })
+    if (!existing) return { ok: false, error: "納品書が見つかりません" }
+    // DRAFT のみ編集可（§9 の削除・§4-3「発行後は不変」と同じ線）。
+    if (existing.status !== DeliveryNoteStatus.DRAFT) {
+      return { ok: false, error: "ドラフト以外の納品書は編集できません" }
+    }
+
+    const prep = await prepareDeliveryNote(sess.companyId, data)
+    if (!prep.ok) return prep
+    const p = prep.prepared
+
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.deliveryNote.update({
+          where: { id },
+          // deliveryNumber / status は更新しない（保存済み番号を保持・DRAFT のまま）。
+          data: {
+            clientId: p.clientId,
+            buyerId: p.buyerId,
+            deliveryDestinationId: p.deliveryDestinationId,
+            shipFromAddress: SHIP_FROM_ADDRESS,
+            shipFromContact: COMPANY_PROFILE.name,
+            shipToAddress: p.shipToAddress,
+            shipToContact: p.shipToContact,
+            shipToPhone: p.shipToPhone,
+            deliveryDate: p.deliveryDate,
+            totalQuantity: p.totalQuantity,
+            showAmounts: p.showAmounts,
+            subtotalAmount: p.subtotalAmount,
+            taxAmount: p.taxAmount,
+            totalAmount: p.totalAmount,
+            currency: p.currency,
+            internalNotes: p.internalNotes,
+            clientNotes: p.clientNotes,
+          },
+        })
+        // 明細は全削除→再作成（DeliveryNoteItem は deletedAt を持たず DeliveryNote 従属）。
+        await tx.deliveryNoteItem.deleteMany({ where: { deliveryNoteId: id } })
+        await tx.deliveryNoteItem.createMany({
+          data: p.itemRows.map((r) => ({ ...r, deliveryNoteId: id })),
+        })
+      },
+      { timeout: 15000 },
+    )
+
+    await prisma.auditLog.create({
+      data: {
+        companyId: sess.companyId,
+        userId: sess.userId,
+        action: "UPDATE",
+        entityType: "DeliveryNote",
+        entityId: id,
+        afterData: {
+          deliveryNumber: existing.deliveryNumber,
+          itemCount: p.itemRows.length,
+        },
+      },
+    })
+
+    revalidatePath("/deliveries")
+    revalidatePath(`/deliveries/${id}`)
+    return {
+      ok: true,
+      data: {
+        id,
+        deliveryNumber: existing.deliveryNumber,
+        warnings: p.warnings,
+      },
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "納品書の更新に失敗しました",
     }
   }
 }
