@@ -17,13 +17,14 @@ import {
 } from "@/components/ui/select"
 import {
   createDeliveryNote,
+  updateDeliveryNote,
   type ClientOption,
   type BuyerOption,
   type DestinationOption,
   type DeliveryProductOption,
 } from "@/lib/actions/delivery-notes"
 
-type ItemRow = {
+export type ItemRow = {
   productId: string
   productName: string
   clientProductCode: string
@@ -32,6 +33,21 @@ type ItemRow = {
   quantity: string
   unit: string
   unitPrice: string
+}
+
+/** 編集フォームの初期値（編集ページが getDeliveryNote から組み立てる）。 */
+export type DeliveryNoteFormInitial = {
+  clientId: string
+  buyerId: string | null
+  deliveryDestinationId: string | null
+  deliveryDate: string
+  showAmounts: boolean
+  taxRatePercent: string
+  shipToAddress: string
+  shipToContact: string
+  shipToPhone: string
+  clientNotes: string
+  items: ItemRow[]
 }
 
 const NONE = "__none__"
@@ -54,30 +70,48 @@ export function DeliveryNoteForm({
   buyers,
   destinations,
   products,
-  previewNumber,
-  defaultDate,
+  previewNumber = null,
+  defaultDate = "",
+  mode = "create",
+  id,
+  initial,
+  currentDeliveryNumber,
 }: {
   clients: ClientOption[]
   buyers: BuyerOption[]
   destinations: DestinationOption[]
   products: DeliveryProductOption[]
-  previewNumber: string | null
-  defaultDate: string
+  previewNumber?: string | null
+  defaultDate?: string
+  /** 省略時は "create"。編集は "edit"（id / initial / currentDeliveryNumber 必須）。 */
+  mode?: "create" | "edit"
+  id?: string
+  initial?: DeliveryNoteFormInitial
+  currentDeliveryNumber?: string
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const isEdit = mode === "edit"
 
-  const [clientId, setClientId] = useState("")
-  const [buyerId, setBuyerId] = useState(NONE)
-  const [destinationId, setDestinationId] = useState(NONE)
-  const [deliveryDate, setDeliveryDate] = useState(defaultDate)
-  const [showAmounts, setShowAmounts] = useState(false)
-  const [taxRatePercent, setTaxRatePercent] = useState("10")
-  const [shipToAddress, setShipToAddress] = useState("")
-  const [shipToContact, setShipToContact] = useState("")
-  const [shipToPhone, setShipToPhone] = useState("")
-  const [clientNotes, setClientNotes] = useState("")
-  const [items, setItems] = useState<ItemRow[]>([emptyRow()])
+  const [clientId, setClientId] = useState(initial?.clientId ?? "")
+  const [buyerId, setBuyerId] = useState(initial?.buyerId ?? NONE)
+  const [destinationId, setDestinationId] = useState(
+    initial?.deliveryDestinationId ?? NONE,
+  )
+  const [deliveryDate, setDeliveryDate] = useState(
+    initial?.deliveryDate ?? defaultDate,
+  )
+  const [showAmounts, setShowAmounts] = useState(initial?.showAmounts ?? false)
+  const [taxRatePercent, setTaxRatePercent] = useState(
+    initial?.taxRatePercent ?? "10",
+  )
+  const [shipToAddress, setShipToAddress] = useState(initial?.shipToAddress ?? "")
+  const [shipToContact, setShipToContact] = useState(initial?.shipToContact ?? "")
+  const [shipToPhone, setShipToPhone] = useState(initial?.shipToPhone ?? "")
+  const [clientNotes, setClientNotes] = useState(initial?.clientNotes ?? "")
+  const [items, setItems] = useState<ItemRow[]>(
+    initial?.items && initial.items.length > 0 ? initial.items : [emptyRow()],
+  )
 
   // クライアントで絞った buyer / destination。
   const clientBuyers = useMemo(
@@ -135,13 +169,20 @@ export function DeliveryNoteForm({
       })),
     }
     startTransition(async () => {
-      const r = await createDeliveryNote(payload)
+      const r =
+        isEdit && id
+          ? await updateDeliveryNote(id, payload)
+          : await createDeliveryNote(payload)
       if (!r.ok) {
         toast.error(r.error)
         return
       }
       for (const w of r.data.warnings) toast.warning(w)
-      toast.success(`納品書 ${r.data.deliveryNumber} を作成しました`)
+      toast.success(
+        isEdit
+          ? `納品書 ${r.data.deliveryNumber} を更新しました`
+          : `納品書 ${r.data.deliveryNumber} を作成しました`,
+      )
       router.push(`/deliveries/${r.data.id}`)
       router.refresh()
     })
@@ -152,8 +193,16 @@ export function DeliveryNoteForm({
       {/* ヘッダ */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className="space-y-1">
-          <Label>DLV番号（保存時に確定）</Label>
-          <Input value={previewNumber ?? "（保存時に採番）"} disabled className="font-mono" />
+          <Label>{isEdit ? "DLV番号" : "DLV番号（保存時に確定）"}</Label>
+          <Input
+            value={
+              isEdit
+                ? currentDeliveryNumber ?? ""
+                : previewNumber ?? "（保存時に採番）"
+            }
+            disabled
+            className="font-mono"
+          />
         </div>
         <div className="space-y-1">
           <Label>納品日</Label>
@@ -411,12 +460,18 @@ export function DeliveryNoteForm({
       </div>
 
       <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => router.push("/deliveries")} disabled={isPending}>
+        <Button
+          variant="outline"
+          onClick={() =>
+            router.push(isEdit && id ? `/deliveries/${id}` : "/deliveries")
+          }
+          disabled={isPending}
+        >
           キャンセル
         </Button>
         <Button onClick={onSubmit} disabled={isPending}>
           {isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
-          作成
+          {isEdit ? "更新" : "作成"}
         </Button>
       </div>
     </div>

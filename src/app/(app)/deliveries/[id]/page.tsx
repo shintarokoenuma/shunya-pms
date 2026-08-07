@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Pencil } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -80,6 +80,14 @@ export default async function DeliveryNoteDetailPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <DeliveryNoteStatusControl id={dn.id} status={dn.status} />
+            {isDraft && (
+              <Button asChild variant="outline" size="sm">
+                <Link href={`/deliveries/${dn.id}/edit`}>
+                  <Pencil className="mr-1 h-4 w-4" />
+                  編集
+                </Link>
+              </Button>
+            )}
             {isDraft && (
               <DeliveryNoteDeleteButton
                 id={dn.id}
