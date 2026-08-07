@@ -158,6 +158,8 @@ pr-url-checklist(147) / reference-archive(63) / session-handover(101)
 - **B-116**: PO/WO 一覧からの複数選択 → まとめて1PDF
 - **B-117**: 完了済（stamp 突合）
 - **B-118**: Windows Chrome で入力ボックスがフォーカス時に最下部へスクロール（再発監視・自然解消済み）→ `docs/b-118-windows-chrome-focus-scroll-watch-2026-08-07.md`
+- **B-119**: 発注（PO/WO）作成画面に品番が表示されず、何用の発注か分からなくなる。`new/page.tsx` の context ラベルは sampleNumber / taskType のみで productCode・productName を含まない。PO/WO 両方が対象。表示位置（パンくず / ヘッダ / context ラベル拡張）は設計時に確定
+- **B-120**: 発注明細で入力済み行の複製（行コピー）。カラー展開の入力時に同内容の行を何度も手入力している。useFieldArray の append で実装可。B-084（行のドラッグ&ドロップ並べ替え）と同じ明細 UI 改善として同時設計を検討
 
 ## 取り下げ
 - **B-112**（DeliveryDestination の Buyer 必須緩和）→ `Client.shipping*` で足りるため不要
