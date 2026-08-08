@@ -101,7 +101,8 @@ export function DeliveryNoteForm({
   const [deliveryDate, setDeliveryDate] = useState(
     initial?.deliveryDate ?? defaultDate,
   )
-  const [showAmounts, setShowAmounts] = useState(initial?.showAmounts ?? false)
+  // 追補 v1.1（§6 改訂）: 既定 ON。edit 時は initial.showAmounts を尊重（?? は false を上書きしない）。
+  const [showAmounts, setShowAmounts] = useState(initial?.showAmounts ?? true)
   const [taxRatePercent, setTaxRatePercent] = useState(
     initial?.taxRatePercent ?? "10",
   )
