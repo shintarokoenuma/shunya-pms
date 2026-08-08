@@ -160,6 +160,8 @@ pr-url-checklist(147) / reference-archive(63) / session-handover(101)
 - **B-118**: Windows Chrome で入力ボックスがフォーカス時に最下部へスクロール（再発監視・自然解消済み）→ `docs/b-118-windows-chrome-focus-scroll-watch-2026-08-07.md`
 - **B-119**: 発注（PO/WO）作成画面に品番が表示されず、何用の発注か分からなくなる。`new/page.tsx` の context ラベルは sampleNumber / taskType のみで productCode・productName を含まない。PO/WO 両方が対象。表示位置（パンくず / ヘッダ / context ラベル拡張）は設計時に確定
 - **B-120**: 発注明細で入力済み行の複製（行コピー）。カラー展開の入力時に同内容の行を何度も手入力している。useFieldArray の append で実装可。B-084（行のドラッグ&ドロップ並べ替え）と同じ明細 UI 改善として同時設計を検討
+- **B-121**: 納品書の品番必須を緩和（参考サンプルの売り立て等、品番を登録しない納品が実在する）。`delivery_note_items.product_id` の DROP NOT NULL が必要＝migration・triple-gate 案件。spec §1「v1 は品番必須」と §3-2 の改訂を伴う。★B-108 PR2（引き当て UI）完了後に再評価（タブ3 手入力行の実際の使われ方を見てから設計する）
+- **B-122**: 納品書 明細の品番ピッカー改善。現状 `listActiveProductsForDeliverySelect` は companyId のみで全品番を返し（絞り込み・件数上限なし）、品番増加でプルダウンが破綻する。確定方針: SearchableSelect 化／選択中クライアントの品番をブランド別グループで既定表示／検索時のみクライアント外を別グループで表示／クライアント未選択時はガイド表示／クライアント変更時も明細行は残しクライアント外バッジを出す（案a）。大量件数時のサーバー側検索は v2 送り。★B-108 PR2 完了後に再評価（引き当てが主経路になると手入力ピッカーは例外運用に落ちるため）
 
 ## 取り下げ
 - **B-112**（DeliveryDestination の Buyer 必須緩和）→ `Client.shipping*` で足りるため不要
