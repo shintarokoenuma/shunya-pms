@@ -145,6 +145,12 @@ export function DeliveryNoteForm({
       toast.error("クライアントを選択してください")
       return
     }
+    // §6: 金額表示ON かつ単価未入力の明細があれば保存前に警告（ブロックしない）。
+    // サーバ側 warnings は保存後のナビゲーションで取りこぼされうるため、保存前の
+    // クライアント警告を主とする（判定基準は payload と同じ r.unitPrice === ""）。
+    if (showAmounts && items.some((r) => r.unitPrice === "")) {
+      toast.warning("単価が未入力の明細があります（金額は空欄で保存されます）")
+    }
     const payload = {
       clientId,
       buyerId: buyerId === NONE ? null : buyerId,
@@ -177,14 +183,16 @@ export function DeliveryNoteForm({
         toast.error(r.error)
         return
       }
-      for (const w of r.data.warnings) toast.warning(w)
+      // 単価未入力の警告は保存前に出す（上記）。サーバ側 warnings の生成ロジックは
+      // 温存しつつ、同一メッセージの二重表示とナビゲーション取りこぼしを避けるため、
+      // ここでの再表示はしない。
       toast.success(
         isEdit
           ? `納品書 ${r.data.deliveryNumber} を更新しました`
           : `納品書 ${r.data.deliveryNumber} を作成しました`,
       )
+      // router.refresh() は push が遷移先を取得するため不要（二重レンダの原因）。
       router.push(`/deliveries/${r.data.id}`)
-      router.refresh()
     })
   }
 
