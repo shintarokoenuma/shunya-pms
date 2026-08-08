@@ -1,192 +1,183 @@
-# SESSION_HANDOVER.md（2026-08-08 締め / B-108 PR1 完了・PR2 仕様確認書 v0.1・B-121 取り下げ）
+# SESSION_HANDOVER.md（2026-08-08 締め / B-108 PR2 仕様確定・⑫=案A′・B-123/B-124 起票）
 
 ## ⓪ 次セッションの最初の一手
 
-**`docs/specs/b-108-pr2-allocation-ui-spec-confirmation-v0_1-2026-08-08.md` の §4 ⑫ を判断する。**
-引き当て元3列（`sourceSampleProductionId` / `sourceWoItemId` / `sourcePoItemId`）を
-`DeliveryNoteItem` に追加するか否か。案A（追加・推奨・triple-gate）か案B（追加せず既定フィルタを外す）。
-これが決まらないと PR2 の実装分割が確定しない。
+**B-108 PR2a（引き当て元5列の migration・triple-gate）に着手する。**
+仕様は確定済み。設計の議論は不要で、そのまま実装ブリーフを書ける状態。
+本番に触れるのは migration のみ（§6-1 は取り消し済み）。
 
 ---
 
-## ① 今セッションで完了したこと
+## ① 今セッションで完了したこと（コード変更ゼロ・docs のみ）
 
-### B-108 PR1 完了（納品書の migration + CRUD + 一覧 + 編集）
-- **PR #125 マージ済み（`629da41`）。本番稼働確認済み。**
-  Railway デプロイログ `46 migrations found / No pending migrations to apply.` により、
-  PR1a（`03f2c8d`）の migration が本番適用済みであることを裏取りした。
-- 本番 smoke test 合格: 一覧・サイドバー「納品」・新規作成フォーム
-  （金額表示チェック ON・単価欄・消費税率欄）。本番でのデータ作成はしていない。
-- 積んだコミット: `1ed4aa7` PR1b 本体 → `a75e09e` 編集 action → `7b39c86` 編集 UI
-  → `de7c9ab` 単価警告の修正 → `94d9046` spec 追補 v1.1 ＋ showAmounts 既定 ON
+### ⑫（引き当て元の記録列）を確定 → 案A′（5列）
 
-### 検証で見つけて塞いだもの
-- **編集機能が全層で欠落**（ルート・action・validator・フォーム・詳細導線）。
-  §7 により削除した DLV 番号は再利用されないため、「作り直し」は番号を恒久的に焼却する。
-  訂正のたびに番号が飛ぶ運用は成立しないので編集は必須と判断し、同 PR で実装。
-- **単価未入力の警告が出なかった。** サーバ側 warnings が保存直後の画面遷移と競合していた。
-  保存前のクライアント側判定に移動（`de7c9ab`）。
-- **showAmounts の既定を OFF → ON に改訂**（実運用では金額入りが基本）。
-  `initial?.showAmounts ?? true` としており、edit 時に保存済み false は上書きされない。
+前セッションからの持ち越し論点。案A（3列）で一度確定させたあと、
+recon 結果により案A′（5列）へ改訂した。
 
-### spec 追補 v1.1 を記録
-`docs/specs/b-108-sample-delivery-note-spec-confirmation-v1_0-2026-08-05.md` 末尾に
-A-1〜A-5 を追記（編集機能と DRAFT 限定の根拠／showAmounts 既定 ON／単価警告の位置／
-既知の制約（税率10%固定・品番必須）／実地検証記録）。
+    sourceSampleProductionId  String?  @map("source_sample_production_id")
+    sourceWoItemId            String?  @map("source_wo_item_id")
+    sourceWorkOrderId         String?  @map("source_work_order_id")
+    sourcePoItemId            String?  @map("source_po_item_id")
+    sourcePurchaseOrderId     String?  @map("source_purchase_order_id")
 
-### B-108 PR2 仕様確認書 v0.1 を起草（`665985a`）
-`docs/specs/b-108-pr2-allocation-ui-spec-confirmation-v0_1-2026-08-08.md`（284行）。
-④〜⑪ を確定し、⑫ のみ未確認。詳細は §④ を参照。
+すべて nullable・index 付与・@relation なし・backfill 不要。
 
-### バックログ起票（`cce44f1`）
-B-119 / B-120 / B-121 / B-122 を §⑦ に起票。B-118 ノートに拡張機能の追加観測を記録。
-※ その後の議論で **B-121 は取り下げ**が確定（本メモ §⑦ に反映済み）。
+**★列ごとの役割を混同しないこと（これが本件の肝）**
+
+| 列 | 安定性 | 用途 |
+|---|---|---|
+| sourceSampleProductionId | 安定 | **フィルタ可** |
+| sourceWoItemId / sourcePoItemId | 不安定（親編集で dead） | 行特定・best-effort |
+| sourceWorkOrderId / sourcePurchaseOrderId | 安定 | **バッジのみ・フィルタ不可** |
+
+### recon（read-only・DB 非接続）で判明した現物
+
+- updatePurchaseOrder（purchase-orders.ts:732-733）/ updateWorkOrder
+  （work-orders.ts:940-941）は明細を deleteMany → createMany。
+  **PoItem.id / WoItem.id は編集のたびに再生成＝不安定。** 親は soft-delete で id 不変。
+- **updateDeliveryNote（delivery-notes.ts:709-710）も同型** → ★下記の round-trip 要件
+- 命名先例は live 確認済み（schema 9608/9609/9668/9727/9728行・すべて scalar+index・FK なし）
+- DeliveryNote.deliveryDate（@db.Date NOT NULL・index 有・入力経路も実在）
+
+### ★実装前に塞いだ穴（round-trip 要件・PR2b の受け入れ条件）
+
+updateDeliveryNote が明細を作り直すため、編集フォームが sourceXxxId を
+持ち回らないと**引き当て元が静かに消える**。列を足した目的が編集1回で無効化され、
+画面には何も出ない。
+
+1. 編集フォームは明細行ごとに5列を hidden 保持
+2. updateDeliveryNote は再作成時に5列を書き戻す
+3. 検証項目「引き当て → 保存 → 編集画面を開く → 無変更で保存 → 引き当て元が残るか」
+
+### ⑤ を保険扱いに格下げ・§6-1 を取り消し
+
+慎太郎さん確認: **本番の発注はすべて品番カルテから起票されており、
+品番なし発注は存在しない。** dev の3件は開発中の古いデータ。B-078 の validator で
+野良発注は現在塞がっている。
+
+→ 警告表示は実装するが「万一のための保険」。
+→ §6「実装前に必ず行うこと」1番（本番の品番 null count）は**不要として取り消し**。
+   **PR2a で本番に触れるのは migration のみ**になった。
+
+### 締め処理（経理）を B-123 として分離
+
+慎太郎さん指摘「発注も納品書も月末で締めた後は修正不可にしないとダメ」。
+大手（商奉行・弥生販売・フリーウェイ・freee・インボイス制度）を調査し、
+共通構造4点を抽出して永続化した。**B-109 と同時に設計する。単独では作らない。**
+
+### B-124 起票
+
+明細 id の不安定性は QE-1・本件・updateDeliveryNote 自身で **3例目**。
+同じ回避策を3箇所で書いている状態を構造的課題として記録。是正は未判断。
 
 ---
 
 ## ② 現在の状態
 
-- **main HEAD = `665985a`**（本メモ保存で更新される）。作業ツリー クリーン。
-- ローカルに `feat/b108-delivery-note-actions` が残存。PR #125 が squash merge のため
-  `git branch -d` は "not fully merged" で拒否される。`-D` は未実施。
-  内容は main に入っているので削除して問題ないが、判断は次セッションで。
+- **main HEAD = cd51396**。作業ツリー クリーン。
+- 本セッションは **docs のみ。コード・schema・DB は一切変更していない。**
+- コミット2本: 4dd1a6c（v1.0 追補＋B-123）→ cd51396（v1.1 追補＋B-123 追補＋B-124）
+  ※ 52adee4 は前セッションの引き継ぎメモ
+- ローカルに feat/b108-delivery-note-actions が残存（PR #125 squash merge のため
+  git branch -d は拒否される）。内容は main に入っているので -D で消してよい。未実施。
 - dev サーバ PID 37285（2026-08-07 15:24 起動・最新 Prisma Client）。
-- dev のダミークライアント CL-001（葵アパレル）に検証用住所を投入済み
-  （〒150-0043 東京都 渋谷区 道玄坂1-22-10 見真ビル1F / 03-0000-0000）。
+  **PR2a の migration を dev に適用したら必ず再起動すること。**
 
 ---
 
-## ③ B-108 PR2 の確定事項（仕様確認書 §3 の要約）
+## ③ プロジェクトナレッジ登録状況（2026-08-08 時点・完了済み）
 
-| # | 論点 | 確定内容 |
-|---|---|---|
-| ④ | 二重引き当て防止 | **DB では防がない。** 分納が常態（3枚のうち2枚を先に送る等）で、止めると運用が塞がる。正しく防ぐには数量ベースの消化管理が要り、それは受注(SO)・出荷の領分で SO モデルは未実装。代わりに「DLV-2026-0002 で納品済み」の情報バッジを出す |
-| ⑤ | 親の品番が null の WO/PO 明細 | **引き当て候補から除外。ただし折りたたまず警告として表示し理由を明示。** 引き当てタブ内に品番ピッカーを作ると B-122 と二重になる。品番 null は発注側のデータ不備であり直す場所は発注。黙って隠すと ⑥ の趣旨に反する |
-| ⑥ | 候補スコープと漏れ検知 | **本 PR の主目的。** 慎太郎さん確定「同じサンプルを二度送ることより、**仕入があるのに納品していない**ことの方が起こりやすく、そちらがまずい」。候補＝選択中クライアント配下の全品番・全ブランド（品番カルテから起票してもその品番に閉じない）。**既定フィルタ＝未納品のみ。** 納品済みはトグル。クライアント横断はしない |
-| ⑦ | 品番なし納品 | **持たない。** 参考サンプルの売り立ても実在ブランドで品番を起こす（§4-1(d) 準拠）。→ B-121 取り下げ |
-| ⑧ | 写経元の訂正 | spec §5 は `generateProductionOrders` を指すが、実装は「明細ごとに相手先を割当てて1ボタン生成」型で本件と型が違う。**実態に合う写経元は `AddProcessingDialog`**（progress-checklist） |
-| ⑨ | 数量の型差 | `PoItem.quantity` は Decimal(15,4)、`DeliveryNoteItem.quantity` は Int。小数時は警告して人が整数入力・自動丸めなし（上位 §3-2 のまま） |
-| ⑩ | 進行タスク | `SAMPLE_TASK_TEMPLATE` に `{ DELIVERY, sortOrder: 90, isReceived: null }` を追加。enum 既存のため **migration 不要**。`AUTO_FROM_DOC_TASK_TYPES` には含めない（自動算出は B-106） |
-| ⑪ | カルテ内セクション | ⑭発注（`ProductOrdersSection`・`#orders`・616-617行）の直後に `products/_components/delivery-note-section.tsx` を新設。写経モデルは `production-progress-checklist.tsx` |
+- b-108-pr2-allocation-ui-spec-confirmation-v0_1-2026-08-08.md（v1.0＋v1.1 追補入り）
+- b-123-period-close-lock-design-note-2026-08-08.md（recon 追補入り）
+- b-124-order-item-id-instability-note-2026-08-08.md（新規）
+
+※ ファイル名は v0_1 のままだが**中身は v1.1**。上位仕様が v1.0 ファイルに v1.1 追補を
+末尾追記した house style に合わせている。ファイル名でバージョンを判断しないこと。
 
 ---
 
-## ④ ★⑫ 未確認論点（次セッション冒頭で判断）
+## ④ 次の実装（PR2a → PR2b → PR2c）
 
-### 問題
-⑥ で「未納品のみ」を**既定フィルタ**にすると決めた結果、
-「納品済みか否か」の判定精度が漏れ検知の信頼性を直接左右するようになった。
-しかし `DeliveryNoteItem` にはサンプル由来・PoItem 由来を記録する列が無い
-（あるのは休眠の `soId` / `soItemId` / `woId` / `finishedGoodsMovementId` のみ）。
+### PR2a: migration（引き当て元5列・triple-gate 厳守）
 
-推測ベース（productId + 品名 + 数量の一致等）で判定すると、
-誤って「納品済み」とされた行が**既定で非表示になる**。
-⑥ が防ごうとしている漏れを、システム自身が作り出すことになる。
-バッジだけなら誤判定は表示の間違いで済むが、**フィルタで隠すと事故**。
+- ゲート1 dev 適用 → **ゲート2 ★マージ前★ 本番 dry-run（BEGIN/ROLLBACK・行数実測）**
+  → ゲート3 マージ（= 自動デプロイ = 自動適用）→ ゲート4 実測
+- dev DB には _prisma_migrations が無い（db push 由来）。
+  手順は「静的 diff → 手書き SQL → psql 適用 → migrate diff で empty-diff 検証」
+- additive-only（PR1a の DROP NOT NULL とは性質が違い非破壊）。
+  ただし migration である以上 triple-gate は厳守
+- **dev 適用後は dev サーバを再起動**（2026-08-08 の教訓・stale Prisma Client）
 
-### 案A（推奨）: 引き当て元3列を追加
-`sourceSampleProductionId` / `sourceWoItemId` / `sourcePoItemId`（すべて nullable・index）。
-- 命名は既存規約に沿う（`ProductionEstimateItem` に `sourcePoItemId` / `sourceWoItemId` が実在）
-- **additive-only。** PR1a の `DROP NOT NULL`（片道切符）とは性質が違い非破壊。
-  ただし migration である以上 **triple-gate は厳守**
-- 判定が確実になり、将来の数量ベース消化管理（SO 実装時）の土台にもなる
+### PR2b: 引き当て UI（3タブ・一括追加）＋ 漏れ検知フィルタ
 
-### 案B: 列を追加せず既定フィルタを外す
-既定は全件表示・納品済みバッジのみ。判定は推測ベースだが、誤判定しても行が隠れない。
+- 写経元は AddProcessingDialog（samples/_components/progress-checklist.tsx）
+- **★round-trip 検証を受け入れ条件に含める**（①参照）
+- 実装前に **dev 検証データの投入が必要**（§6-2）:
+  wo_items / po_items の INDIVIDUAL_BILLING が dev に **0件**でタブ2 が検証できない
 
-### 実装分割（判断後に確定）
-- 案A: PR2a migration（3列・triple-gate）→ PR2b 引き当て UI ＋ 漏れ検知 → PR2c カルテ内セクション ＋ DELIVERY 行
-- 案B: PR2a 引き当て UI ＋ バッジ → PR2b カルテ内セクション ＋ DELIVERY 行
+### PR2c: カルテ内セクション ＋ SAMPLE_TASK_TEMPLATE の DELIVERY 行
 
----
-
-## ⑤ PR2 recon で判明した現物（仕様確認書 §2 の要約）
-
-### 品番の解決経路と穴（★重要）
-`WoItem` / `PoItem` は **`productId` 列を持たない**。親から解決する:
-- `WoItem` → `WorkOrder.productId` = `String?`（**nullable**）
-- `PoItem` → `PurchaseOrder.primaryProductId` = `String?`（**nullable**）
-
-validator は PO/WO とも `.refine(d => !!d.productId || !!d.sampleProductionId)` で
-「品番 or サンプル製作」いずれか必須（野良伝票防止・§4-1(d)）。
-action は `SampleProduction.productId ?? data.productId` で導出。
-**ただし DB 制約ではなくアプリ層のみの担保。**
-
-**dev 実データに品番 null が実在**: `purchase_orders` 9件中1件・`work_orders` 12件中2件。
-B-078 以前の残骸と推測。`DeliveryNoteItem.productId` は NOT NULL のため ⑤ が必要になる。
-**本番にも同種の行があるかは未確認。実装ブリーフ着手前に read-only の count で確認する。**
-
-### dev の検証データ不足
-- `sample_productions`（active）= 6 → タブ1 は検証可能
-- `wo_items` で `billing_classification = 'INDIVIDUAL_BILLING'` = **0**
-- `po_items` で `INDIVIDUAL_BILLING` または `is_physical_asset = true` = **0**
-→ **タブ2 が検証できない。** 実装ブリーフに dev 検証データ投入を工程として含める。
+- ⑭発注（ProductOrdersSection・#orders）の直後に
+  products/_components/delivery-note-section.tsx を新設
+- { DELIVERY, sortOrder: 90, isReceived: null } を追加。enum 既存のため migration 不要
+- AUTO_FROM_DOC_TASK_TYPES には含めない（自動算出は B-106）
 
 ---
 
-## ⑥ 実装前に必ず行うこと（仕様確認書 §6）
-1. 本番の品番 null 行の確認（read-only の count のみ）
-2. dev 検証データの投入（`INDIVIDUAL_BILLING` の WoItem / PoItem）
-3. migration を伴う場合は dev サーバの再起動（§⑧ の教訓）
+## ⑤ バックログ（今セッションの増減）
+
+### 新規
+
+- **B-123**: 締め処理（期間ロック）。**B-109 と同時設計・単独では作らない。**
+  → docs/b-123-period-close-lock-design-note-2026-08-08.md
+- **B-124**: 明細 id の不安定性（伝票編集で全削除→再作成）。記録のみ・是正未判断。
+  → docs/b-124-order-item-id-instability-note-2026-08-08.md
+
+### 変更なし（前セッションから継続）
+
+- B-119 / B-120（PO/WO 作成 UX）、B-122（納品書の品番ピッカー・PR2 完了後に再評価）
+- B-115 / B-116 / B-118（Windows Chrome フォーカススクロール・再発監視）
+- B-108 PR3（PDF・★B-086 完了後）、B-109 / B-110 / B-114
+- B-121 は取り下げ済み（2026-08-08）
 
 ---
 
-## ⑦ バックログ
+## ⑥ 本セッションの教訓
 
-### 新規起票
-- **B-115**: 旧方式で溜まった GCS 控えの棚卸し・掃除（不可逆のため慎重に）
-- **B-116**: PO/WO 一覧からの複数選択 → まとめて1PDF
-- **B-117**: 完了済（stamp 突合）
-- **B-118**: Windows Chrome で入力ボックスがフォーカス時に最下部へスクロール（再発監視・未再現）→ `docs/b-118-windows-chrome-focus-scroll-watch-2026-08-07.md`
-- **B-119**: 発注（PO/WO）作成画面に品番が表示されず、何用の発注か分からなくなる。`new/page.tsx` の context ラベルは sampleNumber / taskType のみ。PO/WO 両方が対象
-- **B-120**: 発注明細で入力済み行の複製（行コピー）。`useFieldArray` の append で実装可。B-084（行の並べ替え）と同時設計を検討
-- **B-121**: ★**取り下げ（2026-08-08）**。参考サンプルの売り立ても実在ブランドで品番を起こす方針が確定したため、`delivery_note_items.product_id` の DROP NOT NULL は不要。根拠は `product-sample-spec §4-1(d)`（品番未確定の宙ぶらりんな状態を持たない）。B-112 と同じ取り下げ扱い
-- **B-122**: 納品書 明細の品番ピッカー改善。現状 `listActiveProductsForDeliverySelect` は companyId のみで全品番を返す（絞り込み・件数上限なし）。**確定方針（B-121 取り下げにより単純化）**: SearchableSelect 化／選択中クライアント配下をブランド別グループで既定表示／クライアント未選択時はガイド／クライアント変更時も明細行は残す（案a）／サーバー側検索は v2。★B-108 PR2 完了後に再評価（引き当てが主経路になると手入力ピッカーは例外運用に落ちるため）
+### 説明が専門的すぎて論点が伝わらなかった
 
-### PR2 の後に控えるもの
-- **B-108 PR3** PDF（★B-086 完了後。B-086 の recon が前提・上位 §15）
-- **B-109** 合計請求書（インボイス制度）／**B-110** 輸出用コマーシャルインボイス
-- **B-114** 量産納品書（SKU×サイズ・受注(SO)モデルが前提）
+「引き当て元列」「id の不安定性」を技術用語のまま説明したため、慎太郎さんから
+「この辺りは経理関係？」と確認が入った。**経理（締め処理）と作業ミス防止（漏れ検知）は
+別の話**だったが、同じ会話の中で混ざっていた。
+→ 業務の言葉に翻訳してから話す。「何のための機能か」を先に置く。
 
----
+### 検証コマンドの設計ミス
 
-## ⑧ 本セッションの教訓
+grep -c "sourceWoId" が 0 のはず、としたが結果は 3。中身は
+「sourceWoId は採らない」と却下している散文だった。**却下理由の中に文字列が出ることを
+織り込んでいなかった。** Claude Code が停止せず理由を添えて報告した判断は正しい。
+→ 否定形のチェックは、文脈込みで見ないと誤検知する。
 
-### dev サーバの長時間起動による stale Prisma Client
-納品書の作成が `Argument 'productId' is missing` で失敗したが、schema・dev DB・
-ディスク上の生成 client・spec のすべてが正しかった。原因は dev サーバが
-2026-08-05 23:44 起動のまま、2026-08-06 17:34 の `prisma generate` より前の client を
-メモリに保持していたこと。`@prisma/client` はプロセス起動時に一度ロードされ、
-ホットリロードでは差し替わらない。
+### 保存指示にプレースホルダを残した（★再発）
 
-→ **migration を dev に適用したら dev サーバも必ず再起動する。**
-   さらに悪いのは、再生成以降にその dev サーバで行った目視確認が
-   すべて古い client 上の結果になっていた点。**再起動後に検証をやり直す必要がある。**
+引き継ぎメモの保存指示で heredoc の中身を「（メモ全文をここに貼り付け）」のままにして
+渡した。実行されていれば既存メモが1行で全上書きされ消失していた。
+Claude Code が実行前に停止して報告したため事故は起きていない。
+→ **file-write-verification の原則どおり、本文は必ず heredoc に丸ごと埋め込む。
+  プレースホルダは厳禁。** 分割して渡す場合も同じ。
 
-### 指示の継ぎ足しによる矛盾
-Claude.ai 側が構造化タスクを出した後、別メッセージで対象ファイルを追加したため、
-禁止事項（「SESSION_HANDOVER.md 以外に触れない」）と本文が食い違い、
-Claude Code が実行前に停止して確認してきた。停止判断は正しい。
-**指示を出した後に対象を足す場合は、禁止事項も含めて全体を出し直す。**
-同様に、既に起票済みのバックログを再度起票する指示を出して重複を招きかけた。
-**起票前に必ず現物 grep で既存を確認する。**
+### 実装前 recon が穴を1つ潰した
 
-### tsc/lint は挙動変化を捉えない
-`createDeliveryNote` を共有ヘルパに切り出すリファクタを行った際、tsc/lint は
-クリーンだったが、動いていた作成パスに手が入っている以上、
-**編集だけでなく作成も検証し直す必要があった。**
-
-### ブラウザ拡張が DOM に介入する
-Feedly Mini 拡張が `<body>` に `data-feedly-mini="yes"` を注入し、
-ハイドレーション不一致を起こしていた。B-118 の傍証（詳細は B-118 ノートの追加観測）。
+updateDeliveryNote も明細を作り直すことは、列を追加した後だと気づきにくい経路だった
+（消えてもエラーが出ず画面にも現れない）。**recon を実装ブリーフの前に置いた**ことで
+要件化できた。この順序は維持する。
 
 ---
 
-## ⑨ 環境
+## ⑦ 環境（変更なし）
 
-- dev DB = `hopper.proxy.rlwy.net:12921` / 本番 DB = `shuttle.proxy.rlwy.net:16099`
-- 本番 URL = `shunya-pms-web-production.up.railway.app`
-- dev サーバは `PORT=3001`（localhost:3000 は saagara-rebuild 用）
-- dev DB には `_prisma_migrations` が無い（db push 由来）。migration は
-  「静的 diff → 手書き → psql 適用」が確定手順
+- dev DB = hopper.proxy.rlwy.net:12921 / 本番 DB = shuttle.proxy.rlwy.net:16099
+- 本番 URL = shunya-pms-web-production.up.railway.app
+- dev サーバは PORT=3001（localhost:3000 は saagara-rebuild 用）
 - 本番 migration: 46本適用済み・pending なし（2026-08-08 デプロイログで確認）
