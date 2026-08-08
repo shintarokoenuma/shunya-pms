@@ -116,3 +116,46 @@
 | 日付 | バージョン | 内容 |
 |---|---|---|
 | 2026-08-08 | v0.1 | 初版。大手システム調査（奉行・弥生・フリーウェイ・freee・インボイス制度）を記録。共通構造4点を抽出。B-109 と同時設計する方針を確定。未確認事項4件を列挙 |
+
+---
+
+# 追補（2026-08-08・B-108 PR2 recon による受け皿確認の結果）
+
+§4 未確認事項の 2（計上日列の有無）について、納品書分の確認が完了した。
+
+## 納品書 — 受け皿は充足している（migration 不要）
+
+`DeliveryNote.deliveryDate DateTime @db.Date`（**NOT NULL**）が実在し、
+`@@index([companyId, deliveryDate])` も付いている。人が入力する経路も通っている:
+
+- 入力: `deliveries/_components/delivery-note-form.tsx:220`（date 入力欄）
+- 検証: `validators/delivery-note.ts:76`（「納品日を入力してください」・必須）
+- 保存: `actions/delivery-notes.ts:510`（create）/ `:697`（update）
+
+→ 締めを計上日で切る設計にした場合、**納品書は `deliveryDate` をそのまま使える。**
+   締め導入時に納品書側の migration は不要。
+
+## 発注（PO/WO）— 列は在るが、意味の検討が残る
+
+`PurchaseOrder.orderDate` / `WorkOrder.orderDate`
+（ともに `DateTime @db.Date` NOT NULL・`@default(now())`）が実在。
+
+ただしこれは**発注日**であり、仕入の計上日として妥当かは別問題。
+実務上、仕入を計上するのは検収時点（`receivedAt` / `actualDeliveryDate`）である
+可能性がある。**どの日付で締めるかは B-109 の設計時に慎太郎さんと確定する。**
+
+候補列（いずれも実在）:
+- `orderDate`（発注日・NOT NULL）
+- `actualDeliveryDate`（実納品日・nullable）
+- `receivedAt`（PO のみ・nullable）
+
+→ §4 の未確認事項 2 は「納品書＝解決済み / 発注＝要検討」に更新する。
+
+## §4 未確認事項の現況
+
+| # | 内容 | 状態 |
+|---|---|---|
+| 1 | `Client` の締日マスター | **未確認**（B-109 時） |
+| 2 | 計上日列 | 納品書＝**解決**／発注＝**要検討**（上記） |
+| 3 | PO/WO の編集可能範囲 | **未確認**（B-109 時） |
+| 4 | 変更証跡が既存監査列で足りるか | **未確認**（B-109 時） |

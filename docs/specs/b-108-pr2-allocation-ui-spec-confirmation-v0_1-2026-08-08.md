@@ -401,3 +401,131 @@ migration が必要になることが今の段階で判明する。
 | 日付 | バージョン | 内容 |
 |---|---|---|
 | 2026-08-08 | v1.0 | 追補により確定。⑫ を案A（引き当て元3列追加）で確定。不変条件3点（判定不能は未納品側／FK 非付与／案A′ の可能性）を明記。recon 項目を2件追加（明細更新方式・計上日列）。締め処理を B-123 として分離。実装分割を PR2a/2b/2c で確定 |
+
+---
+
+# 追補 v1.1（2026-08-08・recon 結果による ⑫ の再確定）
+
+本追補は v1.0 追補（§B-1〜B-6）の **B-1 と B-2(c) を改訂する**。
+根拠は同日実施の read-only recon（§C-1 に raw 記載）。
+
+## C-1. recon で確定した現物
+
+### 明細の更新方式（全て deleteMany → createMany）
+
+| action | 該当箇所 | 明細 id の安定性 |
+|---|---|---|
+| `updatePurchaseOrder` | `purchase-orders.ts:732-733` | `PoItem.id` は編集のたびに再生成＝**不安定** |
+| `updateWorkOrder` | `work-orders.ts:940-941` | `WoItem.id` は編集のたびに再生成＝**不安定** |
+| `updateDeliveryNote` | `delivery-notes.ts:709-710` | 同型（自分自身も作り直す）→ §C-3 |
+
+親（`PurchaseOrder` / `WorkOrder`）は soft-delete のみで **id 不変**。
+
+### 命名先例（house style の live 確認）
+
+`schema.prisma` に既存:
+- 9608-9609行 `ProductionEstimateItem.sourcePoItemId` / `sourceWoItemId`
+- 9668行 `sourceSampleProductionId`（`@@index` 付き・9703行）
+- 9727-9728行（別モデル）
+
+いずれも **scalar `@map` ＋ `@@index`・`@relation` なし**。
+→ v1.0 追補 B-2(b)（FK 非付与）は house style と完全一致。**変更なし。**
+
+### 計上日の受け皿（B-123 向け確認）
+
+`DeliveryNote.deliveryDate DateTime @db.Date`（**NOT NULL**）が実在。
+`@@index([companyId, deliveryDate])` あり。入力経路も実在:
+`delivery-note-form.tsx:220`（date 入力）→ `validators/delivery-note.ts:76`（必須）
+→ `delivery-notes.ts:510 / 697`（保存）。
+→ **納品書は締め導入時の migration 不要。** 詳細は B-123 ノートへ。
+
+## C-2. ⑫ の再確定 — 案A（3列）→ **案A′（5列）** に改訂
+
+v1.0 追補 B-2(c) が「`updateWorkOrder` も明細を作り直しているなら案A′を検討する」
+としていた条件が、recon により **成立した**。よって案A′を採用する。
+
+    sourceSampleProductionId  String?  @map("source_sample_production_id")
+    sourceWoItemId            String?  @map("source_wo_item_id")
+    sourceWorkOrderId         String?  @map("source_work_order_id")
+    sourcePoItemId            String?  @map("source_po_item_id")
+    sourcePurchaseOrderId     String?  @map("source_purchase_order_id")
+
+すべて nullable・index 付与・`@relation` なし・backfill 不要。
+
+### ★列ごとの役割を厳密に分ける（実装時の必須要件）
+
+役割を曖昧にすると、不安定な行 id でフィルタしてしまい
+**v1.0 追補 B-2(a)（隠す誤判定を作らない）を破る。**
+
+| 列 | 安定性 | 用途 |
+|---|---|---|
+| `sourceSampleProductionId` | **安定**（レコード自体を参照） | **フィルタ可**（タブ1の未納品判定） |
+| `sourceWoItemId` / `sourcePoItemId` | 不安定（親編集で dead） | 行レベル特定・**best-effort** |
+| `sourceWorkOrderId` / `sourcePurchaseOrderId` | **安定**（soft-delete のみ） | **バッジのみ。フィルタ根拠にしない** |
+
+### 親 id を持つ理由（④ の担保）
+
+④ は「二重引き当てを DB で防がない代わりに情報バッジを出す」で決着している。
+行 id だけだと、**発注を1回編集した時点でバッジが消え、④ の代替策が空手形になる。**
+親 id があれば「この発注に納品実績あり」まで劣化しても表示は残る。
+
+親 id 単独では「どの行が納品済みか」を特定できないため、
+**フィルタの根拠にはならない**（表示のみ）。ここを混同しないこと。
+
+### 命名の変更（recon 案からの修正）
+
+recon の暫定案 `sourceWoId` は**採らない**。
+`DeliveryNoteItem` には既に休眠列 `woId` が存在し（v1.0 §2-3・「意味が異なるため流用しない」
+と明記済み）、`woId` と `sourceWoId` が並ぶと読み手が必ず混乱する。
+親は正式名で対称に揃え、**`sourceWorkOrderId` / `sourcePurchaseOrderId`** とする。
+
+## C-3. ★`updateDeliveryNote` の round-trip 要件（PR2b の必須要件）
+
+`updateDeliveryNote` は明細を全削除→再作成する（v1.1 追補 A-1 で確定した仕様どおり）。
+**引き当て元列を追加した後は、この経路が新たな穴になる。**
+
+DRAFT の納品書を編集して保存した時、フォームが `sourceXxxId` を持ち回っていなければ
+**引き当て元の記録が静かに消える。** 列を追加した目的そのものが編集1回で無効化され、
+しかも消えたことは画面に現れない。
+
+### 必須要件
+
+1. 編集フォームは明細行ごとに5列すべてを hidden で保持する。
+2. `updateDeliveryNote` は再作成時に5列を書き戻す。
+3. **検証項目に明記する**:
+   「引き当て → 保存 → 編集画面を開く → 変更せず保存 → 引き当て元が残っているか」
+   このラウンドトリップ検証を PR2b の受け入れ条件とする。
+
+## C-4. ⑤ の位置づけを格下げ（保険扱い）
+
+慎太郎さん確認（2026-08-08）: **本番の発注はすべて品番カルテから起票されており、
+品番が紐づいていない発注は存在しない。** dev の3件（PO 1・WO 2）は開発中の古いデータ。
+
+加えて B-078 の validator（`!!productId || !!sampleProductionId`）により
+野良発注は現在塞がっている。
+
+→ ⑤ の警告表示は**実務で使われる機能ではなく、万一のための保険**とする。
+   実装内容は v1.0 §3 の ⑤ から変更しない（警告として明示・折りたたまない）。
+
+### §6-1 の消し込み
+
+v1.0 §6 の「実装前に必ず行うこと」1番
+（本番の品番 null 行の read-only count）は **不要として取り消す。**
+確認するまでもなく存在しないため。これにより **PR2a で本番に触れるのは migration のみ**
+となる。本番接続の回数を増やさないことを優先する。
+
+§6 の 2（dev 検証データ投入）と 3（dev サーバ再起動）は**そのまま有効**。
+
+## C-5. B-124 の起票
+
+明細 id の不安定性は QE-1（原価参照を `poItemId` → `purchaseOrderId` に退避）・
+本件の引き当て記録・`updateDeliveryNote` 自身で **3例目**。
+個別の回避ではなく構造的課題として **B-124** に記録する
+（→ `docs/b-124-order-item-id-instability-note-2026-08-08.md`）。
+是正の可否は別途判断。本 PR では回避策（親 id 併記）で進む。
+
+## C-6. 改訂履歴（追記）
+
+| 日付 | バージョン | 内容 |
+|---|---|---|
+| 2026-08-08 | v1.1 | recon 結果により ⑫ を案A→**案A′（5列）**に改訂。列ごとの役割（フィルタ可／バッジのみ）を厳密化。命名を `sourceWorkOrderId` / `sourcePurchaseOrderId` に確定。`updateDeliveryNote` の round-trip 要件を PR2b 必須要件として追加。⑤ を保険扱いに格下げし §6-1 を取り消し。B-124 起票 |
