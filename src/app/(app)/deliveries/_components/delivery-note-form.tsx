@@ -23,6 +23,10 @@ import {
   type DestinationOption,
   type DeliveryProductOption,
 } from "@/lib/actions/delivery-notes"
+import {
+  AllocationDialog,
+  type AllocationPickedRow,
+} from "./allocation-dialog"
 
 export type ItemRow = {
   productId: string
@@ -153,6 +157,17 @@ export function DeliveryNoteForm({
   const addRow = () => setItems((prev) => [...prev, emptyRow()])
   const removeRow = (idx: number) =>
     setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))
+
+  // 引き当てダイアログからの一括追加。既存が「空の1行だけ」なら置き換える。
+  const handleAllocationAdd = (rows: AllocationPickedRow[]) => {
+    setItems((prev) => {
+      const isPristine =
+        prev.length === 1 &&
+        prev[0].productId === "" &&
+        prev[0].productName === ""
+      return isPristine ? rows : [...prev, ...rows]
+    })
+  }
 
   const onSubmit = () => {
     if (!clientId) {
@@ -370,10 +385,13 @@ export function DeliveryNoteForm({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">明細</p>
-          <Button type="button" size="sm" variant="outline" onClick={addRow}>
-            <Plus className="mr-1 h-4 w-4" />
-            行を追加
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={addRow}>
+              <Plus className="mr-1 h-4 w-4" />
+              行を追加
+            </Button>
+            <AllocationDialog clientId={clientId} onAdd={handleAllocationAdd} />
+          </div>
         </div>
         <div className="space-y-3">
           {items.map((row, idx) => (
