@@ -143,14 +143,88 @@
 | B-116 | 未着手 | PO/WO一覧からの複数選択→まとめて1PDF | — |
 | B-117 | 完了 | PDF控えstampの突合修正（B-055回復・PR #123） | — |
 | B-118 | 未着手 | Windows Chromeでフォーカス時に最下部スクロール（再発監視） | docs/b-118-windows-chrome-focus-scroll-watch-2026-08-07.md |
-| B-119 | 未着手 | 発注作成画面に品番非表示（PO/WO contextラベル拡張） | — |
+| B-119 | 未着手 | PO/WO 画面の可読性改善（品番非表示の解消＋明細行の区切りが判別しづらい問題） | — |
 | B-120 | 未着手 | 発注明細の入力済み行の複製（行コピー） | — |
 | B-121 | 取り下げ | 納品書の品番必須緩和（DROP NOT NULL・実在ブランド品番方針で不要） | — |
 | B-122 | 未着手 | 納品書明細の品番ピッカー改善（SearchableSelect化） | — |
 | B-123 | 未着手 | 締め処理（期間ロック・B-109と同時設計） | docs/b-123-period-close-lock-design-note-2026-08-08.md |
 | B-124 | 保留 | 明細idの不安定性（伝票編集で全削除→再作成）記録・是正未判断 | docs/b-124-order-item-id-instability-note-2026-08-08.md |
+| B-126 | 未着手 | 品番の物理削除ガードが Sku/CollectionProduct しか数えず、発注・サンプル・納品書が紐づく品番を削除できる（参照内訳の可視化） | — |
+| B-127 | 未着手 | サンプル製作にサイズ・カラーの明細テーブルを追加（ラウンド横断のサイズ展開把握・量産への引き当て基盤） | — |
+| B-128 | 未着手 | 発注明細の売り立て区分が未設定の行を警告表示（必須化はしない・null は正当な状態のため） | — |
+| B-129 | 未着手 | React Compiler の set-state-in-effect エラー 11件（25ファイル・既存 baseline） | — |
 
 ---
+
+### B-126〜B-129 の補足（2026-08-09 実測）
+
+#### B-126: 品番の物理削除ガードの網が狭い
+
+`checkProductUsage`（`src/lib/actions/products.ts:1010`）が数える参照は
+**`Sku` と `CollectionProduct` の2モデルのみ**。`deleteProductPermanently`
+（同 1049）のガード4 と UI の `canDelete` がこの `totalRefs === 0` に依存する。
+
+一方 `productId` / `primaryProductId` を持つモデルは schema 上30箇所以上あり、
+`WorkOrder` / `PurchaseOrder` / `SampleProduction` / `DeliveryNoteItem` / `Bom` /
+見積類は **scalar FK（`@relation` なし・house style）** のため Cascade もかからず
+参照カウントにも入らない。結果、**発注もサンプルも紐づく品番が「参照なし」と
+表示され削除できる**。
+
+dev で実害が発生済み: 削除済み品番 `7671eb90` を WO-2026-0002 /
+PO-2026-0001 / PO-2026-0002 / SP-2026-0001〜0003 / SP-VERIFY-S4C1 が参照していた。
+
+**方針（慎太郎さん確定 2026-08-09）: 全部を拒否にはしない。**
+- 拒否対象: SKU・コレクション等の直接的な子（現行どおり）
+- **警告対象**: 発注 PO/WO・サンプル製作・納品書明細・BOM・見積類
+  → 件数の内訳を見せ、削除を躊躇する材料にする（判断は人）
+
+権限ガード（MASTER_ADMIN のみ）は既に実装済みのため現行維持。
+
+#### B-127: サンプル製作にサイズ・カラーの明細テーブル
+
+実務の流れ（慎太郎さん 2026-08-09）:
+- 1st の時点ではサイズ展開が未定。作った後に「M だった」と遡って確定する
+- 2nd でグレーディングしてサイズ展開が確定し、S・L を作る（M は 1st 済み）
+- **1つの SP で複数サイズ・カラーを同時に作る**
+- サイズ展開は**ラウンドを横断して**完成する（1st の M ＋ 2nd の S/L）
+
+現状 `SampleProduction` / `SampleRevision` に sku / color / size 列は無く
+（2026-08-09 recon 確認）、samples 配下の UI も SKU を参照していない。
+`Sku` は `colorwayId` NOT NULL ＋ `size` NOT NULL のため、色もサイズも未定の
+1st 時点では紐づける先が存在しない。
+
+要件の骨子:
+1. `SampleProduction` の子テーブルを新設（色・サイズ・数量）
+2. すべて後から確定可能（1st 作成時は空でよい）
+3. `sampleQuantity` との整合をどう取るか要検討
+4. 品番カルテでラウンド横断のサイズ展開一覧を表示（未作成サイズが分かる）
+5. 量産への引き当て基盤とする（用途の具体化が必要）
+
+★設計前に必ず確認: `ProductColorway` / `Sku` / `Material.availableColors` との
+関係（色情報の重複を作らない）、QE-1 がサンプルの何を参照しているか、
+B-114（量産納品書・SKU×サイズ）との境界。
+
+#### B-128: 売り立て区分が未設定の行の警告
+
+`billingClassification` は nullable（`nativeEnum().nullable().optional()`）で、
+dev では null が WO 10件 / PO 17件。**null は正当な状態**である
+（生地・付属の仕入は「売り立てるか単価に含めるか」の分類自体が当てはまらない）。
+
+したがって**必須化はしない**。必須にすると分類が当てはまらない行に
+嘘の値を入れさせることになり、B-108 §⑥ の候補判定が汚れる。
+
+代わりに B-108 §⑤ と同じ形で「売り立て区分が未設定の発注明細（N件）」を
+警告として表示し、拾い漏れに気づける形にする。
+
+#### B-129: lint baseline
+
+`npm run lint` の 11 errors はすべて
+`Calling setState synchronously within an effect can trigger cascading renders`
+（React Compiler の eslint ルール）。対象は brands / clients / colors / factories /
+products / bom-section 等の25ファイル。
+
+2026-08-09 時点で `docs/BACKLOG.md` に該当記載が無いことを grep で確認済み。
+以後の PR では**この 11 を baseline とし、超過した場合のみ停止**の運用とする。
 
 ## 別表: チャット由来（repo 証跡なし）
 
