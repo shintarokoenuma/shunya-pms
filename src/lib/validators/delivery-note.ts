@@ -63,6 +63,15 @@ export const deliveryNoteItemInputSchema = z.object({
   quantity: quantityIntField,
   unit: z.string().max(20).default("枚"),
   unitPrice: unitPriceField,
+  // B-108 PR2: 引き当て元（§C-2）。手入力行は全て null。
+  // ★フィルタ根拠に使ってよいのは sourceSampleProductionId のみ。
+  //   sourceWoItemId / sourcePoItemId は親編集で dead になる（best-effort）。
+  //   sourceWorkOrderId / sourcePurchaseOrderId はバッジ表示専用。
+  sourceSampleProductionId: optionalRelationId,
+  sourceWoItemId: optionalRelationId,
+  sourceWorkOrderId: optionalRelationId,
+  sourcePoItemId: optionalRelationId,
+  sourcePurchaseOrderId: optionalRelationId,
 })
 
 // =============================================================================

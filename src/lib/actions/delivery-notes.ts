@@ -476,6 +476,14 @@ async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
       subtotal: subtotal != null ? new Prisma.Decimal(subtotal) : null,
       currency: data.currency,
       notes: null,
+      // B-108 PR2 §C-3: 引き当て元を透過（加工・補完しない。手入力行は null）。
+      // create/update とも p.itemRows を { ...r } で展開するため、ここに含めれば
+      // deleteMany→createMany の round-trip で引き当て元が保持される。
+      sourceSampleProductionId: it.sourceSampleProductionId,
+      sourceWoItemId: it.sourceWoItemId,
+      sourceWorkOrderId: it.sourceWorkOrderId,
+      sourcePoItemId: it.sourcePoItemId,
+      sourcePurchaseOrderId: it.sourcePurchaseOrderId,
     }
   })
 

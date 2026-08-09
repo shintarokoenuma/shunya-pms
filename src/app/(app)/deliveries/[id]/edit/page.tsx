@@ -72,6 +72,12 @@ export default async function EditDeliveryNotePage({
       quantity: String(it.quantity),
       unit: it.unit,
       unitPrice: it.unitPrice == null ? "" : toStr(it.unitPrice),
+      // B-108 PR2 §C-3: 引き当て元を編集フォームに持ち回る（round-trip）。
+      sourceSampleProductionId: it.sourceSampleProductionId,
+      sourceWoItemId: it.sourceWoItemId,
+      sourceWorkOrderId: it.sourceWorkOrderId,
+      sourcePoItemId: it.sourcePoItemId,
+      sourcePurchaseOrderId: it.sourcePurchaseOrderId,
     })),
   }
 

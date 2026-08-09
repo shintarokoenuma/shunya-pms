@@ -33,6 +33,13 @@ export type ItemRow = {
   quantity: string
   unit: string
   unitPrice: string
+  // B-108 PR2 §C-3: 引き当て元（内部保持のみ・UI 非表示）。手入力行は null。
+  // 第1段では画面に出さず、round-trip（編集で消えない）を通すためだけに持つ。
+  sourceSampleProductionId: string | null
+  sourceWoItemId: string | null
+  sourceWorkOrderId: string | null
+  sourcePoItemId: string | null
+  sourcePurchaseOrderId: string | null
 }
 
 /** 編集フォームの初期値（編集ページが getDeliveryNote から組み立てる）。 */
@@ -62,6 +69,12 @@ function emptyRow(): ItemRow {
     quantity: "1",
     unit: "枚",
     unitPrice: "",
+    // 手入力行は引き当て元を持たない（すべて null）。
+    sourceSampleProductionId: null,
+    sourceWoItemId: null,
+    sourceWorkOrderId: null,
+    sourcePoItemId: null,
+    sourcePurchaseOrderId: null,
   }
 }
 
@@ -173,6 +186,12 @@ export function DeliveryNoteForm({
         quantity: r.quantity,
         unit: r.unit || "枚",
         unitPrice: r.unitPrice === "" ? null : r.unitPrice,
+        // §C-3: 引き当て元を action へ透過（内部保持値をそのまま渡す）。
+        sourceSampleProductionId: r.sourceSampleProductionId,
+        sourceWoItemId: r.sourceWoItemId,
+        sourceWorkOrderId: r.sourceWorkOrderId,
+        sourcePoItemId: r.sourcePoItemId,
+        sourcePurchaseOrderId: r.sourcePurchaseOrderId,
       })),
     }
     startTransition(async () => {
