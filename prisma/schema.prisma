@@ -6064,7 +6064,7 @@ model DeliveryNoteItem {
   // SKU情報
   // B-108 §3-1: ビーカー等 SKU を持たない見本を載せるため nullable 化（片道切符・量産納品は app 側で必須担保）。
   skuId     String? @map("sku_id")
-  productId String @map("product_id")
+  productId String  @map("product_id")
 
   // 表示用情報（仕様書6.3：先方品番中心）
   clientProductCode String? @map("client_product_code") @db.VarChar(50) // 先方品番
@@ -6088,6 +6088,18 @@ model DeliveryNoteItem {
   soItemId String? @map("so_item_id")
   woId     String? @map("wo_id")
 
+  // 引き当て元（B-108 PR2・仕様確認書 v1.1 §C-2）
+  // ★直上の woId は SO/WO 連携用の休眠列であり別物。流用しないこと。
+  // 安定: sourceSampleProductionId / sourceWorkOrderId / sourcePurchaseOrderId
+  // 不安定（親編集で dead になる・best-effort）: sourceWoItemId / sourcePoItemId
+  // フィルタ根拠に使ってよいのは sourceSampleProductionId のみ。
+  // 親 id（sourceWorkOrderId / sourcePurchaseOrderId）はバッジ表示専用。
+  sourceSampleProductionId String? @map("source_sample_production_id")
+  sourceWoItemId           String? @map("source_wo_item_id")
+  sourceWorkOrderId        String? @map("source_work_order_id")
+  sourcePoItemId           String? @map("source_po_item_id")
+  sourcePurchaseOrderId    String? @map("source_purchase_order_id")
+
   // 在庫紐付け
   finishedGoodsMovementId String? @map("finished_goods_movement_id")
 
@@ -6107,6 +6119,11 @@ model DeliveryNoteItem {
   @@index([skuId])
   @@index([productId])
   @@index([soId])
+  @@index([sourceSampleProductionId])
+  @@index([sourceWoItemId])
+  @@index([sourceWorkOrderId])
+  @@index([sourcePoItemId])
+  @@index([sourcePurchaseOrderId])
   @@map("delivery_note_items")
 }
 
