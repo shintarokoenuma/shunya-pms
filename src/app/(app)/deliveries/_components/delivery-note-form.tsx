@@ -23,6 +23,10 @@ import {
   type DestinationOption,
   type DeliveryProductOption,
 } from "@/lib/actions/delivery-notes"
+import {
+  AllocationDialog,
+  type AllocationPickedRow,
+} from "./allocation-dialog"
 
 export type ItemRow = {
   productId: string
@@ -33,6 +37,13 @@ export type ItemRow = {
   quantity: string
   unit: string
   unitPrice: string
+  // B-108 PR2 §C-3: 引き当て元（内部保持のみ・UI 非表示）。手入力行は null。
+  // 第1段では画面に出さず、round-trip（編集で消えない）を通すためだけに持つ。
+  sourceSampleProductionId: string | null
+  sourceWoItemId: string | null
+  sourceWorkOrderId: string | null
+  sourcePoItemId: string | null
+  sourcePurchaseOrderId: string | null
 }
 
 /** 編集フォームの初期値（編集ページが getDeliveryNote から組み立てる）。 */
@@ -62,6 +73,12 @@ function emptyRow(): ItemRow {
     quantity: "1",
     unit: "枚",
     unitPrice: "",
+    // 手入力行は引き当て元を持たない（すべて null）。
+    sourceSampleProductionId: null,
+    sourceWoItemId: null,
+    sourceWorkOrderId: null,
+    sourcePoItemId: null,
+    sourcePurchaseOrderId: null,
   }
 }
 
@@ -141,6 +158,17 @@ export function DeliveryNoteForm({
   const removeRow = (idx: number) =>
     setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))
 
+  // 引き当てダイアログからの一括追加。既存が「空の1行だけ」なら置き換える。
+  const handleAllocationAdd = (rows: AllocationPickedRow[]) => {
+    setItems((prev) => {
+      const isPristine =
+        prev.length === 1 &&
+        prev[0].productId === "" &&
+        prev[0].productName === ""
+      return isPristine ? rows : [...prev, ...rows]
+    })
+  }
+
   const onSubmit = () => {
     if (!clientId) {
       toast.error("クライアントを選択してください")
@@ -173,6 +201,12 @@ export function DeliveryNoteForm({
         quantity: r.quantity,
         unit: r.unit || "枚",
         unitPrice: r.unitPrice === "" ? null : r.unitPrice,
+        // §C-3: 引き当て元を action へ透過（内部保持値をそのまま渡す）。
+        sourceSampleProductionId: r.sourceSampleProductionId,
+        sourceWoItemId: r.sourceWoItemId,
+        sourceWorkOrderId: r.sourceWorkOrderId,
+        sourcePoItemId: r.sourcePoItemId,
+        sourcePurchaseOrderId: r.sourcePurchaseOrderId,
       })),
     }
     startTransition(async () => {
@@ -351,10 +385,13 @@ export function DeliveryNoteForm({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <p className="text-sm font-medium">明細</p>
-          <Button type="button" size="sm" variant="outline" onClick={addRow}>
-            <Plus className="mr-1 h-4 w-4" />
-            行を追加
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button type="button" size="sm" variant="outline" onClick={addRow}>
+              <Plus className="mr-1 h-4 w-4" />
+              行を追加
+            </Button>
+            <AllocationDialog clientId={clientId} onAdd={handleAllocationAdd} />
+          </div>
         </div>
         <div className="space-y-3">
           {items.map((row, idx) => (
