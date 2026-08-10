@@ -31,6 +31,8 @@ import { SampleProductionActions } from "../_components/sample-production-delete
 import { SampleStatusControl } from "../_components/sample-status-control"
 import { SampleGenealogy } from "../_components/sample-genealogy"
 import { ProgressChecklist } from "../_components/progress-checklist"
+import { SampleSewingInstructionSection } from "../_components/sample-sewing-instruction-section"
+import { parseSewingInstruction } from "@/lib/validators/sewing-instruction"
 import {
   SAMPLE_STATUS_LABELS,
   SAMPLE_STATUS_BADGE_VARIANT,
@@ -258,6 +260,21 @@ export default async function SampleProductionDetailPage({
                 "—"
               )
             }
+          />
+        </CardContent>
+      </Card>
+
+      {/* B-130: 縫製指示（ラウンド単位・案A） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">縫製指示</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SampleSewingInstructionSection
+            sampleProductionId={item.id}
+            value={parseSewingInstruction(item.sewingInstructions)}
+            hasStoredValue={item.sewingInstructions !== null}
+            isProductionEstimateBase={item.isProductionEstimateBase}
           />
         </CardContent>
       </Card>
