@@ -150,10 +150,10 @@
 | B-123 | 未着手 | 締め処理（期間ロック・B-109と同時設計） | docs/b-123-period-close-lock-design-note-2026-08-08.md |
 | B-124 | 保留 | 明細idの不安定性（伝票編集で全削除→再作成）記録・是正未判断 | docs/b-124-order-item-id-instability-note-2026-08-08.md |
 | B-126 | 未着手 | 品番の物理削除ガードが Sku/CollectionProduct しか数えず、発注・サンプル・納品書が紐づく品番を削除できる（参照内訳の可視化） | — |
-| B-127 | 未着手 | サンプル製作にサイズ・カラー＋原価の明細を持たせる（発注から原価集計・「請求しない」旧前提の是正・量産と同じ金額保持） | — |
+| B-127 | 未着手 | サンプル製作に色×サイズ×数量の明細（SKU 相当）を追加。★原価は既に実装済み（sample-production-costs.ts・列への永続化も動作）のためスコープ外 | — |
 | B-128 | 未着手 | 発注明細の売り立て区分が未設定の行を警告表示（必須化はしない・null は正当な状態のため） | — |
 | B-129 | 未着手 | React Compiler の set-state-in-effect エラー 11件（25ファイル・既存 baseline） | — |
-| B-130 | 未着手 | サンプル製作ラウンドに縫製指示を持たせる（現在は量産のみ B-094・縫製仕様書はラウンドの出力）。B-127 と同じ土台・recon 必須 | — |
+| B-130 | 未着手 | ラウンド単位の縫製指示（案A確定・SampleProduction に sewingInstructions Json を ADD COLUMN。Product からコピー→ラウンドで編集→確定サンプルを Product に書き戻し）＋変更ログは既存 SampleRevision の CRUD 実装で対応（enum に COLOR/SIZE/STITCHING 既存・現状 count のみで休眠） | docs/specs/b-094-sewing-instruction-spec-confirmation-v1_0-2026-08-01.md |
 | B-131 | 未着手 | 納品書明細に引き当て元バッジを表示（spec §④・5列は保存済みで表示のみ・要否は recon 後） | — |
 | B-132 | 未着手 | 未実装・休眠機能をグレー表示で明示（実装済み／休眠／未着手が画面から区別できず、仕様の欠落と実装の遅れが混同される。サイドバーの「受注」「SKU」で既存のグレー表現を機能単位・セクション単位に拡張） | — |
 
