@@ -4734,6 +4734,10 @@ model SampleProduction {
   patternWoId String? @map("pattern_wo_id") // パターン作成WO
   sewingWoId  String? @map("sewing_wo_id") // サンプル縫製WO
 
+  // 縫製指示（B-130 案A: ラウンド単位で保持。作成時に親SP／Productからコピー）
+  // 形は src/lib/types/sewing-instruction.ts の SewingInstruction と同一（Product と共用）
+  sewingInstructions Json? @map("sewing_instructions")
+
   // ステータス
   status SampleProductionStatus @default(PLANNING)
 
