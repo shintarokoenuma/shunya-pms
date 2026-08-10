@@ -385,6 +385,10 @@ export async function createSampleProduction(
     // 親（修正系譜）の解決：あれば roundOrder/productId を親から決める
     let roundOrder = 1
     let productId = data.productId
+    // B-130 案A: ラウンド作成時に縫製指示を継承する。
+    // 2nd 以降は親サンプルから、1st は品番カルテ（Product）からコピー。
+    // コピー元が null なら列も null のまま（EMPTY は書き込まない）。
+    let inheritedSewingInstructions: Prisma.InputJsonValue | undefined = undefined
     if (data.parentSampleId) {
       const parent = await prisma.sampleProduction.findFirst({
         where: {
@@ -392,22 +396,34 @@ export async function createSampleProduction(
           companyId: sess.companyId,
           deletedAt: null,
         },
-        select: { id: true, productId: true, roundOrder: true },
+        select: {
+          id: true,
+          productId: true,
+          roundOrder: true,
+          sewingInstructions: true,
+        },
       })
       if (!parent) {
         return { ok: false, error: "親サンプルが見つかりません" }
       }
       roundOrder = parent.roundOrder + 1
       productId = parent.productId // 系譜は同一 Product 配下
+      if (parent.sewingInstructions !== null) {
+        inheritedSewingInstructions = parent.sewingInstructions as Prisma.InputJsonValue
+      }
     }
 
     // Product 存在チェック
     const product = await prisma.product.findFirst({
       where: { id: productId, companyId: sess.companyId, deletedAt: null },
-      select: { id: true },
+      select: { id: true, sewingInstructions: true },
     })
     if (!product) {
       return { ok: false, error: "対象の品番カルテが見つかりません" }
+    }
+    // 1st ラウンド（親なし）は品番カルテから継承する。
+    if (!data.parentSampleId && product.sewingInstructions !== null) {
+      inheritedSewingInstructions = product.sewingInstructions as Prisma.InputJsonValue
     }
 
     const sampleRound = roundForOrder(roundOrder)
@@ -437,6 +453,10 @@ export async function createSampleProduction(
               sampleRound,
               roundOrder,
               parentSampleId: data.parentSampleId,
+              // B-130 案A: 継承した縫製指示（コピー元 null なら省略→列は NULL のまま）
+              ...(inheritedSewingInstructions !== undefined
+                ? { sewingInstructions: inheritedSewingInstructions }
+                : {}),
               title: data.title || null,
               description: data.description || null,
               // 空欄（null）のときは列の @default(1) に委ねるため省略する（列は NOT NULL）
@@ -575,6 +595,7 @@ export async function updateSampleProduction(
       parentSampleId: r.parentSampleId,
       title: r.title,
       description: r.description,
+      sewingInstructions: r.sewingInstructions,
       specificationId: r.specificationId,
       patternVersionId: r.patternVersionId,
       designVersionId: r.designVersionId,
