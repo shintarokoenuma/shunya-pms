@@ -153,7 +153,7 @@
 | B-127 | 未着手 | サンプル製作に色×サイズ×数量の明細（SKU 相当）を追加。★原価は既に実装済み（sample-production-costs.ts・列への永続化も動作）のためスコープ外 | — |
 | B-128 | 未着手 | 発注明細の売り立て区分が未設定の行を警告表示（必須化はしない・null は正当な状態のため） | — |
 | B-129 | 未着手 | React Compiler の set-state-in-effect エラー 11件（25ファイル・既存 baseline） | — |
-| B-130 | 未着手 | ラウンド単位の縫製指示（案A確定・SampleProduction に sewingInstructions Json を ADD COLUMN。Product からコピー→ラウンドで編集→確定サンプルを Product に書き戻し）＋変更ログは既存 SampleRevision の CRUD 実装で対応（enum に COLOR/SIZE/STITCHING 既存・現状 count のみで休眠） | docs/specs/b-094-sewing-instruction-spec-confirmation-v1_0-2026-08-01.md |
+| B-130 | 進行中 | ラウンド単位の縫製指示。縫製指示のラウンド保持は完了（PR #128/#129・2026-08-10 マージ・本番反映済み＝列追加＋継承[2nd以降=親SP/1st=Product]＋ラウンド表示編集＋カルテから読込＋確定サンプルからカルテへ明示反映）。残スコープ=ラウンド間の変更ログ（SampleRevision の CRUD・差分自動記録）。書き戻しは自動同期でなく明示ボタン方式・仕様ロックは作らない | docs/specs/b-094-sewing-instruction-spec-confirmation-v1_0-2026-08-01.md |
 | B-131 | 未着手 | 納品書明細に引き当て元バッジを表示（spec §④・5列は保存済みで表示のみ・要否は recon 後） | — |
 | B-132 | 未着手 | 未実装・休眠機能をグレー表示で明示（実装済み／休眠／未着手が画面から区別できず、仕様の欠落と実装の遅れが混同される。サイドバーの「受注」「SKU」で既存のグレー表現を機能単位・セクション単位に拡張） | — |
 
