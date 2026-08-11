@@ -806,7 +806,7 @@ export function ProductionEstimateForm({
                     control={form.control}
                     name={`items.${idx}.unitPrice`}
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className={isMaterial ? "md:order-1" : undefined}>
                         <FormLabel className="text-xs">単価</FormLabel>
                         <FormControl>
                           <Input
@@ -834,7 +834,8 @@ export function ProductionEstimateForm({
                   />
                   {isMaterial ? (
                     // 案A: MATERIAL は数量・単位入力を撤去し所要量（自動）を read-only 表示。
-                    <FormItem className="md:col-span-2">
+                    // B-133: 買う量列の新設で6列を維持するため col-span-2→1・並びは md:order で制御。
+                    <FormItem className="md:order-3">
                       <FormLabel className="text-xs">所要量（自動）</FormLabel>
                       <div className="flex h-9 items-center font-mono text-xs">
                         {fmtNum(
@@ -925,11 +926,43 @@ export function ProductionEstimateForm({
                       />
                     </>
                   )}
+                  {isMaterial && (
+                    // B-133: 買う量（ROLL の反数と残尺）。行小計の直前に置き金額の根拠を隣接。
+                    <FormItem className="md:order-4">
+                      <FormLabel className="text-xs">買う量</FormLabel>
+                      <div className="flex min-h-9 flex-col justify-center font-mono text-xs leading-tight">
+                        {rowResult?.purchasedQuantity != null ? (
+                          <>
+                            <span>
+                              {fmtNum(rowResult.purchasedQuantity)} {it?.unit || ""}
+                              {rowResult.rolls != null &&
+                                `（${rowResult.rolls.toLocaleString("ja-JP")}反）`}
+                            </span>
+                            {rowResult.remainingQuantity != null && (
+                              <span className="text-[10px] text-muted-foreground">
+                                残 {fmtNum(rowResult.remainingQuantity)}{" "}
+                                {it?.unit || ""}
+                              </span>
+                            )}
+                            {rowResult.maxUnitsFromRolls != null && (
+                              <span className="text-[10px] text-muted-foreground">
+                                取り切り{" "}
+                                {rowResult.maxUnitsFromRolls.toLocaleString("ja-JP")}{" "}
+                                枚
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          "—"
+                        )}
+                      </div>
+                    </FormItem>
+                  )}
                   <FormField
                     control={form.control}
                     name={`items.${idx}.currency`}
                     render={({ field }) => (
-                      <FormItem>
+                      <FormItem className={isMaterial ? "md:order-2" : undefined}>
                         <FormLabel className="text-xs">通貨</FormLabel>
                         <Select
                           value={field.value}
@@ -951,13 +984,13 @@ export function ProductionEstimateForm({
                       </FormItem>
                     )}
                   />
-                  <FormItem>
+                  <FormItem className={isMaterial ? "md:order-6" : undefined}>
                     <FormLabel className="text-xs">1枚あたり</FormLabel>
                     <div className="flex h-9 items-center font-mono text-xs font-medium">
                       {jpy(rowResult?.perUnitJpy ?? null)}
                     </div>
                   </FormItem>
-                  <FormItem>
+                  <FormItem className={isMaterial ? "md:order-5" : undefined}>
                     <FormLabel className="text-xs">行小計(JPY)</FormLabel>
                     <div className="flex h-9 items-center font-mono text-xs">
                       {jpy(rowResult?.subtotalJpy ?? null)}
@@ -1165,32 +1198,66 @@ export function ProductionEstimateForm({
                         <FormField
                           control={form.control}
                           name={`items.${idx}.rollPrice`}
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-xs">反単価</FormLabel>
-                              <FormControl>
-                                <Input
-                                  autoComplete="off"
-                                  type="number"
-                                  step="any"
-                                  inputMode="decimal"
-                                  value={field.value ?? ""}
-                                  onChange={(e) =>
-                                    field.onChange(
-                                      snapSpinnerInteger(
-                                        (e.nativeEvent as InputEvent).inputType,
-                                        e.target.value,
-                                        toNum(field.value),
-                                      ),
-                                    )
-                                  }
-                                  onBlur={field.onBlur}
-                                  name={field.name}
-                                  ref={field.ref}
-                                />
-                              </FormControl>
-                            </FormItem>
-                          )}
+                          render={({ field }) => {
+                            // B-133: 反単価 = 単価×原反長 で導出（qe-0 §Q4）。表示のみ・書き込まない。
+                            const up = toNum(it?.unitPrice)
+                            const rl = toNum(it?.rollLength)
+                            const derived =
+                              up !== null && up !== 0 && rl !== null && rl !== 0
+                                ? up * rl
+                                : null
+                            const derivedStr =
+                              derived !== null
+                                ? derived.toLocaleString("ja-JP", {
+                                    maximumFractionDigits: 2,
+                                  })
+                                : null
+                            const rp = toNum(field.value)
+                            return (
+                              <FormItem>
+                                <FormLabel className="text-xs">反単価</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    autoComplete="off"
+                                    type="number"
+                                    step="any"
+                                    inputMode="decimal"
+                                    placeholder={
+                                      rp === null && derivedStr !== null
+                                        ? `${derivedStr}（単価×原反長）`
+                                        : undefined
+                                    }
+                                    value={field.value ?? ""}
+                                    onChange={(e) =>
+                                      field.onChange(
+                                        snapSpinnerInteger(
+                                          (e.nativeEvent as InputEvent).inputType,
+                                          e.target.value,
+                                          toNum(field.value),
+                                        ),
+                                      )
+                                    }
+                                    onBlur={field.onBlur}
+                                    name={field.name}
+                                    ref={field.ref}
+                                  />
+                                </FormControl>
+                                {derivedStr !== null && rp === null && (
+                                  <p className="text-[10px] text-muted-foreground">
+                                    単価×原反長 = ¥{derivedStr} で計算中
+                                  </p>
+                                )}
+                                {derivedStr !== null &&
+                                  rp !== null &&
+                                  derived !== null &&
+                                  rp !== derived && (
+                                    <p className="text-[10px] text-muted-foreground">
+                                      単価×原反長 = ¥{derivedStr}
+                                    </p>
+                                  )}
+                              </FormItem>
+                            )
+                          }}
                         />
                         <FormField
                           control={form.control}
