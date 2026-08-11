@@ -1,13 +1,11 @@
-# SESSION_HANDOVER.md（2026-08-11 締め / M2 半分完了・B-133 完了・B-134〜137 起票）
+# SESSION_HANDOVER.md（2026-08-12 締め / B-134・B-136 完了・行ごと発注先の設計確定）
 
 ## ⓪ 次セッションの最初の一手
 
-**B-134（サンプル修正記録の削除）の実装から始める。**
-
-実装ブリーフは 2026-08-11 のチャットに全文あり。ただし**チャットは失われる前提**なので、
-下記 §⑤ に設計の要点を全て転記してある。ブリーフを再構成できる状態にしてある。
-
-その後の候補は §⑥ の優先順。
+**B-140（見積明細行に発注先を持たせる）の仕様確認書から始める。**
+設計の骨子は §④ に全て転記済み。
+★ただし **§③「判断の揺れ」を必ず先に読むこと。** 読まずに B-135 を
+撤回したくなったら、それは今夜と同じ間違いを繰り返している。
 
 ---
 
@@ -15,238 +13,200 @@
 
 | PR | 内容 | merge commit |
 |---|---|---|
-| **#130** | サンプル修正記録の CRUD（M2 / PR-C1） | `f181e47` |
-| **#131** | 量産見積 材料費行の UI 改善（B-133） | `098274f` |
+| **#132** | サンプル修正記録の削除（B-134） | `ff95d61` |
+| **#133** | 見積明細に由来の相手先を表示（B-136） | `d4fae31` |
 
-両方とも**本番反映済み・本番画面で動作確認済み**。
-PR #94（B-065・6/23 から open）を close。**open な PR はゼロ**。
+両方とも本番反映済み。BACKLOG 更新 `31b0426`（B-134 完了・B-138 起票）。
+**open な PR はゼロ。**
 
-### PR #130（PR-C1）の内容
-- 新規: `src/lib/validators/sample-revision.ts`（status は VarChar なので
-  `SAMPLE_REVISION_STATUSES = ["PENDING","COMPLETED"]` でアプリ層固定）
-- 新規: `src/lib/actions/sample-revisions.ts`（list / create / update）
-- 新規: `src/app/(app)/samples/_components/sample-revision-section.tsx`
-- 変更: `labels.ts`（TYPE 9値 / REQUESTOR 5値 / STATUS 2値）
-- 変更: `samples/[id]/page.tsx`（縫製指示の直後・修正系譜の直前に配置）
-- migration なし。**削除は含めていない**（→ B-134）
+### PR #132（B-134）
+- `deleteSampleRevision(id)` を追加。**物理削除**
+  （`SampleRevision` は `deletedAt` を持たず `SOFT_DELETE_MODELS`
+  = `TENANT_MODELS` に含まれないため削除ガードが掛からない）
+- 親 `SampleProduction` を `findFirst({ id, companyId, deletedAt: null })`
+  で所有確認。★`SampleRevision` に `companyId` 列が無いため必須。
+  省くと id 直指定で他テナントの記録を消せる
+- AuditLog の `beforeData` に **Json 3列（`details`/`photoUrls`/`attachments`）を含む**
+  ★M2 PR-C2 で `details` に縫製指示差分が入るため先回りして退避対象にした
+- `revisionOrder` は詰め直さない。本番実機で #1・#3・#4 を確認済み
+- ★採番は**残存行の最大値 +1** なので、最新行を消した場合のみ番号が再利用される。
+  実務上許容と判断
 
-### PR #131（B-133）の内容
-- `ProductionCostRow` に表示用4項目を追加:
-  `rolls` / `purchasedQuantity` / `remainingQuantity` / `maxUnitsFromRolls`
-- ★**反単価が未入力なら `単価 × 原反長` を導出して計算に使う**（qe-0 §Q4 の実装）
-  導出時の通貨は**行通貨**に従う。実値があればそちらを優先し上書きしない
-- 材料費行の並び: 単価 / 通貨 / 所要量 / 買う量 / 行小計 / 1枚あたり
-  （`md:order-*` で視覚順序のみ変更。JSX は動かしていない）
-- 所要量を `md:col-span-2` → `1` に変更（6列維持のため）
-
----
-
-## ② ★B-133 で見つかった実務上の発見
-
-dev 実測（用尺2.3m / 原反長45m / 見積数量100 / ロス率5%）:
-
-    所要量 = 224.595m → 5反（225m）→ 残 0.405m
-    取り切り = floor(225 ÷ 2.415) = **93枚**
-
-**100枚のつもりが、実際には93枚しか作れない。** 残尺 0.405m で増やす余地もない。
-改修前はこれが一切見えず、100枚で見積を出していた。
-
-★この「取り切り枚数」を出すのは慎太郎さんの発案。改修の中核。
+### PR #133（B-136）
+- 新規 `src/lib/estimate-source-counterparty.ts`
+  `resolveSourceCounterparties(companyId, items)` — 明細配列を一括受け取り
+  `行id → 相手先 | null` の Map を返す。N+1 なし・**例外を投げない**
+- 4経路すべて対応:
+  量産見積 `SAMPLE_WO`（→WorkOrder.factoryId/contractorId）/ `SAMPLE_PO`（→PurchaseOrder.supplierId）
+  ラフ見積 `PAST_WO` / `PAST_PO`（同経路）
+- `BomItem` は対象外（`supplierId` を自前で持つため辿る必要がない）
+- 表示: `由来: ○○` / 辿れなければ `由来不明` / 手入力行はバッジなし
+- ★`isAllocated` を `PAST_WO` にも拡張（従来 `PAST_PO` のみで不整合だった）
 
 ---
 
-## ③ ★B-135 の設計が固まっている（実装は未着手）
+## ② ★B-136 の限界（次の案件の出発点）
 
-**相見積もりの実態（慎太郎さんヒアリング 2026-08-11）**:
-① 材料と仕様を決めて仕様書を作成して工場に渡す
-② パターン依頼し、仕様だけ決めて工場へ渡す
-→ **この2タイプがほとんど。仕様書までまとめて「工場だけ変えればいい」**
+**このバッジが示すのは「由来」であって「現在の発注先」ではない。**
 
-**帰結: 材料の仕入先は相見積もりの比較軸にならない。**
+慎太郎さん談:
+- 「サンプルと量産の発注先が別の場合、機能しない」
+- 「サンプルからの引き当てのみは難しい。**サンプルから追加になる項目もある**ので」
 
-    ProductionEstimate に
-      factoryId    String?  @map("factory_id")
-      contractorId String?  @map("contractor_id")
-
-- `WorkOrder` と同じ house style（scalar FK・`@relation` なし・
-  `@@index([companyId, factoryId])` / `([companyId, contractorId])`）
-- **`supplierId` は持たない**（必要になれば後から行に追加。非破壊）
-- **採用フラグは持たない**（記録不要と確定）
-- 同一品番に複数 PE を作れる構造は既存（unique は `estimateNumber` のみ）
-- migration 1本・ADD COLUMN のみ
-
-★実装時の要確認: `ProductionEstimate` に監査 `snapshot()` の網羅ガード
-（`satisfies Record<...>`）があれば列追加で同期必須。コンパイルで検知される。
-
-★却下した案: 行ごとに相手先を持つ案（材料 Supplier + 工賃 Factory/Contractor）。
-  一度は推奨したが、相見積もりの実態を聞いて撤回。工数に見合わない。
+量産で初めて出る項目（ネーム・下げ札・加工・量産専用の副資材）は
+サンプルに由来が無く `MANUAL` になる → バッジは何も出ない。
+**誰にいくらで頼むのか最も不確かな行に、情報が無い。**
 
 ---
 
-## ④ ★B-136 が地味に重要
+## ③ ★★今夜の判断の揺れ（明日の自分へ・最重要）
 
-`ProductionEstimateItemSource` の実在値は **`MANUAL` / `SAMPLE_PO` / `SAMPLE_WO` / `BOM`**。
-（★`PAST_PO` / `PAST_WO` は **RoughEstimateItem 側**の enum。混同注意）
+同じ論点で**推奨が2転した**。原因は「相見積もり」と「行ごとの発注先」の混同。
+以下が最終結論。**これを覆す前に、この節を読むこと。**
 
-`SAMPLE_WO` ＝ **確定サンプルの WoItem を量産見積にコピーする経路が既に実装済み**。
+### 混同していた2つの要件（別物）
 
-慎太郎さん談: 「日本のサンプル工場で作ってベトナムで量産、という流れも普通にある」
+| | 何の話か | どこに持つ |
+|---|---|---|
+| **相見積もり** | 同じ仕様を複数の工場に投げて金額を比べる | **ヘッダ**（1見積 = 1社） |
+| **行ごとの発注先** | 1つの見積の中で誰に何を頼むか | **行** |
 
-→ **サンプル工場の工賃がベトナム量産の見積に入ったまま気づけない。**
-画面には「サンプル WO」バッジが既に出ているので、そこに注意喚起を添えるだけで効く。
-表示のみ・計算不変・低リスク。B-135 より軽く効果は大きいかもしれない。
+### 結論
 
----
+- **B-135（ヘッダに `factoryId`/`contractorId`）は正しい。** 2026-08-11 の設計のまま
+  一度「行ごとに持つべき」として撤回したが、**その撤回を取り消した**
+- **行ごとの発注先は別レイヤーで必要。** ただし根拠は相見積もりではなく
+  **「量産で追加される項目はサンプルに由来が無い」**
+- 両者は競合しない。同時に存在してよい
 
-## ⑤ B-134 の実装設計（ブリーフ再構成用・チャット消失に備えた転記）
-
-**方式: 物理削除。**
-`SampleRevision` は `deletedAt` 列を持たず `SOFT_DELETE_MODELS` にも含まれないため、
-Prisma 拡張の削除ガードが掛からない＝構造上 `delete` が許可されている。
-論理削除にするには migration が要るため採らない。
-★慎太郎さん談「物理削除以外（アーカイブ等）でもよい。そのタイミングで考える」
-
-**`deleteSampleRevision(id)` の作法**（`updateSampleRevision` と同型）:
-1. `requireSession()`
-2. 対象 revision を `findFirst({ where: { id } })`（companyId 列は無い）
-3. ★取得した `sampleProductionId` で親 `SampleProduction` を
-   `findFirst({ id, companyId, deletedAt: null })` して**所有確認**
-   （省くと id 直指定で他テナントの記録を消せる）
-4. `prisma.sampleRevision.delete({ where: { id } })`
-5. AuditLog: `action: "DELETE"` / `entityType: "SampleRevision"` /
-   `beforeData` に削除前の全項目 / `afterData` は **`Prisma.DbNull`**
-6. `revalidatePath` は既存2箇所と同じ
-
-**UI**: 各行の編集ボタンの隣に `Trash2`。
-確認ダイアログは `sample-production-delete-button.tsx` の作法に揃える。
-文言に何を消すか含める（`修正記録 #2「…」を削除します。取り消せません。`）。
-
-**`revisionOrder` は詰め直さない**（確定）。#2 を消すと #1・#3 が残り、次は #4。
-詰め直すと「2番の修正」という参照が壊れるため。
+### ★却下・撤回の記録
+- 2026-08-11: 「行ごとに相手先を持つ案」を却下
+  → 理由が相見積もりだったため**この却下は無効**
+- 2026-08-12: B-135 を撤回 → **撤回を取り消し**（相見積もりの話だったため）
 
 ---
 
-## ⑥ 次の優先順（提案）
+## ④ B-140 の設計（確定・仕様確認書はまだ無い）
+
+**見積明細行に発注先を持たせる。**
+
+### 確定した3論点（慎太郎さん承認済み 2026-08-12）
+
+**論点1: 列の持ち方 → 3列**
+`supplierId` / `factoryId` / `contractorId` を並べる。
+`WorkOrder` が既に `factoryId`/`contractorId` の2列を持つ house style に揃える。
+（却下: 1列 + `counterpartyType` 方式）
+
+**論点2: 初期値 → 焼き込み + ★`counterpartyConfirmed` フラグ**
+- コピー時にサンプルの相手先を焼き込む（転記ファースト原則）
+- ただし `counterpartyConfirmed = false` で入る
+- 人が選び直す or「これでよい」と確認して `true`
+- ★フラグ無しの素の焼き込みだと、B-136 が防ごうとした
+  「サンプル工場のまま気づかず出す」が再現するため
+
+**論点3: 必須か → 任意 + 警告表示**
+未選択でも保存できる（見積は作りかけ保存が多い）。
+警告は折りたたまない（既存 UI 原則）。
+
+### 未確定の論点（仕様確認書で詰める）
+- 行のカテゴリ（MATERIAL/LABOR）と3列の対応をどう制約するか
+- `counterpartyConfirmed` の粒度（行ごと / 見積ごと）
+- B-136 の「由来」バッジと新しい「発注先」をどう並べるか
+- B-135 と B-140 のどちらを先に実装するか
+
+---
+
+## ⑤ ★今夜の教訓
+
+### 教訓1: ★慎太郎さんの発言を根拠の確認なしに設計変更へ直結させない
+「各社に量産用の見積を取るから行ごとに必要」→ 即座に B-135 を撤回した。
+だが慎太郎さん自身が「それは相見積もりの話では？」と指摘。**取り違えだった。**
+発言の背後にある**要件の層**を確認してから設計を動かす。
+
+### 教訓2: 「バッジに一言添えるだけ」が6ファイルになった
+B-136 は当初「表示のみ・小」の見積もりだったが、recon で同型の穴が4経路
+見つかり、共通ヘルパー + 3画面 + action 2本になった。
+★範囲が広がったこと自体は正しい（一部だけ対応しない原則）。
+　規模は recon 前に確定できないことを織り込む。
+
+### 教訓3: クォート付き heredoc でバッククォートをエスケープしない
+`gh pr create --body "$(cat <<'EOF' … EOF)"` で `\`` と書き、
+PR 本文に `\` が10箇所混入。**クォート付きは展開されないのでエスケープ不要。**
+★検証: `gh pr view <N> --json body --jq '.body' | grep -c '\\`'` が 0 であること。
+
+### 教訓4: squash merge 後の `git branch -d` は必ず拒否される
+このリポジトリは squash merge 運用のため、ローカルブランチ先端は
+main の祖先にならず「not fully merged」になる。`-D` の前に3点を確認:
+
+    git cherry -v main <branch-tip>      # 行頭 `-` なら取り込み済み
+    git diff <branch-tip> main --stat    # 空なら差分ゼロ
+    git log -1 --format='%p' <merge>     # 親1つなら squash
+
+3つ揃えば `-D` で失われる情報はゼロ。揃わなければ停止。
+
+### 教訓5: Claude Code の「完了」報告を検証出力なしに信じない
+今夜3回、報告と実態がずれた。
+①`sed` の範囲不足で修正行が見えていない
+②報告文中のコードブロックをファイル出力と取り違え
+③PR open 報告後に本文が壊れていた
+★raw 出力を見るまで「完了」と書かない。
+
+---
+
+## ⑥ 次の優先順
 
 | 順 | 項目 | 規模 |
 |---|---|---|
-| 1 | **B-134** サンプル修正記録の削除 | PR 1本・migration なし |
-| 2 | **M2 PR-C2** 縫製指示 Json の差分を `SampleRevision.details` に自動記録 | PR 1本・migration なし |
-| 3 | **B-136** SAMPLE_WO の注意喚起 | 小・表示のみ |
-| 4 | **B-135** 量産見積に量産工場 | migration 1本 |
-| 5 | **M3 A-0** サンプルの色×サイズ×数量 仕様確認書 | 設計 |
+| 1 | **B-140** 見積明細行に発注先（仕様確認書から） | 設計 → migration 1本 + フォーム改修 |
+| 2 | **B-135** 量産見積ヘッダに相見積もり相手（設計確定済み） | migration 1本 ADD COLUMN |
+| 3 | **M2 PR-C2** 縫製指示 Json の差分を `SampleRevision.details` に記録 | PR 1本・設計論点3つあり |
+| 4 | **B-139** ラフ見積の引き当て直後にも相手先名を表示 | 小 |
+| 5 | **B-138** `sample-revisions.ts` の `B-130 PR-C1` 表記修正 | コメント1行（PR-C2 で吸収） |
 
-★M2 は PR-C1 完了で半分。PR-C2 を終えれば M2 完了。
-★M3 の A-0 論点3つは前回引き継ぎメモに記載（色の参照方式・サイズ体系・Sku 昇格）。
-
----
-
-## ⑦ ★本セッションの教訓
-
-### 教訓1: このリポジトリに vitest は無い
-
-テストは各ファイル冒頭に書かれているとおり **`npx tsx <path>`** で実行する自作 assert 方式。
-`package.json` に test スクリプトも vitest も無い。`npx vitest run` は
-「Cannot find package '@/lib/calc/production-cost'」（`@/` エイリアス未解決）で落ちる。
-
-    npx tsx src/lib/calc/production-cost.test.ts
-    npx tsx src/lib/production-estimate/calc.test.ts
-
-集計は `console.log("✓ …: N/M ケース PASS")`。ケース追加時は**分母も更新**する。
-
-### 教訓2: 「見せるだけ」の線引きが裏目に出ることがある
-
-反単価の導出を最初「表示のみ・計算には使わない」と線を引いたが、
-画面に ¥50,000 と見えているのに行小計が「—」のままという状態を作ってしまった。
-**B-133 が潰そうとしていた「値が見えているのに使われていない」構造そのもの。**
-影響範囲を実測（dev 1件・本番 0件）してから撤回し、計算に使う形へ変更した。
-
-★教訓: 「安全側に倒す」判断が、ユーザーから見て**より混乱する形**になることがある。
-  画面を見てから判断する。
-
-### 教訓3: lint の「baseline 同数」は根拠にならない
-
-Claude Code が「lint 11 = baseline 同数」と繰り返し報告したが、
-**main で lint を実行した結果は一度も取っていなかった**（記憶由来）。
-正しい判定は **`npm run lint | grep <変更ファイル名>` が空であること**。
-件数の一致より強い証拠になる。
-
-### 教訓4: 計算を変える PR は本番の該当件数を実測してからマージ
-
-B-133 は rollPrice 未入力行の扱いを変えた＝既存見積の金額が動きうる。
-本番を read-only で調べて **ROLL 行 0 件**を確認してからマージした。
-手順: Railway から `DATABASE_PUBLIC_URL` → `~/prod-url-tmp.txt`（chmod 600・repo 外）
-→ ホストが `shuttle.proxy.rlwy.net:16099` であることを目視 → SELECT → `rm`。
-
-### 教訓5: 対象の取り違え（QE-1R と PE）
-
-「ラフ見積の ROLL 計算がおかしい」と調べ始めたが、実際の画面は
-**量産見積（ProductionEstimate）** だった。ラフ見積（`RoughEstimate`）には
-`procurementMode` / `rollLength` / `rollPrice` / `cutFee` / `usagePerUnit` の
-**列が1つも無い**（spec で「概算には引き込まない」と明記されている通り）。
-★スクリーンショットから画面を特定する時は、**スキーマに列があるか**で裏を取る。
+★M2 PR-C2 の未確定論点: 差分の粒度（Json 全体 / 項目単位）・
+　手動記録と自動記録の区別・記録タイミング（保存ごと / ラウンドまたぎ）
 
 ---
 
-## ⑧ ★新しい入口: Google Drive の気づきメモ
+## ⑦ 環境（2026-08-12 実測）
 
-慎太郎さんが Windows / Mac 双方から書き溜められるフォルダを新設。
-
-- フォルダ: `shunya-pms 気づきメモ`（Google Drive・Claude から読める）
-- 構成: `画像/`（配下に `解決済み/`）・`メモ/`
-- ★**テキストは Claude が読める。画像（PNG）は読めない**
-  （Base64 で返るため実質的に取得不能。**画像はチャットに直接添付**していただく）
-
-**運用（確定）**: Drive は inbox に徹し、状態管理は `BACKLOG.md` に一本化する。
-二重管理を避けるため、Drive 側では「B番号を振ったら該当行の冒頭に `[B-133]` と追記」
-のみ行う（フォルダ移動はしない）。
-
-★本日の B-133 / B-135 / B-136 はすべてこのメモが起点。
-
----
-
-## ⑨ 本セッションのバックログ増減
-
-**新規4件（B-134〜137）／状態変更1件（B-133 完了）／close 1件（PR #94）**
-
-- **B-133**: 完了（PR #131・本番反映済み）
-- **B-134**: サンプル修正記録の削除（新規・ブリーフ設計は §⑤）
-- **B-135**: 量産見積に量産工場（新規・設計は §③）
-- **B-136**: SAMPLE_WO の注意喚起（新規・§④）
-- **B-137**: 単位「枚」の行に販売モード/カット代が出る件（新規・小）
-- **B-065 / PR #94**: close。主客転倒の設計誤りのため B-069 に引き継ぎ。
-  ブランチ `feat/b-065-po-import-colorway` は証跡として残置
-
-**次に振れる番号は B-138。**
-
----
-
-## ⑩ 環境（2026-08-11 実測）
-
-- main HEAD = **`5939fb3`**（docs: BACKLOG 更新）
-- 機能コードの最新は `098274f`（PR #131 マージ）
-- dev DB = `hopper.proxy.rlwy.net:12921` / 本番 DB = `shuttle.proxy.rlwy.net:16099`
+- main HEAD = **`d4fae31`**（BACKLOG 更新 commit を積んだ後は 1つ進む）
+- dev DB = `hopper.proxy.rlwy.net:12921` / 本番 = `shuttle.proxy.rlwy.net:16099`
 - ★Railway から取るのは **`DATABASE_PUBLIC_URL`**（`DATABASE_URL` は internal）
-- 本番 URL = `shunya-pms-web-production.up.railway.app`
-- dev サーバ **PID 31405**（PORT 3001）・締め時点で稼働中
-- migration ディレクトリ **49本**（本日の2 PR はいずれも migration なし）
-- 作業ツリー: `?? skill/` のみ（未追跡・B-037 管轄）
-- **open な PR = 0 件**
+- dev サーバ PID **40337**（PORT 3001）★前回メモの 31405 は死んでいた
+- 作業ツリー `?? skill/` のみ / **open な PR = 0 件**
 
-### dev データの現況
-- `sample_revisions`: 2件（SP-2026-0005 配下・#1 PENDING / #2 COMPLETED）
-- `production_estimate_items`: ROLL 1件（デニム・rollPrice 未入力）
-- 本番の `production_estimate_items`: ROLL **0件** / METER 6件 / null 10件
-  ★METER 6件のうち3件に `roll_price` が入っている。METER では参照されないので
-    実害はないが、「ROLL のつもりで METER のまま」の可能性。要観察
+### dev データ
+- `sample_revisions`: **3件**（#1・#3・#4）★前回2件から変化
+- `production_estimate_items`: MANUAL 1 / SAMPLE_PO 2 / SAMPLE_WO 2
+- 由来の解決先:
+  supplier `3e637ef0-9a60-4c2b-8686-27323bbec9e5` = 藤崎テキスタイル[ダミー]
+  factory `d7eb54d6-f86c-4271-86f1-f2ce6dddbba5` = ベトナム第一縫製[ダミー]
+- 対象見積（すべて品番 `b29e0391-c9ad-4525-b0d3-9830fa469b9b`）:
+  PE-2026-0001 `aaa108fd-8a20-4b48-a133-e361ec55040a`
+  PE-2026-0002 `f2666d33-b9f3-4fb0-ab02-97c0842d639b`
+  RE-2026-0001 `f2011158-bef4-493d-b1ba-82d0b7cfe35c`
+  RE-2026-0002 `20014610-72fd-4925-9a78-46cba3b0adb1`
 
 ---
 
-## ⑪ 次セッション冒頭の手順
+## ⑧ バックログ増減
 
-1. `git branch --show-current` / `git log origin/main --oneline -3`（HEAD = `5939fb3` 以降か）
-2. dev サーバ PID 31405 の生存（`lsof -nP -iTCP:3001 -sTCP:LISTEN`）
-3. `.env` の接続先が `hopper.proxy.rlwy.net:12921` であること
-4. `gh pr list --state open`（0件のはず）
-5. B-134 に着手するなら §⑤ からブリーフを再構成。recon は不要
-   （`sample-revisions.ts` は本日 PR #130 で作ったばかりで構造は §⑤ に転記済み）
+- **B-134 完了**（PR #132・`ff95d61`）
+- **B-136 完了**（PR #133・`d4fae31`）
+- **B-138 起票**（`sample-revisions.ts` の表記修正）
+- **B-139 起票**（ラフ引き当て直後の相手先名）
+- **B-140 起票**（見積明細行に発注先）
+- **B-135 は状態変更なし**（撤回検討→取り消しの注記のみ追記）
+
+**次に振れる番号は B-141。**
+
+---
+
+## ⑨ 次セッション冒頭の手順
+
+1. `git log origin/main --oneline -3`
+2. `gh pr list --state open`（0件のはず）
+3. `.env` が `hopper.proxy.rlwy.net:12921` であること
+4. **§③ を読む**（B-135 を撤回したくなったら、必ずその前に）
+5. B-140 の仕様確認書は §④ から起こす

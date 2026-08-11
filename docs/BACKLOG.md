@@ -158,10 +158,12 @@
 | B-132 | 未着手 | 未実装・休眠機能をグレー表示で明示（実装済み／休眠／未着手が画面から区別できず、仕様の欠落と実装の遅れが混同される。サイドバーの「受注」「SKU」で既存のグレー表現を機能単位・セクション単位に拡張） | — |
 | B-133 | 完了 | 量産見積 材料費行の UI 改善（買う量[反数]／残尺／取り切り枚数の表示・反単価未入力時に 単価×原反長 を導出して計上[qe-0 §Q4]・材料費行の並び替え）。PR #131・2026-08-11 マージ・本番反映済み。★計算変更ありだが本番の ROLL 行が 0 件のため既存見積の金額は不変 | — |
 | B-134 | 完了 | サンプル修正記録の削除（物理削除。SampleRevision は deletedAt を持たず SOFT_DELETE_MODELS 対象外＝構造上許可・親サンプルで所有確認・監査ログに全項目退避[Json 3列含む]・revisionOrder は詰め直さない・確認ダイアログ）。PR #132・merge ff95d61・2026-08-11 マージ | — |
-| B-135 | 未着手 | 量産見積に量産工場を持たせる（相見積もり対応）。ヘッダに factoryId?/contractorId? を追加・WorkOrder と同じ house style[scalar FK・@relation なし・companyId 複合 index]・材料の仕入先は持たない[比較軸にならないため]・採用フラグ不要・migration 1本 ADD COLUMN のみ | — |
-| B-136 | 未着手 | SAMPLE_WO コピー時の工賃が別工場のものである可能性を示す。確定サンプルの WoItem→量産見積コピー経路（ProductionEstimateItemSource.SAMPLE_WO）は実装済。日本のサンプル工場の工賃がベトナム量産の見積に入ったまま気づけない。既存「サンプル WO」バッジに注意喚起を添える（表示のみ） | — |
+| B-135 | 未着手 | 量産見積に量産工場を持たせる（相見積もり対応）。ヘッダに factoryId?/contractorId? を追加・WorkOrder と同じ house style[scalar FK・@relation なし・companyId 複合 index]・材料の仕入先は持たない[比較軸にならないため]・採用フラグ不要・migration 1本 ADD COLUMN のみ（2026-08-12 撤回検討 → 取り消し・ヘッダ=相見積で正しい・行ごと発注先 B-140 とは別レイヤーで両立） | — |
+| B-136 | 完了 | 見積明細に由来の相手先を表示。共通ヘルパー src/lib/estimate-source-counterparty.ts で4経路（量産見積 SAMPLE_WO/SAMPLE_PO・ラフ見積 PAST_WO/PAST_PO）を一括解決。「由来: ○○」/ 辿れなければ「由来不明」/ 手入力行はバッジなし。isAllocated を PAST_WO にも拡張。表示のみ・計算不変・migration なし。★由来であって現在の発注先ではない（→ B-140）。PR #133・merge d4fae31・2026-08-12 マージ | — |
 | B-137 | 未着手 | 単位「枚」の行に販売モード/カット代が出る件。usagePerUnit があれば枚単位でも生地行扱いになりカット代が乗る。qe-1 addendum §1 では procurementMode は生地行のみと明記。小・要判断 | — |
 | B-138 | 未着手 | sample-revisions.ts ヘッダ JSDoc の「B-130 PR-C1」表記を修正。PR番号 #130 を指すが B番号としての B-130 と紛らわしい。正しくは M2 PR-C1（PR #130）。M2 PR-C2 で同ファイルを触る際に修正（コメント1行） | — |
+| B-139 | 未着手 | ラフ見積の引き当て直後にも相手先名を表示。引き当て直後は appliedInfo（PO番号/品目名）、再読込後は相手先名と表示が変わる。引き当て候補側（rough-estimates.ts:160/228）に相手先情報があるか recon してから実装。小 | — |
+| B-140 | 未着手 | 見積明細行に発注先を持たせる。量産で追加される項目（ネーム・下げ札・加工・量産専用副資材）はサンプルに由来が無く MANUAL になるため誰に頼むか分からない。★根拠は相見積もりではない（B-135 とは別レイヤー・両立する）。確定: ①supplierId/factoryId/contractorId の3列（WorkOrder の house style）②コピー時に焼き込むが counterpartyConfirmed=false で入れ確認するまで警告 ③未選択でも保存可・警告は折りたたまない。未確定: カテゴリと3列の対応制約・確認フラグの粒度・B-135 との実装順。仕様確認書から | — |
 
 ---
 
