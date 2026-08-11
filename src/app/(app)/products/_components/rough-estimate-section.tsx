@@ -46,6 +46,7 @@ import {
   type PastWoItemCandidate,
   type RoughEstimateDuplicateData,
 } from "@/lib/actions/rough-estimates"
+import type { SourceCounterparty } from "@/lib/estimate-source-counterparty"
 import type {
   MaterialOption,
   CostCategoryOption,
@@ -518,6 +519,19 @@ function emptyItem(
 
 // 編集/複製プレフィルの共通変換（plain な取得データ → フォーム値・文字列化）。
 // 編集(RoughEstimateEditData) と複製(RoughEstimateDuplicateData) は id/estimateNumber
+// B-136: 由来の相手先を source id（poItem/woItem）キーの Map に畳む（表示のみ）。
+function buildCounterpartyMap(
+  items: RoughEstimateDuplicateData["items"],
+): Map<string, SourceCounterparty> {
+  const m = new Map<string, SourceCounterparty>()
+  for (const it of items) {
+    if (!it.sourceCounterparty) continue
+    const key = it.sourcePoItemId ?? it.sourceWoItemId
+    if (key) m.set(key, it.sourceCounterparty)
+  }
+  return m
+}
+
 // 以外同形なので、複製データ型を受ければ両方に使える。
 function toFormValues(
   d: RoughEstimateDuplicateData,
@@ -590,6 +604,11 @@ function RoughEstimateFormDialog({
   const [appliedByIdx, setAppliedByIdx] = useState<
     Record<number, { poNumber: string; displayName: string }>
   >({})
+  // B-136: 由来（PAST_PO/PAST_WO）の相手先を source id キーで保持（server 解決済み・表示のみ）。
+  // 編集/複製ロード時に構築。再読込で appliedInfo が空でも相手先名を復元できる。
+  const [cpBySourceId, setCpBySourceId] = useState<Map<string, SourceCounterparty>>(
+    new Map(),
+  )
 
   const form = useForm<RoughEstimateFormValues>({
     resolver: zodResolver(roughEstimateInputSchema),
@@ -626,6 +645,7 @@ function RoughEstimateFormDialog({
       }
       const d = r.data
       form.reset(toFormValues(d))
+      setCpBySourceId(buildCounterpartyMap(d.items))
       if (d.hasUsdLine) {
         toast.info("USD 明細があります。保存にはレート（USD/JPY）の再入力が必要です。")
       }
@@ -651,6 +671,7 @@ function RoughEstimateFormDialog({
       }
       const d = r.data
       form.reset(toFormValues(d))
+      setCpBySourceId(buildCounterpartyMap(d.items))
       if (d.hasUsdLine) {
         toast.info("USD 明細があります。保存にはレート（USD/JPY）の再入力が必要です。")
       }
@@ -1013,28 +1034,39 @@ function RoughEstimateFormDialog({
                   </div>
                 </div>
 
-                {fields.map((f, idx) => (
-                  <ItemCard
-                    key={f.id}
-                    form={form}
-                    idx={idx}
-                    itemValue={items[idx]}
-                    subtotalJpy={rowSubtotals[idx] ?? null}
-                    autoInitialPresentedJpy={computeInitialCostPresentedJpy(
-                      rowSubtotals[idx] ?? null,
-                      marginNum,
-                    )}
-                    materials={materials}
-                    costCategories={costCategories}
-                    suppliers={suppliers}
-                    appliedInfo={appliedByIdx[idx] ?? null}
-                    onApplied={(info) =>
-                      setAppliedByIdx((prev) => ({ ...prev, [idx]: info }))
-                    }
-                    onRemove={() => (fields.length > 1 ? remove(idx) : null)}
-                    canRemove={fields.length > 1}
-                  />
-                ))}
+                {fields.map((f, idx) => {
+                  // B-136: 行の由来 id で相手先を引く（無ければ null＝相手先不明）。
+                  const cpKey =
+                    items[idx]?.sourcePoItemId ??
+                    items[idx]?.sourceWoItemId ??
+                    null
+                  const resolvedCounterparty = cpKey
+                    ? cpBySourceId.get(cpKey) ?? null
+                    : null
+                  return (
+                    <ItemCard
+                      key={f.id}
+                      form={form}
+                      idx={idx}
+                      itemValue={items[idx]}
+                      subtotalJpy={rowSubtotals[idx] ?? null}
+                      autoInitialPresentedJpy={computeInitialCostPresentedJpy(
+                        rowSubtotals[idx] ?? null,
+                        marginNum,
+                      )}
+                      materials={materials}
+                      costCategories={costCategories}
+                      suppliers={suppliers}
+                      appliedInfo={appliedByIdx[idx] ?? null}
+                      resolvedCounterparty={resolvedCounterparty}
+                      onApplied={(info) =>
+                        setAppliedByIdx((prev) => ({ ...prev, [idx]: info }))
+                      }
+                      onRemove={() => (fields.length > 1 ? remove(idx) : null)}
+                      canRemove={fields.length > 1}
+                    />
+                  )
+                })}
                 {form.formState.errors.items?.message && (
                   <p className="text-sm text-destructive">
                     {form.formState.errors.items.message}
@@ -1291,6 +1323,7 @@ function ItemCard({
   costCategories,
   suppliers,
   appliedInfo,
+  resolvedCounterparty,
   onApplied,
   onRemove,
   canRemove,
@@ -1304,6 +1337,7 @@ function ItemCard({
   costCategories: CostCategoryOption[]
   suppliers: SupplierOption[]
   appliedInfo: { poNumber: string; displayName: string } | null
+  resolvedCounterparty: SourceCounterparty | null
   onApplied: (info: { poNumber: string; displayName: string }) => void
   onRemove: () => void
   canRemove: boolean
@@ -1323,12 +1357,13 @@ function ItemCard({
   const usdSubtotal =
     isUsdRow && usdQ != null && usdP != null ? usdQ * usdP : null
 
-  // PAST_PO 引き当ての痕跡。直近詳細（appliedInfo）は親が保持、無い（編集で開き直した等）ときは
-  // sourcePoItemId の存在のみで最小バッジにフォールバック（追加クエリなし・軽量版）。
-  // 表示条件は source===PAST_PO かつ sourcePoItemId 非null の AND（MANUAL へ変えたら消える）。
+  // 引き当ての痕跡（PAST_PO/PAST_WO 両経路・B-136）。直近詳細（appliedInfo）は親が保持、
+  // 無い（編集で開き直した等）ときは server 解決済みの相手先名（resolvedCounterparty）を、
+  // それも無ければ「相手先不明」を出す。source を MANUAL へ変えたら消える。
   const isAllocated =
-    source === RoughEstimateItemSource.PAST_PO &&
-    !!itemValue?.sourcePoItemId
+    (source === RoughEstimateItemSource.PAST_PO &&
+      !!itemValue?.sourcePoItemId) ||
+    (source === RoughEstimateItemSource.PAST_WO && !!itemValue?.sourceWoItemId)
 
   // 素材選択時に品目名が空なら自動補完（任意で上書き可）。setValue 連鎖のスクロール巻き戻りを回避。
   const onPickMaterial = (materialId: string | null) =>
@@ -1422,7 +1457,9 @@ function ItemCard({
             <Badge variant="outline" className="border-emerald-300 text-emerald-700">
               {appliedInfo
                 ? `引き当て: ${appliedInfo.poNumber} / ${appliedInfo.displayName}`
-                : "引き当て済み（PAST_PO）"}
+                : resolvedCounterparty
+                  ? `引き当て: ${resolvedCounterparty.name}`
+                  : "引き当て済み・相手先不明"}
             </Badge>
           )}
         </div>

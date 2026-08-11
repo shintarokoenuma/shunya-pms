@@ -16,6 +16,10 @@ import {
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import {
+  resolveSourceCounterparties,
+  type SourceCounterparty,
+} from "@/lib/estimate-source-counterparty"
+import {
   listActiveSuppliersForPoSelect,
   type SupplierOption,
 } from "@/lib/actions/purchase-orders"
@@ -289,6 +293,8 @@ export type ProductionEstimateItemDTO = {
   subtotalJpy: number | null
   presentedPriceManualJpy: number | null
   notes: string | null
+  /** B-136: 由来（SAMPLE_PO/SAMPLE_WO）の相手先。辿れなければ null（表示のみ・計算不変）。 */
+  sourceCounterparty: SourceCounterparty | null
 }
 
 export type ProductionEstimateDTO = {
@@ -844,6 +850,12 @@ export async function getProductionEstimate(
       orderBy: { itemOrder: "asc" },
     })
 
+    // B-136: 由来の相手先を一括解決（表示のみ・計算不変）。
+    const counterpartyById = await resolveSourceCounterparties(
+      sess.companyId,
+      items,
+    )
+
     return {
       ok: true,
       data: {
@@ -892,6 +904,7 @@ export async function getProductionEstimate(
           subtotalJpy: dnum(it.subtotalJpy),
           presentedPriceManualJpy: dnum(it.presentedPriceManualJpy),
           notes: it.notes,
+          sourceCounterparty: counterpartyById.get(it.id) ?? null,
         })),
       },
     }

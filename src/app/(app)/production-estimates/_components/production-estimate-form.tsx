@@ -357,6 +357,17 @@ export function ProductionEstimateForm({
   const marginNum = toNum(watchedMargin)
   const rateNum = toNum(watchedRate)
 
+  // B-136: 由来の相手先（server 解決済み DTO）を source id キーで引けるようにする（表示のみ）。
+  const counterpartyBySourceId = new Map<
+    string,
+    NonNullable<ProductionEstimateItemDTO["sourceCounterparty"]>
+  >()
+  for (const dtoItem of estimate.items) {
+    if (!dtoItem.sourceCounterparty) continue
+    const key = dtoItem.sourcePoItemId ?? dtoItem.sourceWoItemId
+    if (key) counterpartyBySourceId.set(key, dtoItem.sourceCounterparty)
+  }
+
   const calcLines: ProductionEstimateLineForCalc[] = items.map((it, i) => ({
     id: String(i),
     itemCategory:
@@ -646,9 +657,25 @@ export function ProductionEstimateForm({
                       ]}
                     </Badge>
                     {it?.source && (
-                      <Badge variant="outline" className="text-[10px]">
-                        {PRODUCTION_ESTIMATE_SOURCE_LABELS[it.source]}
-                      </Badge>
+                      <>
+                        <Badge variant="outline" className="text-[10px]">
+                          {PRODUCTION_ESTIMATE_SOURCE_LABELS[it.source]}
+                        </Badge>
+                        {(it.sourcePoItemId || it.sourceWoItemId) &&
+                          (() => {
+                            const key =
+                              it.sourcePoItemId ?? it.sourceWoItemId ?? ""
+                            const cp = counterpartyBySourceId.get(key)
+                            return (
+                              <Badge
+                                variant="outline"
+                                className="text-[10px]"
+                              >
+                                {cp ? `由来: ${cp.name}` : "由来不明"}
+                              </Badge>
+                            )
+                          })()}
+                      </>
                     )}
                     {isSeparate && (
                       <Badge

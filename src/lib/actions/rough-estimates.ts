@@ -14,6 +14,10 @@ import {
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import {
+  resolveSourceCounterparties,
+  type SourceCounterparty,
+} from "@/lib/estimate-source-counterparty"
+import {
   roughEstimateInputSchema,
   type RoughEstimateInput,
 } from "@/lib/validators/rough-estimate"
@@ -916,6 +920,8 @@ export type RoughEstimateEditItem = {
   /** 道A: 別枠計上（初期費用）行の手打ち提示額（フラグ ON 行のみ非null 想定）。 */
   presentedPriceManualJpy: number | null
   notes: string | null
+  /** B-136: 由来（PAST_PO/PAST_WO）の相手先。辿れなければ null（表示のみ・計算不変）。 */
+  sourceCounterparty: SourceCounterparty | null
 }
 
 export type RoughEstimateEditData = {
@@ -953,6 +959,12 @@ export async function getRoughEstimateForEdit(
       where: { roughEstimateId: id },
       orderBy: { itemOrder: "asc" },
     })
+
+    // B-136: 由来の相手先を一括解決（表示のみ・計算不変）。
+    const counterpartyById = await resolveSourceCounterparties(
+      sess.companyId,
+      items,
+    )
 
     return {
       ok: true,
@@ -994,6 +1006,7 @@ export async function getRoughEstimateForEdit(
               ? Number(it.presentedPriceManualJpy)
               : null,
           notes: it.notes,
+          sourceCounterparty: counterpartyById.get(it.id) ?? null,
         })),
       },
     }
