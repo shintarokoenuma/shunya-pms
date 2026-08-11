@@ -33,6 +33,8 @@ import { SampleGenealogy } from "../_components/sample-genealogy"
 import { ProgressChecklist } from "../_components/progress-checklist"
 import { SampleSewingInstructionSection } from "../_components/sample-sewing-instruction-section"
 import { parseSewingInstruction } from "@/lib/validators/sewing-instruction"
+import { SampleRevisionSection } from "../_components/sample-revision-section"
+import { listSampleRevisions } from "@/lib/actions/sample-revisions"
 import {
   SAMPLE_STATUS_LABELS,
   SAMPLE_STATUS_BADGE_VARIANT,
@@ -90,6 +92,10 @@ export default async function SampleProductionDetailPage({
   // S-4c-1.5: コスト集計の明細内訳
   const breakdownResult = await getSampleProductionCostBreakdown(item.id)
   const costSections = breakdownResult.ok ? breakdownResult.data.sections : []
+
+  // B-130 PR-C1: 修正記録
+  const revisionsResult = await listSampleRevisions(item.id)
+  const revisions = revisionsResult.ok ? revisionsResult.data.items : []
 
   return (
     <div className="space-y-6 p-6">
@@ -275,6 +281,19 @@ export default async function SampleProductionDetailPage({
             value={parseSewingInstruction(item.sewingInstructions)}
             hasStoredValue={item.sewingInstructions !== null}
             isProductionEstimateBase={item.isProductionEstimateBase}
+          />
+        </CardContent>
+      </Card>
+
+      {/* B-130: 修正記録（ラウンド内の修正ログ・修正系譜とは別物） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">修正記録</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SampleRevisionSection
+            sampleProductionId={item.id}
+            revisions={revisions}
           />
         </CardContent>
       </Card>

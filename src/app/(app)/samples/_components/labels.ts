@@ -1,4 +1,13 @@
-import { SampleProductionStatus, SampleRound } from "@prisma/client"
+import {
+  SampleProductionStatus,
+  SampleRound,
+  SampleRevisionType,
+  RevisionRequestor,
+} from "@prisma/client"
+import {
+  SAMPLE_REVISION_STATUSES,
+  type SampleRevisionStatus,
+} from "@/lib/validators/sample-revision"
 
 /**
  * S-2: サンプル製作セット（SampleProduction）ラベル定義
@@ -71,3 +80,57 @@ export const SAMPLE_ROUND_BADGE_VARIANT: Record<
 export const SAMPLE_ROUND_OPTIONS: { value: SampleRound; label: string }[] = (
   Object.keys(SAMPLE_ROUND_LABELS) as SampleRound[]
 ).map((value) => ({ value, label: SAMPLE_ROUND_LABELS[value] }))
+
+// =============================================================================
+// B-130 PR-C1: 修正記録（SampleRevision）
+// =============================================================================
+
+/** 修正タイプ（SampleRevisionType・9値すべて） */
+export const SAMPLE_REVISION_TYPE_LABELS: Record<SampleRevisionType, string> = {
+  DESIGN: "デザイン変更",
+  PATTERN: "パターン修正",
+  MATERIAL: "素材変更",
+  COLOR: "色変更",
+  SIZE: "サイズ調整",
+  STITCHING: "縫製方法",
+  FIT: "フィット感",
+  DETAILS: "ディテール",
+  OTHER: "その他",
+}
+
+export const SAMPLE_REVISION_TYPE_OPTIONS: {
+  value: SampleRevisionType
+  label: string
+}[] = (Object.keys(SAMPLE_REVISION_TYPE_LABELS) as SampleRevisionType[]).map(
+  (value) => ({ value, label: SAMPLE_REVISION_TYPE_LABELS[value] }),
+)
+
+/** 修正依頼元（RevisionRequestor・5値すべて。schema コメントの3値記載は誤り） */
+export const REVISION_REQUESTOR_LABELS: Record<RevisionRequestor, string> = {
+  CLIENT: "クライアント依頼",
+  INTERNAL: "社内判断",
+  FACTORY: "工場側の指摘",
+  DESIGNER: "デザイナー",
+  PATTERN_MAKER: "パタンナー",
+}
+
+export const REVISION_REQUESTOR_OPTIONS: {
+  value: RevisionRequestor
+  label: string
+}[] = (Object.keys(REVISION_REQUESTOR_LABELS) as RevisionRequestor[]).map(
+  (value) => ({ value, label: REVISION_REQUESTOR_LABELS[value] }),
+)
+
+/** 修正記録の状態（アプリ層 2値・DB は VarChar） */
+export const SAMPLE_REVISION_STATUS_LABELS: Record<SampleRevisionStatus, string> = {
+  PENDING: "未対応",
+  COMPLETED: "対応済",
+}
+
+export const SAMPLE_REVISION_STATUS_OPTIONS: {
+  value: SampleRevisionStatus
+  label: string
+}[] = SAMPLE_REVISION_STATUSES.map((value) => ({
+  value,
+  label: SAMPLE_REVISION_STATUS_LABELS[value],
+}))
