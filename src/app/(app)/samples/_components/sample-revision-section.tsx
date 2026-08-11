@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Plus, Loader2, Pencil } from "lucide-react"
+import { Plus, Loader2, Pencil, Trash2, AlertTriangle } from "lucide-react"
 import type { SampleRevisionType, RevisionRequestor } from "@prisma/client"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -24,8 +24,18 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
   createSampleRevision,
   updateSampleRevision,
+  deleteSampleRevision,
   type SampleRevisionItem,
 } from "@/lib/actions/sample-revisions"
 import {
@@ -137,16 +147,19 @@ export function SampleRevisionSection({
                       {fmtDate(r.requestedAt)}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => {
-                          setAdding(false)
-                          setEditingId(r.id)
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setAdding(false)
+                            setEditingId(r.id)
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <RevisionDeleteButton revision={r} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 )
@@ -156,6 +169,72 @@ export function SampleRevisionSection({
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * 修正記録の物理削除ボタン。確認ダイアログの作法は
+ * sample-production-delete-button.tsx に揃える（Dialog + useState/useTransition + pending 表示）。
+ */
+function RevisionDeleteButton({ revision }: { revision: SampleRevisionItem }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [isPending, startTransition] = useTransition()
+
+  const handleDelete = () => {
+    startTransition(async () => {
+      const r = await deleteSampleRevision(revision.id)
+      if (!r.ok) {
+        toast.error(r.error)
+        return
+      }
+      toast.success("修正記録を削除しました")
+      setOpen(false)
+      router.refresh()
+    })
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="ghost">
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-destructive" />
+            修正記録を削除
+          </DialogTitle>
+          <DialogDescription>
+            修正記録 #{revision.revisionOrder}「{revision.description}」を削除します。
+            この操作は取り消せません。
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={isPending}
+          >
+            キャンセル
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={isPending}
+          >
+            {isPending ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="mr-1 h-4 w-4" />
+            )}
+            削除する
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
