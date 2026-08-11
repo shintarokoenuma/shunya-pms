@@ -96,6 +96,16 @@ export type ProductionCostRow = {
   amountJpy: number | null
   excluded: boolean
   excludeReason: ProductionCostExcludeReason | null
+  /** B-133 表示用（計算不変・導出のみ）。ROLL 時の反数。METER/付属/不能は null。 */
+  rolls: number | null
+  /** B-133 表示用。ROLL 時の買う量 = rolls × rollLength。METER/付属/不能は null。 */
+  purchasedQuantity: number | null
+  /** B-133 表示用。ROLL 時の残尺 = purchasedQuantity − requirement。METER/付属/不能は null。 */
+  remainingQuantity: number | null
+  /** B-133 表示用。ROLL 時に買った量で作れる最大枚数 = floor(purchasedQuantity ÷ 1枚あたり所要)。 */
+  maxUnitsFromRolls: number | null
+  /** B-133: 反単価が未入力で 単価×原反長 の導出値を計算に用いたとき true（UI で「計算中」を明示）。 */
+  rollPriceDerived: boolean
 }
 
 export type ProductionCostSection = {
@@ -183,6 +193,8 @@ export type MaterialProcurement = {
   currency: ProductionCostCurrency
   cutFee: number
   amountOriginal: number | null
+  /** B-133: 反単価が未入力で 単価×原反長 の導出値を計算に用いたとき true。 */
+  rollPriceDerived: boolean
 }
 export function computeMaterialProcurement(
   m: MaterialCostInput,
@@ -195,26 +207,42 @@ export function computeMaterialProcurement(
   )
 
   if (m.procurementMode === "ROLL") {
-    const currency: ProductionCostCurrency = m.rollCurrency ?? "JPY"
+    // B-133/qe-0 §Q4: 反単価が未入力なら 単価×原反長 で導出して計上する。
+    // 実値があればそちらを優先し、上書きしない。
+    const rollPriceDerived =
+      m.rollPrice === null &&
+      m.unitPrice !== null &&
+      m.rollLength !== null &&
+      m.rollLength > 0
+    const effectiveRollPrice =
+      m.rollPrice ??
+      (rollPriceDerived
+        ? (m.unitPrice as number) * (m.rollLength as number)
+        : null)
+    // 実値は反通貨（rollCurrency ?? JPY）。導出値は単価から導いたので行通貨。
+    const currency: ProductionCostCurrency = rollPriceDerived
+      ? m.currency
+      : m.rollCurrency ?? "JPY"
     let rolls: number | null = null
     let amountOriginal: number | null = null
     if (
       requirement !== null &&
       m.rollLength !== null &&
       m.rollLength > 0 &&
-      m.rollPrice !== null
+      effectiveRollPrice !== null
     ) {
       rolls = Math.ceil(requirement / m.rollLength)
-      amountOriginal = rolls * m.rollPrice
+      amountOriginal = rolls * effectiveRollPrice
     }
     return {
       requirement,
       rolls,
       poQuantity: rolls,
-      unitPrice: m.rollPrice,
+      unitPrice: effectiveRollPrice,
       currency,
       cutFee: 0,
       amountOriginal,
+      rollPriceDerived,
     }
   }
 
@@ -232,6 +260,7 @@ export function computeMaterialProcurement(
     currency: m.currency,
     cutFee,
     amountOriginal,
+    rollPriceDerived: false,
   }
 }
 
@@ -253,6 +282,35 @@ function buildMaterialRow(
 
   const conv = convertToJpy(proc.amountOriginal, proc.currency, usdJpyRate)
   const excluded = conv.reason !== null
+
+  // B-133: 表示用の買う量・残尺（計算不変・proc の既存値からの導出のみ）。
+  // ROLL かつ 反数算出済み かつ rollLength 有効 のときのみ。それ以外は null。
+  const hasRoll =
+    m.procurementMode === "ROLL" &&
+    proc.rolls !== null &&
+    m.rollLength !== null &&
+    m.rollLength > 0
+  const purchasedQuantity = hasRoll
+    ? (proc.rolls as number) * (m.rollLength as number)
+    : null
+  const remainingQuantity =
+    purchasedQuantity !== null && proc.requirement !== null
+      ? purchasedQuantity - proc.requirement
+      : null
+
+  // B-133: 買った量で作れる最大枚数 = floor(買う量 ÷ 1枚あたり所要)。
+  // 1枚あたり所要 = usagePerUnit × (1 + lossRate/100)。usagePerUnit 無効なら null。
+  const perUnitRequirement =
+    m.usagePerUnit !== null && m.usagePerUnit > 0
+      ? m.usagePerUnit * (1 + m.lossRate / 100)
+      : null
+  const maxUnitsFromRolls =
+    purchasedQuantity !== null &&
+    perUnitRequirement !== null &&
+    perUnitRequirement > 0
+      ? Math.floor(purchasedQuantity / perUnitRequirement)
+      : null
+
   return {
     key: m.bomItemId,
     label: m.itemLabel,
@@ -268,6 +326,11 @@ function buildMaterialRow(
     amountJpy: conv.jpy,
     excluded,
     excludeReason: conv.reason,
+    rolls: hasRoll ? proc.rolls : null,
+    purchasedQuantity,
+    remainingQuantity,
+    maxUnitsFromRolls,
+    rollPriceDerived: proc.rollPriceDerived,
   }
 }
 
@@ -305,6 +368,11 @@ function buildLaborRow(
       amountJpy: conv.jpy,
       excluded: excludeReason !== null,
       excludeReason,
+      rolls: null,
+      purchasedQuantity: null,
+      remainingQuantity: null,
+      maxUnitsFromRolls: null,
+      rollPriceDerived: false,
     },
     isSeparate,
   }

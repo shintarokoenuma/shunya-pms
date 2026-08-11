@@ -72,6 +72,16 @@ export type ProductionEstimateRowResult = {
   isSeparateBilling: boolean
   /** 所要量ベース（生地行）か。false は unitPrice × quantity 行。 */
   isRequirementRow: boolean
+  /** B-133 表示用（計算不変・production-cost 行から通す）。ROLL 時の反数。 */
+  rolls: number | null
+  /** B-133 表示用。ROLL 時の買う量 = rolls × rollLength。 */
+  purchasedQuantity: number | null
+  /** B-133 表示用。ROLL 時の残尺 = purchasedQuantity − requirement。 */
+  remainingQuantity: number | null
+  /** B-133 表示用。ROLL 時に買った量で作れる最大枚数。 */
+  maxUnitsFromRolls: number | null
+  /** B-133: 反単価を 単価×原反長 で導出して計上したとき true。 */
+  rollPriceDerived: boolean
 }
 
 export type ProductionEstimateCalcResult = {
@@ -231,6 +241,11 @@ export function computeProductionEstimate(
       perUnitJpy,
       isSeparateBilling: line.isSeparateBilling,
       isRequirementRow: requirement,
+      rolls: row?.rolls ?? null,
+      purchasedQuantity: row?.purchasedQuantity ?? null,
+      remainingQuantity: row?.remainingQuantity ?? null,
+      maxUnitsFromRolls: row?.maxUnitsFromRolls ?? null,
+      rollPriceDerived: row?.rollPriceDerived ?? false,
     })
   }
 

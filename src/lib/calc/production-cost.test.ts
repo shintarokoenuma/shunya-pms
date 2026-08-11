@@ -258,4 +258,113 @@ let passed = 0
   passed++
 })()
 
-console.log(`✓ production-cost: ${passed}/9 ケース PASS`)
+// ⑩ ROLL の反数・買う量・残尺・取り切り枚数（B-133 表示用）
+;(() => {
+  const skus = [sku("A", 50)]
+  // requirement = 50 × 6 × 1.1 = 330 / rollLength 12 → rolls=ceil(330/12)=28
+  // purchased = 28×12 = 336 / remaining = 336−330 = 6
+  // 1枚あたり所要 = 6×1.1 = 6.6 / maxUnits = floor(336/6.6) = 50
+  const materials = [
+    mat({
+      procurementMode: "ROLL",
+      usagePerUnit: 6,
+      lossRate: 10,
+      rollLength: 12,
+      rollPrice: 700,
+      rollCurrency: "JPY",
+    }),
+  ]
+  const r = computeProductionCost(skus, materials, [], null)
+  const row = r.sections[0].rows[0]
+  assert(row.rolls === 28, "⑩反数=28")
+  assert(approx(row.purchasedQuantity ?? -1, 336), "⑩買う量=336")
+  assert(approx(row.remainingQuantity ?? -1, 6), "⑩残尺=6")
+  assert(row.maxUnitsFromRolls === 50, "⑩取り切り枚数=50")
+  // 計算不変: amountJpy = 28反 × 700 = 19,600
+  assert(approx(row.amountJpy ?? -1, 19600), "⑩生地コスト=19,600")
+  passed++
+})()
+
+// ⑪ rollLength null → rolls/purchased/remaining/maxUnits すべて null
+;(() => {
+  const skus = [sku("A", 50)]
+  const materials = [
+    mat({
+      procurementMode: "ROLL",
+      usagePerUnit: 6,
+      lossRate: 10,
+      rollLength: null,
+      rollPrice: 700,
+      rollCurrency: "JPY",
+    }),
+  ]
+  const r = computeProductionCost(skus, materials, [], null)
+  const row = r.sections[0].rows[0]
+  assert(row.rolls === null, "⑪反数 null")
+  assert(row.purchasedQuantity === null, "⑪買う量 null")
+  assert(row.remainingQuantity === null, "⑪残尺 null")
+  assert(row.maxUnitsFromRolls === null, "⑪取り切り枚数 null")
+  passed++
+})()
+
+// ⑫ rollPrice=null かつ unitPrice/rollLength あり → 単価×原反長 で導出計算される（B-133 Step 16）
+;(() => {
+  const skus = [sku("A", 100)]
+  // requirement = 100 × 2 × 1.05 = 210 / rollLength 50 → rolls=ceil(210/50)=5
+  // 有効反単価 = 単価1000 × 原反長50 = 50,000 / amountOriginal = 5 × 50,000 = 250,000
+  // purchased = 5×50 = 250 / remaining = 250−210 = 40
+  // 1枚あたり所要 = 2×1.05 = 2.1 / maxUnits = floor(250/2.1) = 119
+  const materials = [
+    mat({
+      procurementMode: "ROLL",
+      usagePerUnit: 2,
+      lossRate: 5,
+      unitPrice: 1000,
+      currency: "JPY",
+      rollLength: 50,
+      rollPrice: null,
+      rollCurrency: null,
+    }),
+  ]
+  const r = computeProductionCost(skus, materials, [], null)
+  const row = r.sections[0].rows[0]
+  assert(!row.excluded, "⑫導出値で計上され除外されない")
+  assert(row.rollPriceDerived === true, "⑫rollPriceDerived=true")
+  assert(row.rolls === 5, "⑫反数=5")
+  assert(approx(row.unitPrice ?? -1, 50000), "⑫有効反単価=50,000")
+  assert(approx(row.amountJpy ?? -1, 250000), "⑫生地コスト=250,000")
+  assert(approx(row.purchasedQuantity ?? -1, 250), "⑫買う量=250")
+  assert(approx(row.remainingQuantity ?? -1, 40), "⑫残尺=40")
+  assert(row.maxUnitsFromRolls === 119, "⑫取り切り枚数=119")
+  passed++
+})()
+
+// ⑬ 導出時の通貨は行通貨（currency）に従う（B-133 Step 16）
+;(() => {
+  const skus = [sku("A", 10)]
+  // requirement = 10 × 1 = 10 / rollLength 50 → rolls=ceil(10/50)=1
+  // 有効反単価 = 単価$12 × 原反長50 = $600 / amountOriginal = 1 × 600 = $600
+  // 行通貨 USD で導出 → ×150 = ¥90,000
+  const materials = [
+    mat({
+      procurementMode: "ROLL",
+      usagePerUnit: 1,
+      lossRate: 0,
+      unitPrice: 12,
+      currency: "USD",
+      rollLength: 50,
+      rollPrice: null,
+      rollCurrency: null,
+    }),
+  ]
+  const r = computeProductionCost(skus, materials, [], 150)
+  const row = r.sections[0].rows[0]
+  assert(row.rollPriceDerived === true, "⑬rollPriceDerived=true")
+  assert(row.currency === "USD", "⑬導出通貨=行通貨USD")
+  assert(approx(row.amountOriginal ?? -1, 600), "⑬原通貨$600")
+  assert(approx(row.amountJpy ?? -1, 90000), "⑬JPY換算¥90,000")
+  assert(!row.excluded, "⑬USD行は換算され集計対象")
+  passed++
+})()
+
+console.log(`✓ production-cost: ${passed}/13 ケース PASS`)
