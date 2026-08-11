@@ -250,6 +250,13 @@ function ItemRow({
           <Badge variant="outline" className="text-[10px]">
             {PRODUCTION_ESTIMATE_SOURCE_LABELS[it.source]}
           </Badge>
+          {(it.sourcePoItemId || it.sourceWoItemId) && (
+            <Badge variant="outline" className="text-[10px]">
+              {it.sourceCounterparty
+                ? `由来: ${it.sourceCounterparty.name}`
+                : "由来不明"}
+            </Badge>
+          )}
           <span className="font-medium">{it.itemName}</span>
         </div>
         <span className="font-mono text-xs font-medium">
