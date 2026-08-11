@@ -18,8 +18,11 @@ import {
  * よって全 action で必ず親 SampleProduction を companyId スコープで取得し所有確認する。
  * `prisma.sampleRevision.*` の where に companyId は書かない（列が存在しない）。
  *
- * - 論理削除の仕組みが無いため削除機能は実装しない（本 PR のスコープ外）。
- * - photoUrls / attachments / details / revisionWoId は本 PR では書き込まない（列は温存）。
+ * - 削除は物理削除（B-134）。SampleRevision は deletedAt を持たず SOFT_DELETE_MODELS
+ *   対象外のため prisma.sampleRevision.delete が構造上許可されている。revisionOrder は
+ *   詰め直さない（#2 を消すと #1・#3 が残り次は #4。既存参照を壊さないため）。
+ * - photoUrls / attachments / details / revisionWoId は create / update では書き込まない
+ *   （列は温存）。ただし削除時は beforeData に含めて監査ログへ退避する。
  */
 
 export type ActionResult<T = void> =
@@ -247,6 +250,96 @@ export async function updateSampleRevision(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "修正記録の更新に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
+// 4. 削除（物理削除・B-134。revisionOrder は詰め直さない）
+// =============================================================================
+export async function deleteSampleRevision(
+  id: string,
+): Promise<ActionResult<{ id: string }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    // 対象 revision を取得（companyId は持たないので親経由で所有確認する）。
+    const existing = await prisma.sampleRevision.findFirst({
+      where: { id },
+      select: {
+        id: true,
+        sampleProductionId: true,
+        revisionOrder: true,
+        revisionType: true,
+        requestedBy: true,
+        requestedByUserId: true,
+        description: true,
+        status: true,
+        completedAt: true,
+        completedByUserId: true,
+        revisionWoId: true,
+        requestedAt: true,
+        details: true,
+        photoUrls: true,
+        attachments: true,
+      },
+    })
+    if (!existing) {
+      return { ok: false, error: "修正記録が見つかりません" }
+    }
+
+    // ★id 直指定での他テナント削除を防ぐため、必ず親の所有確認を行う。
+    const parent = await prisma.sampleProduction.findFirst({
+      where: {
+        id: existing.sampleProductionId,
+        companyId: sess.companyId,
+        deletedAt: null,
+      },
+      select: { id: true },
+    })
+    if (!parent) {
+      return { ok: false, error: "サンプル製作セットが見つかりません" }
+    }
+
+    await prisma.sampleRevision.delete({ where: { id } })
+
+    await prisma.auditLog.create({
+      data: {
+        companyId: sess.companyId,
+        userId: sess.userId,
+        action: "DELETE",
+        entityType: "SampleRevision",
+        entityId: id,
+        // 削除前レコード（Date は ISO 文字列化。Json 列も含める＝PR-C2 で
+        // details に縫製指示差分が入るため、削除しても監査ログで追跡可能にする）。
+        beforeData: {
+          sampleProductionId: existing.sampleProductionId,
+          revisionOrder: existing.revisionOrder,
+          revisionType: existing.revisionType,
+          requestedBy: existing.requestedBy,
+          requestedByUserId: existing.requestedByUserId,
+          description: existing.description,
+          status: existing.status,
+          completedAt: existing.completedAt?.toISOString() ?? null,
+          completedByUserId: existing.completedByUserId,
+          revisionWoId: existing.revisionWoId,
+          requestedAt: existing.requestedAt.toISOString(),
+          details: existing.details ?? null,
+          photoUrls: existing.photoUrls ?? null,
+          attachments: existing.attachments ?? null,
+        },
+        afterData: Prisma.DbNull,
+      },
+    })
+
+    revalidatePath(`/samples/${existing.sampleProductionId}`)
+    revalidatePath("/samples")
+    return { ok: true, data: { id } }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "修正記録の削除に失敗しました",
     }
   }
 }
