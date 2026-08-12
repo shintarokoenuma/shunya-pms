@@ -169,9 +169,10 @@ nullable であり、単価すら未入力で保存できる構造になって�
 2. migration SQL（手書き＋`migrate diff` の empty-diff 検証）
 3. `src/lib/actions/production-order-generation.ts` — 生成前の保存ステップ追加
 4. `src/lib/actions/production-estimates.ts` — `GenLineTarget` 導出順に保存値を1段追加
+5. `src/app/(app)/production-estimates/_components/production-order-generate-form.tsx` — 「導出:」caption に保存値ケースの文言を1つ追加（表示のみ・分岐1つ）
 
-★`ProductionEstimateItemDTO`・`toFormValues`・編集フォームは**変更不要**
-（編集フォームに露出させないため）。
+★`ProductionEstimateItemDTO`・`toFormValues`・**見積編集フォーム**
+（`production-estimate-form.tsx`）は変更不要。5 は**発注生成フォーム**であり別物。
 
 ---
 
@@ -207,3 +208,4 @@ nullable であり、単価すら未入力で保存できる構造になって�
 | 日付 | バージョン | 内容 |
 |---|---|---|
 | 2026-08-12 | v0.1 | 初版確定。R-a を改訂し PE 明細に相手先3列を追加。counterpartyConfirmed・編集フォーム改修・警告表示を却下して案を最小化。単価未入力警告を B-141 に分離 |
+| 2026-08-12 | v0.1 追補 | §4 に5点目（発注生成フォームの caption）を追加。導出順に保存値を足すと caption が無表示になる行が生まれ、B-136 が潰した「根拠のない値」が再発するため。§4 は網羅ガード不在を補う唯一の安全網であり、不完全なまま残さない |
