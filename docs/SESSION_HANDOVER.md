@@ -407,3 +407,37 @@ B-148（受注本実装）と B-143（確定見積 QE-2）の設計根拠にな�
 ★プロジェクトナレッジへの追加が必要。次チャットで
 　project_knowledge_search を叩いて、届いているかを実検索で確認すること
 　（ファイル名リストで判断しない・§11-2 の失敗の再発防止）。
+
+---
+
+### 11-7. ★docs を main に commit したら main のまま終える（2026-08-13）
+
+#### 起きたこと
+
+main に commit/push した spec
+（sales-order-quotation-flow-spec-confirmation-v0_1-2026-08-13.md・c7536f5）が、
+Mac のローカルで見つからなかった。
+
+原因: 作業ブランチが feat/b-140-estimate-item-counterparty のままだったため。
+このブランチは main より前の時点から分岐しており、main にしかない docs は
+作業ツリーに存在しない。git checkout main で解決した。
+
+本セッションでは毎回「main に切替 → docs を commit → feature ブランチへ戻る」
+という手順を踏んでおり、戻した時点で当日作成した docs がローカルから消えていた。
+
+#### 規律
+
+**docs を main に commit した日は、main のまま終える。**
+feature ブランチに戻さない。
+
+理由: ナレッジへのアップは慎太郎さんの手作業であり、
+ローカルからファイルが見えないと作業できない。
+
+実装ブランチのコードは commit + push 済みであれば失われない
+（B-140 は commit 8f668cd として push 済み）。
+
+#### 反映先
+
+次チャットのスキル一本化に含めること。
+締めの手順の最後を「feature ブランチへ戻る」から
+「main のまま終える」に変更する。
