@@ -797,3 +797,99 @@ export async function cancelSalesOrder(
     }
   }
 }
+
+// =============================================================================
+// 7.（read-only）品番カルテの受注セクション用集約（R-11・入力はしない）
+// =============================================================================
+export type SalesOrderKarteSku = {
+  skuId: string
+  colorName: string
+  size: string
+  sizeOrder: number
+  orderedQuantity: number
+  moqStatus: SkuMoqStatus
+}
+export type SalesOrderKarteOrder = {
+  id: string
+  soNumber: string
+  status: SalesOrderStatus
+}
+export type SalesOrderKarteSection = {
+  skus: SalesOrderKarteSku[]
+  orders: SalesOrderKarteOrder[]
+}
+
+export async function getSalesOrderSectionForProduct(
+  productId: string,
+): Promise<ActionResult<SalesOrderKarteSection>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const product = await prisma.product.findFirst({
+      where: { id: productId, companyId: sess.companyId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!product) return { ok: false, error: "品番が見つかりません" }
+
+    // 品番配下の SKU（Sku は TENANT: companyId/deletedAt 自動注入）。
+    const skus = await prisma.sku.findMany({
+      where: { productId },
+      orderBy: [{ colorCode: "asc" }, { sizeOrder: "asc" }],
+      select: {
+        id: true,
+        colorName: true,
+        size: true,
+        sizeOrder: true,
+        orderedQuantity: true,
+        moqStatus: true,
+      },
+    })
+    const skuIds = skus.map((s) => s.id)
+
+    // この品番の SKU を含む SO（キャンセル含む・生存のみ）へのリンク。
+    let orders: SalesOrderKarteOrder[] = []
+    if (skuIds.length > 0) {
+      const items = await prisma.soItem.findMany({
+        where: {
+          skuId: { in: skuIds },
+          so: { companyId: sess.companyId, deletedAt: null },
+        },
+        select: { so: { select: { id: true, soNumber: true, status: true } } },
+      })
+      const map = new Map<string, SalesOrderKarteOrder>()
+      for (const it of items) {
+        if (!map.has(it.so.id)) {
+          map.set(it.so.id, {
+            id: it.so.id,
+            soNumber: it.so.soNumber,
+            status: it.so.status,
+          })
+        }
+      }
+      orders = [...map.values()].sort((a, b) =>
+        b.soNumber.localeCompare(a.soNumber),
+      )
+    }
+
+    return {
+      ok: true,
+      data: {
+        skus: skus.map((s) => ({
+          skuId: s.id,
+          colorName: s.colorName,
+          size: s.size,
+          sizeOrder: s.sizeOrder,
+          orderedQuantity: s.orderedQuantity,
+          moqStatus: s.moqStatus,
+        })),
+        orders,
+      },
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "受注セクションの取得に失敗しました",
+    }
+  }
+}
