@@ -294,11 +294,13 @@ export function ProductionOrderGenerateForm({
                 {derived ? (
                   <span className="text-[11px] text-muted-foreground">
                     導出:{" "}
-                    {derived === "sourcePo"
-                      ? "元PO"
-                      : derived === "sourceWo"
-                        ? "元WO"
-                        : "素材マスター"}
+                    {derived === "saved"
+                      ? "前回の指定"
+                      : derived === "sourcePo"
+                        ? "元PO"
+                        : derived === "sourceWo"
+                          ? "元WO"
+                          : "素材マスター"}
                   </span>
                 ) : (
                   <span className="text-[11px] text-amber-700">要指定</span>

@@ -1060,14 +1060,14 @@ export type GenLineTarget =
   | {
       kind: "MATERIAL"
       supplierId: string | null
-      supplierSource: "sourcePo" | "material" | null
+      supplierSource: "saved" | "sourcePo" | "material" | null
     }
   | {
       kind: "LABOR"
       targetType: "factory" | "contractor" | null
       targetId: string | null
       workType: WorkOrderType | null
-      targetSource: "sourceWo" | null
+      targetSource: "saved" | "sourceWo" | null
     }
 
 /** 生成対象の PE 明細行（生地/付属/工賃の判定材料を全部載せる）。 */
@@ -1201,10 +1201,13 @@ export async function getProductionOrderGenerationContext(
       const isMaterial = it.itemCategory === ProductionEstimateCategory.MATERIAL
       let target: GenLineTarget
       if (isMaterial) {
-        // (1) 元 PO の仕入先 → (2) Material.primarySupplierId → (3) null
+        // B-140: (0) PE 行の保存値 → (1) 元 PO の仕入先 → (2) Material.primarySupplierId → (3) null
         let supplierId: string | null = null
-        let supplierSource: "sourcePo" | "material" | null = null
-        if (it.sourcePoItemId && poItemById.get(it.sourcePoItemId)) {
+        let supplierSource: "saved" | "sourcePo" | "material" | null = null
+        if (it.supplierId) {
+          supplierId = it.supplierId
+          supplierSource = "saved"
+        } else if (it.sourcePoItemId && poItemById.get(it.sourcePoItemId)) {
           supplierId = poItemById.get(it.sourcePoItemId)!.po.supplierId
           supplierSource = "sourcePo"
         } else if (it.materialId && matById.get(it.materialId)) {
@@ -1213,15 +1216,25 @@ export async function getProductionOrderGenerationContext(
         }
         target = { kind: "MATERIAL", supplierId, supplierSource }
       } else {
-        // LABOR: (1) 元 WO の工場/外注先＋workType → (2) null
+        // LABOR: (0) PE 行の保存値 → (1) 元 WO の工場/外注先 → (2) null
+        // workType は相手先の由来に関わらず元 WO から引く（保存値ケースでも sourceWoItemId があれば取得）。
         let targetType: "factory" | "contractor" | null = null
         let targetId: string | null = null
         let workType: WorkOrderType | null = null
-        let targetSource: "sourceWo" | null = null
+        let targetSource: "saved" | "sourceWo" | null = null
         const src = it.sourceWoItemId
           ? woItemById.get(it.sourceWoItemId)
           : undefined
-        if (src) {
+        if (src) workType = src.wo.workType
+        if (it.factoryId) {
+          targetType = "factory"
+          targetId = it.factoryId
+          targetSource = "saved"
+        } else if (it.contractorId) {
+          targetType = "contractor"
+          targetId = it.contractorId
+          targetSource = "saved"
+        } else if (src) {
           if (src.wo.factoryId) {
             targetType = "factory"
             targetId = src.wo.factoryId
@@ -1229,7 +1242,6 @@ export async function getProductionOrderGenerationContext(
             targetType = "contractor"
             targetId = src.wo.contractorId
           }
-          workType = src.wo.workType
           targetSource = "sourceWo"
         }
         target = { kind: "LABOR", targetType, targetId, workType, targetSource }

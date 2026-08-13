@@ -9749,6 +9749,13 @@ model ProductionEstimateItem {
   sourceWoItemId  String?                      @map("source_wo_item_id")
   sourceBomItemId String?                      @map("source_bom_item_id") // seed② 予約
 
+  // B-140: 行ごとの発注先（生成画面で人が選んだ値を永続化）。
+  // MATERIAL は supplierId、LABOR は factoryId または contractorId を使う。
+  // scalar FK・@relation なし（WorkOrder の house style）。DB 制約は掛けない。
+  supplierId   String? @map("supplier_id")
+  factoryId    String? @map("factory_id")
+  contractorId String? @map("contractor_id")
+
   // 単価スナップショット・行別通貨
   unitPrice Decimal? @map("unit_price") @db.Decimal(15, 4)
   currency  Currency @default(JPY)
@@ -9781,5 +9788,8 @@ model ProductionEstimateItem {
 
   @@index([productionEstimateId, itemOrder])
   @@index([materialId])
+  @@index([supplierId])
+  @@index([factoryId])
+  @@index([contractorId])
   @@map("production_estimate_items")
 }

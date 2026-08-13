@@ -126,6 +126,46 @@ export async function generateProductionOrders(
   }
   const data = parsed.data
 
+  // B-140: 生成の前に、選ばれた相手先を PE 明細へ永続化する（addendum §2-2）。
+  // ★PO/WO 生成の前に書く。生成は非アトミックで途中失敗しうるため、成功後に書くと
+  //   失敗時に人の選択が消える。updateProductionEstimate は経由しない・AuditLog は出さない。
+  {
+    const session = await auth()
+    const companyId = session?.user?.companyId
+    if (!companyId) return { ok: false, error: "認証されていません" }
+
+    // 対象 PE が自社のものであることを確認（ProductionEstimateItem に companyId 列は無い）。
+    const pe = await prisma.productionEstimate.findFirst({
+      where: { id: data.peId, companyId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!pe) return { ok: false, error: "量産見積が見つかりません" }
+
+    // 配下の明細 id 集合と照合してから書き込む（id 直指定での他 PE 混入を防ぐ）。
+    // 読み（配下 id 取得）と書き（各行 update）を同一トランザクションで一貫させる。
+    await prisma.$transaction(async (tx) => {
+      const owned = await tx.productionEstimateItem.findMany({
+        where: { productionEstimateId: data.peId },
+        select: { id: true },
+      })
+      const ownedIds = new Set(owned.map((r) => r.id))
+
+      for (const t of data.targets) {
+        if (!ownedIds.has(t.peItemId)) continue // 自 PE 配下でない行は無視
+        const patch =
+          t.targetType === "supplier"
+            ? { supplierId: t.targetId, factoryId: null, contractorId: null }
+            : t.targetType === "factory"
+              ? { supplierId: null, factoryId: t.targetId, contractorId: null }
+              : { supplierId: null, factoryId: null, contractorId: t.targetId }
+        await tx.productionEstimateItem.update({
+          where: { id: t.peItemId },
+          data: patch,
+        })
+      }
+    })
+  }
+
   // 生成コンテキスト（対象行・色グループ・相手先候補）はサーバ側で再取得（信頼境界）。
   const ctxResult = await getProductionOrderGenerationContext(data.peId)
   if (!ctxResult.ok) return ctxResult
