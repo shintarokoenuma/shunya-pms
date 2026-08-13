@@ -11,6 +11,7 @@ import type { SkuRow } from "@/lib/types/sku"
  * - SkuRow は中立モジュール @/lib/types/sku に置く（client が "use server" から型 import する
  *   と @prisma/client がブラウザに漏れるため・index-browser 罠回避）。
  * - 数量は量産ライフサイクルの値（受注=orderedQuantity / 量産=productionQuantity 他）。
+ *   ★受注数(orderedQuantity)は受注側(SalesOrder)が正。SKU 生成は生成時も更新時も触らない。
  * - house style: requireSession は各 action ファイルにローカル定義（共有 helper なし）。
  */
 
@@ -124,14 +125,14 @@ export async function getDefaultSizesForProduct(
 
 // =============================================================================
 // 2. SKU 生成（ACTIVE カラーウェイ × サイズ の直積を upsert・冪等）
-//    数量は引数 quantities（colorwayId|size → 受注数）or 0。skuCode で冪等。
+//    ★受注数(orderedQuantity)は受注側(SalesOrder)が正。生成は create 時 0・既存は現状維持で
+//    　触らない（D-8: 再生成で受注集計が 0 に潰れる穴の是正）。skuCode で冪等。
 // =============================================================================
 export type SkuSizeInput = { size: string; sizeOrder: number }
 
 export async function createSkusForProduct(
   productId: string,
   sizes: SkuSizeInput[],
-  quantities?: Record<string, number>, // key: `${colorwayId}|${size}` → orderedQuantity
 ): Promise<ActionResult<{ count: number }>> {
   try {
     const sess = await requireSession()
@@ -159,16 +160,15 @@ export async function createSkusForProduct(
       for (const cw of colorways) {
         for (const sz of sizes) {
           const skuCode = `${product.productCode}-${cw.colorwayCode}-${sz.size}`
-          const ordered = quantities?.[`${cw.id}|${sz.size}`] ?? 0
           await tx.sku.upsert({
             where: { companyId_skuCode: { companyId: sess.companyId, skuCode } },
+            // ★update に orderedQuantity を含めない（既存 SKU の受注集計を再生成で潰さない）。
             update: {
               colorwayId: cw.id,
               colorCode: cw.colorwayCode,
               colorName: cw.colorwayName,
               size: sz.size,
               sizeOrder: sz.sizeOrder,
-              orderedQuantity: ordered,
             },
             create: {
               companyId: sess.companyId,
@@ -179,7 +179,7 @@ export async function createSkusForProduct(
               colorName: cw.colorwayName,
               size: sz.size,
               sizeOrder: sz.sizeOrder,
-              orderedQuantity: ordered,
+              orderedQuantity: 0,
             },
           })
           count++
