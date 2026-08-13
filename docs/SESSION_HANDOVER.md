@@ -114,5 +114,10 @@ shunya-pms は OEM 生産管理会社のシステム。展示会で受注を積�
 
 ## ⑨ ナレッジ登録の状況
 
-- ★未登録: sales-order-spec-confirmation-v1_0-2026-08-13.md（本日作成）
-- ★差し替え必要: BACKLOG.md（ナレッジ側は B-142 止まり）/ SESSION_HANDOVER.md（本ファイル）
+★2026-08-13 に project_knowledge_search で実確認した結果（リストからの推測ではない）
+
+- 登録済み: sales-order-spec-confirmation-v1_0-2026-08-13.md（全文がヒット）
+- 登録済み: BACKLOG.md（B-140=完了・B-163/B-164 まで反映済み）
+- ★差し替え必要: SESSION_HANDOVER.md（本ファイル）のみ
+- ★前版の「未登録」「B-142 止まり」はファイル名リストという二次情報からの断定で誤りだった。
+  　ナレッジの有無は必ず project_knowledge_search で確認する（鉄則6）
