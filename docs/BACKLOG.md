@@ -188,6 +188,7 @@
 | B-162 | 未着手 | 受注変更履歴（SalesOrderChangeHistory）の実装。schema は完備（変更タイプ enum・before/after Json・変更理由・クライアント依頼フラグ・影響評価・承認者）だが、受注 spec v1.0 R-9 で初版スコープ外とした。理由: 先方都合の数量変更は基本発生せず、工場・資材都合の減産は受注変更ではなく納品側の事象のため。将来クライアント都合の変更が常態化した場合に着手する | sales-order-spec-confirmation-v1_0-2026-08-13.md §9（ライフサイクル: 7. 受注確定） |
 | B-163 | 未着手 | SKU 別 MOQ の自動判定。受注 spec v1.0 R-8 で初版は「人が選ぶのみ・自動判定なし」と確定。取り切り枚数は量産見積の更新時に確認済みという運用のため。将来 SKU 別受注数と MOQ・取り切り枚数を突き合わせて SkuMoqStatus を候補提示する場合に着手する。★確定は人が行う原則を崩さない | sales-order-spec-confirmation-v1_0-2026-08-13.md §9（ライフサイクル: 7. 受注確定） |
 | B-164 | 未着手 | SalesOrderStatus の TENTATIVE コメント修正（軽微）。schema のコメントが「仮受注（受注募集中・展示会中）」だが、受注 spec v1.0 §0 により shunya-pms に展示会積み上げの概念は無く、実態は「社内の入力途中（代打ち中・内容未確認）」。コメントのみの変更で migration の要否を確認してから実施する | sales-order-spec-confirmation-v1_0-2026-08-13.md §9（ライフサイクル: 7. 受注確定） |
+| B-165 | 未着手 | 受注（SO）の税表示。qe1r-tax-addendum v0.1 §3「税率は表示層の定数 TAX_RATE = 0.10・スキーマに保存しない」に従い、B-148 PR-1 では SalesOrder.taxAmount に書き込まず subtotal / totalAmount はいずれも税抜合計とした。受注一覧・詳細・（将来の）受注請書 PDF に税抜/消費税/税込の3段表示を入れる際に着手する | b-148-pr1-implementation-brief-2026-08-13.md §1-1（ライフサイクル: 7. 受注確定） |
 
 ---
 
