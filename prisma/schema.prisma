@@ -4422,7 +4422,7 @@ model SalesOrder {
   soNumber String @map("so_number") @db.VarChar(50)
 
   // 関連エンティティ
-  productId             String  @map("product_id")
+  productId             String? @map("product_id")
   clientId              String  @map("client_id")
   buyerId               String? @map("buyer_id") // バイヤー
   deliveryDestinationId String? @map("delivery_destination_id") // 納品先

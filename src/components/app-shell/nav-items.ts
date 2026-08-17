@@ -76,7 +76,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "見積もり", href: "/quotations", icon: Calculator, enabled: true },
       { label: "発注（仕入 PO）", href: "/purchase-orders", icon: ShoppingCart, enabled: true },
       { label: "発注（作業 WO）", href: "/work-orders", icon: Hammer, enabled: true },
-      { label: "受注", href: "/sales-orders", icon: ClipboardCheck, enabled: false },
+      { label: "受注", href: "/sales-orders", icon: ClipboardCheck, enabled: true },
       // B-108: 納品書（DLV）を有効化。請求（INV）は B-109 で別項目として追加する
       // （sidebar-ui-design-2026-05-27 は 納品/請求 を別項目として設計）。
       { label: "納品", href: "/deliveries", icon: Receipt, enabled: true },

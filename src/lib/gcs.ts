@@ -185,6 +185,51 @@ export async function uploadProductSketch(
   }
 }
 
+export type UploadOrderSourceFileParams = {
+  companyId: string
+  salesOrderId: string
+  fileName: string
+  /** MIME。受注原本は PDF / Excel / 画像 / メール添付を許すため呼び出し側が渡す。 */
+  contentType: string
+  buffer: Buffer
+}
+
+/**
+ * B-148: 受注（SO）の原本ファイル（メール添付 / PDF / Excel / 画像）を GCS に保存する。
+ * パス規約は uploadMarkingPdf を踏襲し識別子を受注用に置換:
+ *   sales-order-source/{companyId}/{salesOrderId}/{yyyyMMdd-HHmmss}-{fileName}
+ * 履歴保持・上書きなし。PDF 限定バリデーションは持たない（contentType は呼び出し側指定）。
+ * ★この系は GCS 実体を削除しない（既存アップロード系に削除実装が無いのと同じ作法）。
+ * 失敗/未設定は null（graceful degradation・例外は投げない）。
+ */
+export async function uploadOrderSourceFile(
+  params: UploadOrderSourceFileParams,
+): Promise<{ gcsPath: string } | null> {
+  const ctx = getStorageContext()
+  if (!ctx) return null
+
+  const stamp = timestampJst(new Date())
+  // パス安全化（区切り・空白を除去）。表示名は originalFiles.fileName 側で保持する。
+  const safeName = params.fileName.replace(/[^\w.\-]+/g, "_")
+  const objectPath = `sales-order-source/${params.companyId}/${params.salesOrderId}/${stamp}-${safeName}`
+  try {
+    await ctx.storage
+      .bucket(ctx.bucketName)
+      .file(objectPath)
+      .save(params.buffer, {
+        contentType: params.contentType,
+        resumable: false,
+      })
+    return { gcsPath: `gs://${ctx.bucketName}/${objectPath}` }
+  } catch (e) {
+    console.error(
+      `[gcs] 受注原本ファイルのアップロードに失敗しました (${objectPath}):`,
+      e instanceof Error ? e.message : "unknown error",
+    )
+    return null
+  }
+}
+
 /**
  * gs://bucket/object 形式のパスから署名付き読み取りURL（有効期限15分）を生成する。
  * バケットは非公開のためダウンロード/プレビューはこれ経由。失敗/未設定は null。

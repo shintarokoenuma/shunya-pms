@@ -35,6 +35,8 @@ import { ProductionCostSection } from "../_components/production-cost-section"
 import { getProductionCostInputs } from "@/lib/actions/production-cost"
 import { ProductionEstimateSection } from "../_components/production-estimate-section"
 import { getProductionEstimateSection } from "@/lib/actions/production-estimates"
+import { SalesOrderSection } from "../_components/sales-order-section"
+import { getSalesOrderSectionForProduct } from "@/lib/actions/sales-orders"
 import { ProductOrdersSection } from "../_components/product-orders-section"
 import { getProductOrders } from "@/lib/actions/product-orders"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
@@ -200,6 +202,7 @@ export default async function ProductDetailPage({
 
   // A-seed1: 量産見積（発行履歴＋基準サンプル有無）。
   const productionEstimateSection = await getProductionEstimateSection(id)
+  const salesOrderSection = await getSalesOrderSectionForProduct(id)
   const productOrders = await getProductOrders(id)
 
   // QE-1: 量産原価ビュー用の入力（ROLL 反情報・PRODUCTION WoItem。read-only）。
@@ -526,6 +529,18 @@ export default async function ProductDetailPage({
         defaultSizeOptions={defaultSizeOptions}
         categoryId={item.category?.id ?? null}
       />
+
+      {/* 受注（SO・B-148・集約表示） */}
+      {salesOrderSection.ok && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">受注</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <SalesOrderSection section={salesOrderSection.data} />
+          </CardContent>
+        </Card>
+      )}
 
       {/* 資材表（BOM・QE-0b） */}
       <Card>
