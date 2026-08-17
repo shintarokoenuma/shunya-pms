@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, Plus, Trash2 } from "lucide-react"
@@ -154,6 +154,18 @@ export function SalesOrderForm({
     keywords: `${c.clientCode} ${c.companyName}`,
   }))
 
+  // 初期グループ由来の SKU ロードを一度きりにするガード（ref のため再レンダリングを起こさない）。
+  const initRef = useRef(false)
+
+  // アンマウント後の setState を避けるためのマウント状態フラグ（非同期完了後に参照）。
+  const mountedRef = useRef(true)
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
+
   const patchBlock = (key: string, patch: Partial<Block>) =>
     setBlocks((prev) =>
       prev.map((b) => (b.key === key ? { ...b, ...patch } : b)),
@@ -161,6 +173,7 @@ export function SalesOrderForm({
 
   async function loadSkus(key: string, productId: string) {
     const r = await listSkusForProduct(productId)
+    if (!mountedRef.current) return // アンマウント後は書かない
     if (!r.ok) {
       toast.error(r.error)
       patchBlock(key, { skus: [] })
@@ -178,9 +191,12 @@ export function SalesOrderForm({
   }
 
   // 編集初期化: 既存ブロックの SKU をまとめて読み込む（qty/moq は保持）。
-  const [skusInitialized, setSkusInitialized] = useState(false)
-  if (!skusInitialized && initialGroups && initialGroups.length > 0) {
-    setSkusInitialized(true)
+  // ★レンダリング中に呼ばず、マウント時に一度だけ実行する（setState-in-render 違反の解消）。
+  //   skusInitialized の一度きりガードは維持（無限ループ防止・二重ロード防止）。
+  useEffect(() => {
+    if (initRef.current) return
+    if (!initialGroups || initialGroups.length === 0) return
+    initRef.current = true
     startTransition(async () => {
       for (const b of blocks) {
         if (b.productId && b.skus === null) {
@@ -188,7 +204,9 @@ export function SalesOrderForm({
         }
       }
     })
-  }
+    // 初期グループ由来のロードはマウント時のみ。blocks/loadSkus は初期値を参照する。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const onSubmit = () => {
     if (!clientId) {
