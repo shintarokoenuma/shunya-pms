@@ -203,6 +203,7 @@
 | B-177 | 未着手 | 受注前の品番カルテにおける試算数量の供給。B-168 v0.1 D-2 で数量マトリクス下段の手入力を非表示にした結果、SO が成立していない品番では Sku.productionQuantity が 0 のままとなり、品番カルテの「資材所要量」「1枚原価」セクションが 0 表示になる（products/[id]/page.tsx:578 で無条件描画されるため）。★B-168 で意図的に受け入れた副作用でありバグではない。解消案は2つ: ①量産見積の estimateQuantity を分母として流用する（production-estimate/calc.ts:118-131 の syntheticSku が前例・計算エンジンは改修不要） ②試算専用の列を別に持つ。★量産見積側の原価計算は合成 SKU により影響を受けない | b-168-production-quantity-spec-confirmation-v0_1-2026-08-19.md §5・§7（ライフサイクル: 5. 見積もり） |
 | B-178 | 未着手 | Sku.productionQuantity 列の最終処分。B-168 v0.1 D-1 では非破壊原則によりキャッシュ列として残したが、SO 由来の運用が安定した段階で、列を廃止して全読み口（material-requirement.ts / production-cost.ts / production-estimates.ts / production-order-generate-form.tsx）を SO 集計へ差し替えるかを判断する。★計算エンジン側は productionQuantity を引数で受ける設計のため改修不要（recon 2026-08-19 で確認済み） | b-168-production-quantity-spec-confirmation-v0_1-2026-08-19.md §7（ライフサイクル: 7 → 8） |
 | B-179 | 未着手 | 歩留まり率の既定値の運用高度化。B-168 v0.1 D-4 では「SO 入力時に都度入力・既定は率 5%・率と加算枚数の2方式」で確定した。品番別・クライアント別・工場別の既定値を持たせる、実績（B-150 減産率＝実生産数÷計画数）から既定値を提案する、といった発展を検討する。★実データが溜まるまで着手しない | b-168-production-quantity-spec-confirmation-v0_1-2026-08-19.md §7（ライフサイクル: 7 → 8） |
+| B-180 | 未着手 | SalesOrderStatus.TENTATIVE の enum コメント修正。schema.prisma:4532 が「仮受注（受注募集中・展示会中）」のままで、受注 spec v1.0 R-6 の再定義「入力途中（社内の代打ち中・内容未確認）」と食い違う。★spec v1.0 §9 に「未起票（軽微）」と明記されたまま B番号が振られていなかったものを起票。★Prisma の // コメントは DB に反映されず migration は発生しない。B-148 PR-2a に同梱して解消する予定 | sales-order-spec-confirmation-v1_0-2026-08-13.md §2・§9（ライフサイクル: 7. 受注確定） |
 
 ---
 
