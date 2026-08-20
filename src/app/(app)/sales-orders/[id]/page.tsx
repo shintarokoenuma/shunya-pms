@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft, Pencil } from "lucide-react"
+import { YieldMode } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Badge } from "@/components/ui/badge"
@@ -153,10 +154,12 @@ export default async function SalesOrderDetailPage({
                 <TableHeader>
                   <TableRow>
                     <TableHead>カラー / サイズ</TableHead>
-                    <TableHead className="w-[100px] text-right">受注数</TableHead>
-                    <TableHead className="w-[110px] text-right">単価</TableHead>
-                    <TableHead className="w-[120px] text-right">小計</TableHead>
-                    <TableHead className="w-[180px]">MOQ 判定</TableHead>
+                    <TableHead className="w-[90px] text-right">受注数</TableHead>
+                    <TableHead className="w-[110px] text-right">量産数量</TableHead>
+                    <TableHead className="w-[110px] text-right">歩留まり</TableHead>
+                    <TableHead className="w-[100px] text-right">単価</TableHead>
+                    <TableHead className="w-[110px] text-right">小計</TableHead>
+                    <TableHead className="w-[160px]">MOQ 判定</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -178,10 +181,22 @@ export default async function SalesOrderDetailPage({
                             {it.orderedQuantity.toLocaleString("ja-JP")}
                           </TableCell>
                           <TableCell className="text-right text-sm">
-                            {it.unitPrice.toLocaleString("ja-JP")}
+                            {it.productionQuantity === null
+                              ? "—"
+                              : it.productionQuantity.toLocaleString("ja-JP")}
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">
+                            {yieldLabel(it)}
                           </TableCell>
                           <TableCell className="text-right text-sm">
-                            {it.subtotal.toLocaleString("ja-JP")}
+                            {it.unitPrice === null
+                              ? "—"
+                              : it.unitPrice.toLocaleString("ja-JP")}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">
+                            {it.subtotal === null
+                              ? "—"
+                              : it.subtotal.toLocaleString("ja-JP")}
                           </TableCell>
                           <TableCell className="text-sm">
                             {SKU_MOQ_STATUS_LABELS[it.moqStatus]}
@@ -206,4 +221,19 @@ function Cell({ label, value }: { label: string; value: string }) {
       <div className="font-medium">{value}</div>
     </div>
   )
+}
+
+/** 歩留まりの表示（率 or 加算枚数）。未設定は「—」。 */
+function yieldLabel(it: {
+  yieldMode: YieldMode | null
+  yieldRate: number | null
+  yieldQuantity: number | null
+}): string {
+  if (it.yieldMode === YieldMode.RATE) {
+    return it.yieldRate === null ? "—" : `+${it.yieldRate}%`
+  }
+  if (it.yieldMode === YieldMode.QUANTITY) {
+    return it.yieldQuantity === null ? "—" : `+${it.yieldQuantity}枚`
+  }
+  return "—"
 }

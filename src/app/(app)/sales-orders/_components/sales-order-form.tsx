@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, Plus, Trash2 } from "lucide-react"
-import { Currency, OrderSourceType, SkuMoqStatus } from "@prisma/client"
+import { Currency, OrderSourceType, SkuMoqStatus, YieldMode } from "@prisma/client"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -24,6 +24,7 @@ import {
 } from "@/lib/actions/sales-orders"
 import { listSkusForProduct } from "@/lib/actions/skus"
 import type { SkuRow } from "@/lib/types/sku"
+import { computeProductionQuantity } from "@/lib/calc/sales-order-quantity"
 import {
   ORDER_SOURCE_TYPE_OPTIONS,
   SKU_MOQ_STATUS_OPTIONS,
@@ -36,14 +37,17 @@ export type ProductOpt = {
   productName: string
 }
 
-/** 編集時にサーバから渡す初期グループ（品番ごとに単価と SKU 別数量を復元）。 */
+/** 編集時にサーバから渡す初期グループ（品番ごとに単価と SKU 別数量・歩留まりを復元）。 */
 export type InitialGroup = {
   productId: string
-  unitPrice: number
+  unitPrice: number | null
   skus: {
     skuId: string
     orderedQuantity: number
     moqStatus: SkuMoqStatus
+    yieldMode: YieldMode | null
+    yieldRate: number | null
+    yieldQuantity: number | null
   }[]
 }
 export type InitialHeader = {
@@ -57,6 +61,9 @@ export type InitialHeader = {
   internalNotes: string | null
 }
 
+/** 歩留まりの一括適用の粒度（E-5）。 */
+type YieldGranularity = "UNIFORM" | "COLOR" | "SIZE" | "SKU"
+
 type Block = {
   key: string
   productId: string | null
@@ -64,7 +71,18 @@ type Block = {
   skus: SkuRow[] | null // null=未ロード
   qty: Record<string, string>
   moq: Record<string, SkuMoqStatus>
+  // 歩留まりの一括適用コントロール（ブロック単位・E-5）
+  yGran: YieldGranularity
+  yBulkMode: YieldMode
+  yBulkUniform: string
+  yBulkByColor: Record<string, string> // colorwayId -> 値
+  yBulkBySize: Record<string, string> // size -> 値
+  // 各 SKU に解決された歩留まり（保存はこの2つ・SKU 行単位・D-3）
+  ymode: Record<string, YieldMode> // skuId -> 方式
+  yval: Record<string, string> // skuId -> 値（方式で率/枚を解釈）
 }
+
+const DEFAULT_YIELD_RATE = "5" // 既定は率 5%（D-4）
 
 let blockSeq = 0
 function newBlock(): Block {
@@ -76,6 +94,13 @@ function newBlock(): Block {
     skus: null,
     qty: {},
     moq: {},
+    yGran: "UNIFORM",
+    yBulkMode: YieldMode.RATE,
+    yBulkUniform: DEFAULT_YIELD_RATE,
+    yBulkByColor: {},
+    yBulkBySize: {},
+    ymode: {},
+    yval: {},
   }
 }
 
@@ -131,12 +156,32 @@ export function SalesOrderForm({
         return {
           key: `b${blockSeq}`,
           productId: g.productId,
-          unitPrice: String(g.unitPrice),
+          unitPrice: g.unitPrice === null ? "" : String(g.unitPrice),
           skus: null, // マウント後に読み込む（下の loadSkus）
           qty: Object.fromEntries(
             g.skus.map((s) => [s.skuId, String(s.orderedQuantity)]),
           ),
           moq: Object.fromEntries(g.skus.map((s) => [s.skuId, s.moqStatus])),
+          yGran: "UNIFORM" as YieldGranularity,
+          yBulkMode: YieldMode.RATE,
+          yBulkUniform: DEFAULT_YIELD_RATE,
+          yBulkByColor: {},
+          yBulkBySize: {},
+          ymode: Object.fromEntries(
+            g.skus.map((s) => [s.skuId, s.yieldMode ?? YieldMode.RATE]),
+          ),
+          yval: Object.fromEntries(
+            g.skus.map((s) => [
+              s.skuId,
+              (s.yieldMode ?? YieldMode.RATE) === YieldMode.QUANTITY
+                ? s.yieldQuantity === null
+                  ? ""
+                  : String(s.yieldQuantity)
+                : s.yieldRate === null
+                  ? ""
+                  : String(s.yieldRate),
+            ]),
+          ),
         }
       })
     }
@@ -179,15 +224,64 @@ export function SalesOrderForm({
       patchBlock(key, { skus: [] })
       return
     }
-    patchBlock(key, { skus: r.data })
+    const loaded = r.data
+    // 各 SKU の歩留まりに既定（率 5%）を敷く。編集復元済みの値は保持する。
+    setBlocks((prev) =>
+      prev.map((b) => {
+        if (b.key !== key) return b
+        const ymode = { ...b.ymode }
+        const yval = { ...b.yval }
+        for (const s of loaded) {
+          if (ymode[s.id] === undefined) ymode[s.id] = YieldMode.RATE
+          if (yval[s.id] === undefined) yval[s.id] = DEFAULT_YIELD_RATE
+        }
+        return { ...b, skus: loaded, ymode, yval }
+      }),
+    )
   }
 
   const onSelectProduct = (key: string, productId: string) => {
-    // 品番が変わったら SKU と入力をリセット
-    patchBlock(key, { productId, skus: null, qty: {}, moq: {} })
+    // 品番が変わったら SKU と入力をリセット（歩留まりの解決値も含む）
+    patchBlock(key, { productId, skus: null, qty: {}, moq: {}, ymode: {}, yval: {} })
     startTransition(async () => {
       await loadSkus(key, productId)
     })
+  }
+
+  /** ブロックの歩留まりを、選んだ粒度で各 SKU に配る（E-5）。 */
+  const applyYield = (key: string) => {
+    setBlocks((prev) =>
+      prev.map((b) => {
+        if (b.key !== key) return b
+        if (b.yGran === "SKU") return b // SKU 個別は各行を直接編集
+        const skus = b.skus ?? []
+        const ymode = { ...b.ymode }
+        const yval = { ...b.yval }
+        for (const s of skus) {
+          let v = ""
+          if (b.yGran === "UNIFORM") v = b.yBulkUniform
+          else if (b.yGran === "COLOR") v = b.yBulkByColor[s.colorwayId] ?? ""
+          else if (b.yGran === "SIZE") v = b.yBulkBySize[s.size] ?? ""
+          ymode[s.id] = b.yBulkMode
+          yval[s.id] = v
+        }
+        return { ...b, ymode, yval }
+      }),
+    )
+  }
+
+  /** 各 SKU 行の量産数量プレビュー（受注数＋歩留まり・純関数を共用）。 */
+  const previewProduction = (b: Block, skuId: string): number => {
+    const ordered = Number(b.qty[skuId] || 0)
+    const mode = b.ymode[skuId] ?? YieldMode.RATE
+    const raw = b.yval[skuId]
+    const val = raw === "" || raw === undefined ? null : Number(raw)
+    return computeProductionQuantity(
+      ordered,
+      mode === YieldMode.QUANTITY ? "QUANTITY" : "RATE",
+      mode === YieldMode.RATE ? val : null,
+      mode === YieldMode.QUANTITY ? val : null,
+    )
   }
 
   // 編集初期化: 既存ブロックの SKU をまとめて読み込む（qty/moq は保持）。
@@ -226,25 +320,42 @@ export function SalesOrderForm({
         return
       }
       seenProduct.add(b.productId)
-      if (b.unitPrice === "" || Number(b.unitPrice) < 0) {
-        toast.error("各品番に単価（0以上）を入力してください")
+      // 単価は任意（B-167）。入力があるときだけ 0 以上を確認する。
+      if (b.unitPrice !== "" && Number(b.unitPrice) < 0) {
+        toast.error("単価は0以上で入力してください")
         return
       }
-      const skusPayload = (b.skus ?? [])
-        .filter((s) => Number(b.qty[s.id] || 0) >= 1)
-        .map((s) => ({
+      const targetSkus = (b.skus ?? []).filter(
+        (s) => Number(b.qty[s.id] || 0) >= 1,
+      )
+      // 歩留まりの値が方式に対して空でないこと（率/枚のいずれも入力必須）。
+      for (const s of targetSkus) {
+        const raw = b.yval[s.id]
+        if (raw === "" || raw === undefined) {
+          toast.error("各 SKU に歩留まり（率 or 枚数）を入力してください")
+          return
+        }
+      }
+      const skusPayload = targetSkus.map((s) => {
+        const mode = b.ymode[s.id] ?? YieldMode.RATE
+        const val = Number(b.yval[s.id])
+        return {
           skuId: s.id,
           orderedQuantity: Number(b.qty[s.id]),
           moqStatus: b.moq[s.id] ?? SkuMoqStatus.NOT_DETERMINED,
           moqDecisionReason: "",
-        }))
+          yieldMode: mode,
+          yieldRate: mode === YieldMode.RATE ? val : null,
+          yieldQuantity: mode === YieldMode.QUANTITY ? val : null,
+        }
+      })
       if (skusPayload.length === 0) {
         toast.error("各品番に受注数（1以上）の SKU を1件以上入力してください")
         return
       }
       productsPayload.push({
         productId: b.productId,
-        unitPrice: Number(b.unitPrice),
+        unitPrice: b.unitPrice === "" ? null : Number(b.unitPrice),
         skus: skusPayload,
       })
     }
@@ -415,12 +526,13 @@ export function SalesOrderForm({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label>単価（税抜・この品番の全 SKU に配る）</Label>
+                  <Label>単価（税抜・任意・この品番の全 SKU に配る）</Label>
                   <Input
                     type="number"
                     min={0}
                     step="any"
                     inputMode="decimal"
+                    placeholder="未定なら空欄"
                     value={b.unitPrice}
                     onChange={(e) =>
                       patchBlock(b.key, { unitPrice: e.target.value })
@@ -428,6 +540,143 @@ export function SalesOrderForm({
                   />
                 </div>
               </div>
+
+              {/* 歩留まりの一括適用（E-5・D-4） */}
+              {b.skus !== null && b.skus.length > 0 && (
+                <div className="space-y-2 rounded-md border bg-muted/30 p-2">
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">歩留まりの適用粒度</Label>
+                      <Select
+                        value={b.yGran}
+                        onValueChange={(v) =>
+                          patchBlock(b.key, { yGran: v as YieldGranularity })
+                        }
+                      >
+                        <SelectTrigger className="h-9 w-[150px]">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="UNIFORM">一律</SelectItem>
+                          <SelectItem value="COLOR">色別</SelectItem>
+                          <SelectItem value="SIZE">サイズ別</SelectItem>
+                          <SelectItem value="SKU">SKU 個別</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {b.yGran !== "SKU" && (
+                      <>
+                        <div className="space-y-1">
+                          <Label className="text-xs">方式</Label>
+                          <Select
+                            value={b.yBulkMode}
+                            onValueChange={(v) =>
+                              patchBlock(b.key, { yBulkMode: v as YieldMode })
+                            }
+                          >
+                            <SelectTrigger className="h-9 w-[130px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={YieldMode.RATE}>率(%)</SelectItem>
+                              <SelectItem value={YieldMode.QUANTITY}>
+                                加算枚数(+枚)
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {b.yGran === "UNIFORM" && (
+                          <div className="space-y-1">
+                            <Label className="text-xs">
+                              値（{b.yBulkMode === YieldMode.RATE ? "%" : "枚"}）
+                            </Label>
+                            <Input
+                              type="number"
+                              min={0}
+                              step="any"
+                              inputMode="decimal"
+                              className="w-24"
+                              value={b.yBulkUniform}
+                              onChange={(e) =>
+                                patchBlock(b.key, { yBulkUniform: e.target.value })
+                              }
+                            />
+                          </div>
+                        )}
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => applyYield(b.key)}
+                        >
+                          適用
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                  {/* 色別・サイズ別の入力欄 */}
+                  {b.yGran === "COLOR" && (
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from(
+                        new Map(
+                          b.skus.map((s) => [
+                            s.colorwayId,
+                            { id: s.colorwayId, name: s.colorName },
+                          ]),
+                        ).values(),
+                      ).map((c) => (
+                        <div key={c.id} className="space-y-1">
+                          <Label className="text-xs">{c.name}</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="any"
+                            inputMode="decimal"
+                            className="w-20"
+                            value={b.yBulkByColor[c.id] ?? ""}
+                            onChange={(e) =>
+                              patchBlock(b.key, {
+                                yBulkByColor: {
+                                  ...b.yBulkByColor,
+                                  [c.id]: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {b.yGran === "SIZE" && (
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from(new Set(b.skus.map((s) => s.size))).map((sz) => (
+                        <div key={sz} className="space-y-1">
+                          <Label className="text-xs">{sz}</Label>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="any"
+                            inputMode="decimal"
+                            className="w-20"
+                            value={b.yBulkBySize[sz] ?? ""}
+                            onChange={(e) =>
+                              patchBlock(b.key, {
+                                yBulkBySize: {
+                                  ...b.yBulkBySize,
+                                  [sz]: e.target.value,
+                                },
+                              })
+                            }
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-[11px] text-muted-foreground">
+                    「適用」で各 SKU の歩留まりを埋めます（SKU 個別は各行で直接編集）。量産数量＝受注数＋歩留まり。
+                  </p>
+                </div>
+              )}
 
               {/* SKU 別数量 */}
               {b.productId && b.skus === null && (
@@ -492,6 +741,46 @@ export function SalesOrderForm({
                             ))}
                           </SelectContent>
                         </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">歩留まり</Label>
+                        <div className="flex items-center gap-1">
+                          <Select
+                            value={b.ymode[s.id] ?? YieldMode.RATE}
+                            onValueChange={(v) =>
+                              patchBlock(b.key, {
+                                ymode: { ...b.ymode, [s.id]: v as YieldMode },
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-9 w-[72px]">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value={YieldMode.RATE}>%</SelectItem>
+                              <SelectItem value={YieldMode.QUANTITY}>+枚</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            min={0}
+                            step="any"
+                            inputMode="decimal"
+                            className="w-20"
+                            value={b.yval[s.id] ?? ""}
+                            onChange={(e) =>
+                              patchBlock(b.key, {
+                                yval: { ...b.yval, [s.id]: e.target.value },
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs">量産数量</Label>
+                        <div className="flex h-9 items-center px-1 text-sm tabular-nums">
+                          {previewProduction(b, s.id).toLocaleString("ja-JP")}
+                        </div>
                       </div>
                     </div>
                   ))}
