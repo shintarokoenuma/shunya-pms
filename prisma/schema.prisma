@@ -4529,7 +4529,7 @@ enum OrderSourceType {
 }
 
 enum SalesOrderStatus {
-  TENTATIVE // 仮受注（受注募集中・展示会中）
+  TENTATIVE // 入力途中（社内の代打ち中・内容未確認）
   CONFIRMED // 確定受注
   IN_PRODUCTION // 量産中（量産発注済み）
   PARTIAL_DELIVERED // 一部納品済み
@@ -4541,6 +4541,12 @@ enum SalesOrderStatus {
 
 /// SO明細（SKU別）
 /// saagara V2のSKUマトリクスUI継承
+/// 歩留まり率の指定方式（B-168 D-4）。RATE=率(%)、QUANTITY=加算枚数(+N)。
+enum YieldMode {
+  RATE // 率（%）指定
+  QUANTITY // 加算枚数（+N 枚）指定
+}
+
 model SoItem {
   id   String @id @default(uuid())
   soId String @map("so_id")
@@ -4549,9 +4555,10 @@ model SoItem {
   skuId String @map("sku_id")
 
   // 受注情報
+  // B-167: 単価・小計は nullable（希望数量の段階で単価未定を許す。0 と「未定」を区別する）。
   orderedQuantity Int      @map("ordered_quantity")
-  unitPrice       Decimal  @map("unit_price") @db.Decimal(15, 2)
-  subtotal        Decimal  @db.Decimal(15, 2)
+  unitPrice       Decimal? @map("unit_price") @db.Decimal(15, 2)
+  subtotal        Decimal? @db.Decimal(15, 2)
   currency        Currency @default(JPY)
 
   // 納品先（SKUごとに違う場合）
@@ -4561,9 +4568,11 @@ model SoItem {
   moqStatus         SkuMoqStatus @default(NOT_DETERMINED) @map("moq_status")
   moqDecisionReason String?      @map("moq_decision_reason") @db.Text
 
-  // 量産発注時の数量（歩留まり率込み）
-  productionQuantity Int?     @map("production_quantity")
-  yieldRate          Decimal? @map("yield_rate") @db.Decimal(5, 2) // 歩留まり率
+  // 量産発注時の数量（歩留まり率込み）。B-168 PR-2a で受注確定時に算出・保存を開始する。
+  productionQuantity Int?       @map("production_quantity")
+  yieldRate          Decimal?   @map("yield_rate") @db.Decimal(5, 2) // 歩留まり率（RATE 指定時）
+  yieldMode          YieldMode? @map("yield_mode") // 歩留まりの指定方式（B-168 D-4）
+  yieldQuantity      Int?       @map("yield_quantity") // 加算枚数（QUANTITY 指定時）
 
   // 完納数量
   deliveredQuantity Int @default(0) @map("delivered_quantity")

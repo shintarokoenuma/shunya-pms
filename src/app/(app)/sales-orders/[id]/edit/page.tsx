@@ -48,6 +48,9 @@ export default async function EditSalesOrderPage({
       skuId: it.skuId,
       orderedQuantity: it.orderedQuantity,
       moqStatus: it.moqStatus,
+      yieldMode: it.yieldMode,
+      yieldRate: it.yieldRate,
+      yieldQuantity: it.yieldQuantity,
     })
     groupMap.set(pid, g)
   }

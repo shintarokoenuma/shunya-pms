@@ -1,8 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
-import { toast } from "sonner"
+import { useState } from "react"
 import { Plus } from "lucide-react"
 import {
   Card,
@@ -19,7 +17,6 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { updateSkuQuantity } from "@/lib/actions/skus"
 import type { SkuRow } from "@/lib/types/sku"
 import { SkuGenerateDialog } from "./sku-generate-dialog"
 
@@ -119,10 +116,9 @@ export function QuantityMatrixSection({
                           {r ? (
                             <div className="leading-tight">
                               <div>{r.orderedQuantity}</div>
-                              <EditableProductionQty
-                                key={`${r.id}:${r.productionQuantity}`}
-                                sku={r}
-                              />
+                              <div className="text-xs text-muted-foreground">
+                                {r.productionQuantity}
+                              </div>
                             </div>
                           ) : (
                             <span className="text-muted-foreground">—</span>
@@ -141,7 +137,7 @@ export function QuantityMatrixSection({
               </TableBody>
             </Table>
             <p className="mt-2 text-xs text-muted-foreground">
-              上段=受注数（orderedQuantity・読み取り専用）／下段=量産発注数（productionQuantity・クリックで編集）。— は当該カラー×サイズの SKU 未登録。
+              上段=受注数（orderedQuantity）／下段=量産発注数（productionQuantity）。いずれも受注（SO）由来のためこの画面では編集できません。— は当該カラー×サイズの SKU 未登録。
             </p>
           </div>
     )
@@ -169,56 +165,5 @@ export function QuantityMatrixSection({
       <CardContent>{body}</CardContent>
       {dialog}
     </Card>
-  )
-}
-
-/**
- * 量産発注数の下段インライン編集セル。
- * - key に `${id}:${productionQuantity}` を含めることで、router.refresh 後のサーバ値で remount し
- *   初期値を同期する（useEffect での setState 同期＝set-state-in-effect 罠を回避）。
- * - 確定は blur / Enter。受注数(上段)は触らない。
- */
-function EditableProductionQty({ sku }: { sku: SkuRow }) {
-  const router = useRouter()
-  const [value, setValue] = useState(String(sku.productionQuantity))
-  const [pending, startTransition] = useTransition()
-
-  function commit() {
-    const trimmed = value.trim()
-    const n = Number(trimmed)
-    if (trimmed === "" || !Number.isInteger(n) || n < 0) {
-      toast.error("量産発注数は 0 以上の整数で入力してください")
-      setValue(String(sku.productionQuantity))
-      return
-    }
-    if (n === sku.productionQuantity) return
-    startTransition(async () => {
-      const r = await updateSkuQuantity(sku.id, { productionQuantity: n })
-      if (!r.ok) {
-        toast.error(r.error)
-        setValue(String(sku.productionQuantity))
-        return
-      }
-      router.refresh()
-    })
-  }
-
-  return (
-    <input
-      type="number"
-      min={0}
-      inputMode="numeric"
-      value={value}
-      disabled={pending}
-      onChange={(e) => setValue(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          e.preventDefault()
-          e.currentTarget.blur()
-        }
-      }}
-      className="w-12 rounded border border-transparent bg-transparent px-1 text-right text-xs text-muted-foreground tabular-nums hover:border-input focus:border-input focus:bg-background focus:text-foreground focus:outline-none disabled:opacity-50"
-    />
   )
 }
