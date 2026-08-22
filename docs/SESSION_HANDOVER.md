@@ -15,9 +15,9 @@ shunya-session-start スキルを発動する。発動せずに指示文を出�
 
 - ブランチ: ★main（docs を main に commit したため main のまま終える）
 - ★ただし feat/b-148-pr2a-so-yield が存在し、PR #136 が open のまま残っている
-- main HEAD: 本セッション締め commit
+- main HEAD: 073830c（締め commit）
 - 本日の main commit: c410555（B-175/176・B-073統合）→ 4acca93（B-168 spec v0.1）
-  → 5d3bbe3（B-177〜179）→ f5b26f8（PR-2a ブリーフ・B-180）→ 締め commit
+  → 5d3bbe3（B-177〜179）→ f5b26f8（PR-2a ブリーフ・B-180）→ 073830c（締め）
 - feature ブランチ HEAD: fc9a2eb（PR-2a 実装・10 files・+626/-121）
 - 次に振れる番号: B-182
 - 作業ツリーの untracked: skill/ 配下の zip のみ（repo に入れない方針で確定）
@@ -31,30 +31,30 @@ shunya-session-start スキルを発動する。発動せずに指示文を出�
 3. B-175〜B-181 を起票（7件）。B-073 に跨ぎ材料発注の論点を統合
 4. ★B-180 を取り下げ（B-164 と重複していた）
 5. 気づきメモ（Google ドキュメント）の未起票3項目を回収し起票
+6. B-168 addendum v0.1 を保存（073830c）。D-4 を「既定＝加算枚数0」に改訂
 
 ## ④ ★本日確定した設計
 
-### B-168 v0.1（4acca93・docs/specs/b-168-production-quantity-spec-confirmation-v0_1-2026-08-19.md）
+### B-168 v0.1（4acca93）
 
 | # | 確定内容 |
 |---|---|
 | D-1 | SO 由来を正とする。Sku.productionQuantity は Σ SoItem を書き戻すキャッシュ列（列は残す） |
 | D-2 | 数量マトリクス下段の手入力 UI を非表示にする |
 | D-3 | 歩留まりは SoItem（SKU 行）単位で保持 |
-| D-4 | 率(%)と加算枚数(+N)の2方式。★既定は addendum で改訂（下記） |
+| D-4 | 率(%)と加算枚数(+N)の2方式。★既定は addendum で「加算枚数0」に改訂 |
 | D-5 | yieldMode / yieldQuantity を追加。B-167 と同一 migration |
 | D-6 | RATE は ceil(ordered × (1+rate/100))・SKU 単位切り上げ。QUANTITY は ordered + N |
 | D-7 | 入力 UI は一律／色別／サイズ別／SKU 個別の一括適用 |
 | D-8 | 発注生成での上書きは R-d のとおり維持（新規実装なし） |
 | D-9 | 減産は SoItem.productionQuantity を動かす。BomItem.lossRate には触らない |
 
-### ★B-168 addendum v0.1（本日締めで保存）
+### B-168 addendum v0.1（073830c）
 
-- **D-4 の改訂**: 既定を「率 5%」から「**加算枚数 0 枚**」に変更
+- D-4 の改訂: 既定を「率 5%」から「加算枚数 0 枚」へ
   - 根拠: 慎太郎さんの実務情報「オーダーの8割程度は指定数」
-  - 原設計 §2.6 の標準5% は展示会積み上げ前提の記述であり、受注 spec v1.0 §0 の
-    訂正と同じ構図で実態と合わない
-- **★この改訂はまだ実装されていない**（下記 ⑤-1）
+- 歩留まりと資材発注の連動は設計として成立（production-order-generation.ts:176/181-184/224-232）
+- 資材のサイズ軸の欠落を B-181 として分離
 
 ### 受け入れた副作用（意図的）
 
@@ -89,8 +89,7 @@ validator 側に既定値があれば同時に変更する。tsc / build を通�
 - 本番 DB: shuttle.proxy.rlwy.net:16099（★PR-2a の migration は未適用）
 - ★Railway から取るのは DATABASE_PUBLIC_URL。末尾の DB 名まで tail -c で検証
 - ★取得は pbpaste を使う。cat > の対話入力方式は指示に書かない
-- dev の残置データ: SO-2026-0001(CANCELLED) / 0002(CONFIRMED) / 0003(TENTATIVE)
-  ＋ 本日の目視で 0004 以降が増えている可能性あり
+- dev の残置データ: SO-2026-0001(CANCELLED) / 0002(CONFIRMED) / 0003(TENTATIVE) / 0004
   ★0003 は前回メモに記載が無く、その後に増えたもの
 
 ## ⑦ 気づきメモ（Google ドキュメント）
@@ -109,10 +108,13 @@ validator 側に既定値があれば同時に変更する。tsc / build を通�
    （b-168 spec v0.1 と pr2a ブリーフの2件が該当。リネームはせず記録のみ）
 3. ★同一の Claude Code 出力が4回にわたり繰り返し届いた。私はそのたびに再送を
    依頼したが、原因（指示が届いていない）の切り分けが遅れた。
-   → 直前と同一の出力は検証材料として扱わない。file-write-verification に追記済み。
+   → 直前と同一の出力は検証材料として扱わない。file-write-verification 鉄則8。
 4. ★c410555 で実行済みの起票を「未実行の可能性が高い」と断定し再送した。
    raw 出力が返らないことを未実行の根拠にした。→ 実態は grep で確認してから言う。
 5. ★shunya 向け指示が saagara に誤送信された。shunya への影響は確認済みで無し。
+6. ★締めの保存指示で SESSION_HANDOVER.md の heredoc をプレースホルダのまま出した。
+   実行されていれば 142 行の実メモが 1 行で破壊されていた。Claude Code が
+   実行前に grep で実態確認して停止し回避。→ file-write-verification 鉄則1 に追記。
 
 ## ⑨ ナレッジ登録の状況
 
@@ -129,8 +131,8 @@ validator 側に既定値があれば同時に変更する。tsc / build を通�
 - B-番号 増減: 新規 7件（B-175〜B-181）／状態変更 1件（B-073）／
   取り下げ 1件（B-180・B-164 と重複）／番号未採番の合意 0件
 - 繰り延べた要件: 4件（B-177・B-178・B-179・B-181／全件 B番号を振済み）
-- スキルの更新: 2件（file-write-verification / shunya-session-close）
-  ★次のチャットから有効
+- スキルの更新: 2件（file-write-verification 鉄則1強化＋鉄則8新設 /
+  shunya-session-close 鉄則5追記）★次のチャットから有効
 - ナレッジ差し替え依頼: 5件（⑨のとおり）
 
 ## ⑪ 未確定・持ち越し
