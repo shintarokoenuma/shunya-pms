@@ -82,7 +82,8 @@ type Block = {
   yval: Record<string, string> // skuId -> 値（方式で率/枚を解釈）
 }
 
-const DEFAULT_YIELD_RATE = "5" // 既定は率 5%（D-4）
+const DEFAULT_YIELD_MODE = YieldMode.QUANTITY // 既定は加算枚数（B-168 addendum v0.1 §1）
+const DEFAULT_YIELD_VALUE = "0" // 既定は 0 枚（加算なし＝受注数のまま）
 
 let blockSeq = 0
 function newBlock(): Block {
@@ -95,8 +96,8 @@ function newBlock(): Block {
     qty: {},
     moq: {},
     yGran: "UNIFORM",
-    yBulkMode: YieldMode.RATE,
-    yBulkUniform: DEFAULT_YIELD_RATE,
+    yBulkMode: DEFAULT_YIELD_MODE,
+    yBulkUniform: DEFAULT_YIELD_VALUE,
     yBulkByColor: {},
     yBulkBySize: {},
     ymode: {},
@@ -163,17 +164,17 @@ export function SalesOrderForm({
           ),
           moq: Object.fromEntries(g.skus.map((s) => [s.skuId, s.moqStatus])),
           yGran: "UNIFORM" as YieldGranularity,
-          yBulkMode: YieldMode.RATE,
-          yBulkUniform: DEFAULT_YIELD_RATE,
+          yBulkMode: DEFAULT_YIELD_MODE,
+          yBulkUniform: DEFAULT_YIELD_VALUE,
           yBulkByColor: {},
           yBulkBySize: {},
           ymode: Object.fromEntries(
-            g.skus.map((s) => [s.skuId, s.yieldMode ?? YieldMode.RATE]),
+            g.skus.map((s) => [s.skuId, s.yieldMode ?? DEFAULT_YIELD_MODE]),
           ),
           yval: Object.fromEntries(
             g.skus.map((s) => [
               s.skuId,
-              (s.yieldMode ?? YieldMode.RATE) === YieldMode.QUANTITY
+              (s.yieldMode ?? DEFAULT_YIELD_MODE) === YieldMode.QUANTITY
                 ? s.yieldQuantity === null
                   ? ""
                   : String(s.yieldQuantity)
@@ -225,15 +226,15 @@ export function SalesOrderForm({
       return
     }
     const loaded = r.data
-    // 各 SKU の歩留まりに既定（率 5%）を敷く。編集復元済みの値は保持する。
+    // 各 SKU の歩留まりに既定（加算枚数 0＝受注数のまま）を敷く。編集復元済みの値は保持する。
     setBlocks((prev) =>
       prev.map((b) => {
         if (b.key !== key) return b
         const ymode = { ...b.ymode }
         const yval = { ...b.yval }
         for (const s of loaded) {
-          if (ymode[s.id] === undefined) ymode[s.id] = YieldMode.RATE
-          if (yval[s.id] === undefined) yval[s.id] = DEFAULT_YIELD_RATE
+          if (ymode[s.id] === undefined) ymode[s.id] = DEFAULT_YIELD_MODE
+          if (yval[s.id] === undefined) yval[s.id] = DEFAULT_YIELD_VALUE
         }
         return { ...b, skus: loaded, ymode, yval }
       }),
@@ -273,7 +274,7 @@ export function SalesOrderForm({
   /** 各 SKU 行の量産数量プレビュー（受注数＋歩留まり・純関数を共用）。 */
   const previewProduction = (b: Block, skuId: string): number => {
     const ordered = Number(b.qty[skuId] || 0)
-    const mode = b.ymode[skuId] ?? YieldMode.RATE
+    const mode = b.ymode[skuId] ?? DEFAULT_YIELD_MODE
     const raw = b.yval[skuId]
     const val = raw === "" || raw === undefined ? null : Number(raw)
     return computeProductionQuantity(
@@ -337,7 +338,7 @@ export function SalesOrderForm({
         }
       }
       const skusPayload = targetSkus.map((s) => {
-        const mode = b.ymode[s.id] ?? YieldMode.RATE
+        const mode = b.ymode[s.id] ?? DEFAULT_YIELD_MODE
         const val = Number(b.yval[s.id])
         return {
           skuId: s.id,
@@ -746,7 +747,7 @@ export function SalesOrderForm({
                         <Label className="text-xs">歩留まり</Label>
                         <div className="flex items-center gap-1">
                           <Select
-                            value={b.ymode[s.id] ?? YieldMode.RATE}
+                            value={b.ymode[s.id] ?? DEFAULT_YIELD_MODE}
                             onValueChange={(v) =>
                               patchBlock(b.key, {
                                 ymode: { ...b.ymode, [s.id]: v as YieldMode },

@@ -101,7 +101,7 @@ export const soItemInputSchema = z
     moqStatus: z.nativeEnum(SkuMoqStatus).default(SkuMoqStatus.NOT_DETERMINED),
     moqDecisionReason: optionalString(10000),
     // 歩留まり（B-168 D-3/D-6・SKU 行単位で保持）
-    yieldMode: z.nativeEnum(YieldMode).default(YieldMode.RATE),
+    yieldMode: z.nativeEnum(YieldMode).default(YieldMode.QUANTITY),
     yieldRate: yieldRateField,
     yieldQuantity: yieldQuantityField,
   })
