@@ -170,17 +170,30 @@ yieldMode が null の既存行は「歩留まり未指定」＝受注数のま�
 
 ### 納品した zip（この2つだけを上げる）
 
-- 2026-08-29_file-write-verification_r11.zip … 410行・鉄則1〜11
+- 20260829_filewriteverification_r11b.zip … 411行・鉄則1〜11・description 920文字
   識別行: 「## 鉄則11：★squash マージの取り込みは SHA ではなく「内容」で判定する」
   追加内容: squash は元コミットの SHA を破棄するため
   git merge-base --is-ancestor / git branch --merged は必ず false になる。
   main の現物を grep して内容で判定する。migration はディレクトリ名でパス指定の git log。
   gone は「未マージ」の意味ではない。
-- 2026-08-29_shunya-session-start_date-gate.zip … 198行
+- 20260829_shunyasessionstart_dategate.zip … 198行
   識別行: 第3層のコマンドブロック先頭の date、および
   「### ★スキルの「納品」は「反映」ではない」
   追加内容: 確認ブロックに date を必須化／貼られた出力は日付を先に見る／
   現在地の宣言に確認時刻／メモに「スキル更新」とあれば本体を開いて確認する
+
+### ★スキルの description は 1024 文字上限（2026-08-29 に判明）
+
+アップロード画面で file-write-verification が
+「field 'description' in SKILL.md must be at most 1024 characters」で弾かれた。
+鉄則11 の説明を description に追記した結果 1118 文字になったため。
+
+- ★元の版が既に上限ぎりぎり（約1024）だった。鉄則を1つ足すたびに description の
+  圧縮が必要になる。本文（鉄則）を削るのではなく、説明文の冗長表現を削る
+- ★2026-08-29 時点で 920 文字まで圧縮した（余白 104 文字）。次の追加は1回は入る
+- ★エラーは「保存」を押す前に出る（セキュリティスキャンは保存時に実行）。
+  弾かれた時点では既存スキルは書き換わっておらず、旧版のまま残る＝壊れない
+- ★shunya-session-start は 387 文字で余裕がある
 
 ### ★skill/ フォルダの同名 zip 問題（2026-08-29 に判明）
 
