@@ -14,8 +14,8 @@ shunya-session-start スキルを発動する。発動せずに指示文を出�
 ## ② git の状態（2026-08-28 セッション終了時点）
 
 - ブランチ: main（docs を main に commit したため main のまま終える）
-- main HEAD: 本セッション締め commit（下記 ③ の最終 commit）
-- 本日の main commit: c622467（PR #136 マージ・PR-2a 本番反映）→ b9699b0（設計ドキュメント）→ 締め commit
+- main HEAD: b0bf603（締め commit）＋本ファイルの同期 commit
+- 本日の main commit: c622467（PR #136 マージ・PR-2a 本番反映）→ b9699b0（設計ドキュメント）→ b0bf603（締め）
 - open PR: 0件。未マージ PR は無い
 - 未 push のローカル commit: 無し（全ブランチ確認済み）
 - 次に振れる番号: B-182
@@ -104,10 +104,12 @@ yieldMode が null の既存行は「歩留まり未指定」＝受注数のま�
    それを現在のライブとして現在地を宣言した。結論は変わらなかったが、
    2026-08-22 の失敗2（日付の思い込み）と同型。
    → 確認ブロックの先頭に必ず date を置く。貼られた出力は日付を先に見る。
+   → shunya-session-start に反映済み（zip 納品・次のチャットから有効）。
 2. ★squash マージ済みの PR に対し git merge-base --is-ancestor で取り込みを判定し、
    偽の STOP を出した。squash は元コミットの SHA を破棄するため祖先判定は必ず false になる。
    Claude Code が「内容で判定すべき」と正しく切り分けた。
    → squash 運用では SHA ではなく main の現物を grep して判定する。
+   → ★file-write-verification への反映は未実施（下記 ⑬）。
 3. ★dev（localhost:3001）で行うよう指示した目視が本番で実施された。read-only で保存も
    していないため実害なし。→ 確認項目ごとに「dev か本番か」を1行で明示する。
 4. ★同一の確認出力が1回再送された。file-write-verification 鉄則8 に従い分析せず、
@@ -120,17 +122,18 @@ yieldMode が null の既存行は「歩留まり未指定」＝受注数のま�
 - 登録済み: b-168-production-quantity-spec-confirmation-v0_1-2026-08-19.md
 - 登録済み: b-148-pr2a-implementation-brief-2026-08-19.md
 - 登録済み: b-168-production-quantity-spec-addendum-v0_1-2026-08-22.md
-- ★新規登録が必要: docs/SALES_ORDER_QUANTITY_DESIGN.md（本日作成）
-- ★差し替え必要: BACKLOG.md（B-148 / B-164 / B-167 / B-168 / B-179 反映後）
-- ★差し替え必要: SESSION_HANDOVER.md（本ファイル）
+- 差し替え済み: SESSION_HANDOVER.md（Claude が project_write で更新・本ファイルと同内容）
+- ★新規登録が必要: docs/SALES_ORDER_QUANTITY_DESIGN.md（repo から慎太郎さんがアップロード）
+- ★差し替え必要: BACKLOG.md（repo から慎太郎さんがアップロード。Claude 側で再構成すると
+  repo と食い違うため、必ず repo の現物を上げる）
 
 ## ⑩ 本セッションの増減（沈黙の禁止）
 
 - B-番号 増減: 新規 0件／状態変更 4件（B-148 追記・B-164 完了・B-167 進行中・B-168 完了）／
   定義文への訂正追記 1件（B-179）／取り下げ 0件／番号未採番の合意 0件
 - 繰り延べた要件: 0件（本セッションで新規作成・改訂した spec が無いため）
-- スキルの更新: 2件（shunya-session-start / file-write-verification）★次のチャットから有効
-- ナレッジ差し替え・新規登録依頼: 3件（⑨のとおり）
+- スキルの更新: 1件納品（shunya-session-start）／1件未実施（file-write-verification・下記 ⑬）
+- ナレッジ登録: 1件反映済み（SESSION_HANDOVER.md）／2件依頼中（⑨のとおり）
 - 設計ドキュメント: 1件（docs/SALES_ORDER_QUANTITY_DESIGN.md）
 
 ## ⑪ 未確定・持ち越し
@@ -142,13 +145,13 @@ yieldMode が null の既存行は「歩留まり未指定」＝受注数のま�
 - B-167 の突合警告は B-143（確定見積 QE-2）待ち。本セッションで状態を進行中にした
 - B-181（資材のサイズ軸）は案A（起票のみ・先送り）で確定。
   b-067 v1.0 D1 の改訂 addendum が別途必要
-- 同一 SKU への並行 SO 操作の直列化ロックは未実装（⑤の設計ドキュメント §5 参照）。
+- 同一 SKU への並行 SO 操作の直列化ロックは未実装（⑫の設計ドキュメント §5 参照）。
   実務上の同時多発は稀という前提で保護を入れていない
 - 古いローカルブランチ 40 本超（gone）の掃除は未実施
 
 ## ⑫ 設計ドキュメント
 
-- docs/SALES_ORDER_QUANTITY_DESIGN.md（repo + プロジェクトナレッジ / commit b9699b0）
+- docs/SALES_ORDER_QUANTITY_DESIGN.md（repo commit b9699b0 / ★ナレッジは未登録）
   … 決定アルゴリズム・データスキーマ・状態ストア・命名規則と既定値・失敗時の挙動と冪等性・
   下流への伝播・環境変数の7項目を file:line つきで記載
   - 量産数量 = RATE なら ceil(受注数 × (1 + 率/100))、QUANTITY なら 受注数 + 加算枚数。
@@ -157,7 +160,21 @@ yieldMode が null の既存行は「歩留まり未指定」＝受注数のま�
   - ★並行 SO 操作を直列化するロックは未実装（保護なし）
   - ★資材所要量・発注生成ともサイズ軸は合算で消える（B-181）
 
-## ⑬ ブランチ
+## ⑬ スキルの更新（★次のチャットから有効）
+
+- shunya-session-start: 更新版を zip で納品済み（2026-08-28）。
+  第3層の確認コマンドに date を必須化、「貼り付けられた出力は日付を先に見る」判定を追加、
+  現在地の宣言に確認時刻を追加。★慎太郎さんがアップロードすれば次のチャットから有効。
+- file-write-verification: ★更新できなかった。
+  本セッション中にスキル一覧の description が変化し（exit 1 での停止条件・SQL 前の
+  スキーマ実測が追加されていた）、Claude が読み込んでいた本文が旧版だと判明したため。
+  旧版から zip を作ると新しい2つの鉄則を消してしまう。
+  → 次セッションで、現在の SKILL.md 全文を Claude に渡してから追記する。
+  追記したい内容: squash マージ運用では、PR の取り込みを SHA の祖先判定
+  （git merge-base --is-ancestor / git branch --merged）で判定しない。squash は元コミットの
+  SHA を破棄するため必ず false になる。main の現物を grep して内容で判定する。
+
+## ⑭ ブランチ
 
 ★本セッションは docs を main に commit したため main のまま終える。
 feature ブランチへ戻すと当日の docs がローカルの作業ツリーから消える。
