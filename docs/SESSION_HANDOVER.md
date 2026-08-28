@@ -14,8 +14,8 @@ shunya-session-start スキルを発動する。発動せずに指示文を出�
 ## ② git の状態（2026-08-28 セッション終了時点）
 
 - ブランチ: main（docs を main に commit したため main のまま終える）
-- main HEAD: b0bf603（締め commit）＋本ファイルの同期 commit
-- 本日の main commit: c622467（PR #136 マージ・PR-2a 本番反映）→ b9699b0（設計ドキュメント）→ b0bf603（締め）
+- main HEAD: 69df6e5（引き継ぎメモの同期 commit）＋本ファイルの訂正 commit
+- 本日の main commit: c622467（PR #136 マージ・PR-2a 本番反映）→ b9699b0（設計ドキュメント）→ b0bf603（締め）→ 69df6e5（メモ同期）
 - open PR: 0件。未マージ PR は無い
 - 未 push のローカル commit: 無し（全ブランチ確認済み）
 - 次に振れる番号: B-182
@@ -104,7 +104,8 @@ yieldMode が null の既存行は「歩留まり未指定」＝受注数のま�
    それを現在のライブとして現在地を宣言した。結論は変わらなかったが、
    2026-08-22 の失敗2（日付の思い込み）と同型。
    → 確認ブロックの先頭に必ず date を置く。貼られた出力は日付を先に見る。
-   → shunya-session-start に反映済み（zip 納品・次のチャットから有効）。
+   → ★2026-08-29 実測で判明: 反映されていなかった。スキル本体を開くと第3層に date が
+     無く旧版が動いていた。納品＝反映ではない。日付入りの名前で再納品済み（⑬）。
 2. ★squash マージ済みの PR に対し git merge-base --is-ancestor で取り込みを判定し、
    偽の STOP を出した。squash は元コミットの SHA を破棄するため祖先判定は必ず false になる。
    Claude Code が「内容で判定すべき」と正しく切り分けた。
@@ -123,17 +124,18 @@ yieldMode が null の既存行は「歩留まり未指定」＝受注数のま�
 - 登録済み: b-148-pr2a-implementation-brief-2026-08-19.md
 - 登録済み: b-168-production-quantity-spec-addendum-v0_1-2026-08-22.md
 - 差し替え済み: SESSION_HANDOVER.md（Claude が project_write で更新・本ファイルと同内容）
-- ★新規登録が必要: docs/SALES_ORDER_QUANTITY_DESIGN.md（repo から慎太郎さんがアップロード）
-- ★差し替え必要: BACKLOG.md（repo から慎太郎さんがアップロード。Claude 側で再構成すると
-  repo と食い違うため、必ず repo の現物を上げる）
+- 登録済み: docs/SALES_ORDER_QUANTITY_DESIGN.md（★2026-08-29 00:05 JST 登録・Claude が現物確認）
+- 差し替え済み: BACKLOG.md（★同 00:05 JST・B-148/B-164/B-167/B-168/B-179/B-181 まで反映を現物確認）
+- ★次セッションでの再確認は不要。⑨は全件クローズ
 
 ## ⑩ 本セッションの増減（沈黙の禁止）
 
 - B-番号 増減: 新規 0件／状態変更 4件（B-148 追記・B-164 完了・B-167 進行中・B-168 完了）／
   定義文への訂正追記 1件（B-179）／取り下げ 0件／番号未採番の合意 0件
 - 繰り延べた要件: 0件（本セッションで新規作成・改訂した spec が無いため）
-- スキルの更新: 1件納品（shunya-session-start）／1件未実施（file-write-verification・下記 ⑬）
-- ナレッジ登録: 1件反映済み（SESSION_HANDOVER.md）／2件依頼中（⑨のとおり）
+- スキルの更新: 2件納品（shunya-session-start / file-write-verification・下記 ⑬）。
+  ★どちらもアップロードは未確認（Claude 側から検証不可）
+- ナレッジ登録: 3件とも反映済み（SESSION_HANDOVER.md / SALES_ORDER_QUANTITY_DESIGN.md / BACKLOG.md）
 - 設計ドキュメント: 1件（docs/SALES_ORDER_QUANTITY_DESIGN.md）
 
 ## ⑪ 未確定・持ち越し
@@ -151,7 +153,7 @@ yieldMode が null の既存行は「歩留まり未指定」＝受注数のま�
 
 ## ⑫ 設計ドキュメント
 
-- docs/SALES_ORDER_QUANTITY_DESIGN.md（repo commit b9699b0 / ★ナレッジは未登録）
+- docs/SALES_ORDER_QUANTITY_DESIGN.md（repo commit b9699b0 / ★ナレッジ登録済み 2026-08-29）
   … 決定アルゴリズム・データスキーマ・状態ストア・命名規則と既定値・失敗時の挙動と冪等性・
   下流への伝播・環境変数の7項目を file:line つきで記載
   - 量産数量 = RATE なら ceil(受注数 × (1 + 率/100))、QUANTITY なら 受注数 + 加算枚数。
@@ -160,19 +162,36 @@ yieldMode が null の既存行は「歩留まり未指定」＝受注数のま�
   - ★並行 SO 操作を直列化するロックは未実装（保護なし）
   - ★資材所要量・発注生成ともサイズ軸は合算で消える（B-181）
 
-## ⑬ スキルの更新（★次のチャットから有効）
+## ⑬ スキルの更新（★2026-08-29 更新・アップロードは未確認）
 
-- shunya-session-start: 更新版を zip で納品済み（2026-08-28）。
-  第3層の確認コマンドに date を必須化、「貼り付けられた出力は日付を先に見る」判定を追加、
-  現在地の宣言に確認時刻を追加。★慎太郎さんがアップロードすれば次のチャットから有効。
-- file-write-verification: ★更新できなかった。
-  本セッション中にスキル一覧の description が変化し（exit 1 での停止条件・SQL 前の
-  スキーマ実測が追加されていた）、Claude が読み込んでいた本文が旧版だと判明したため。
-  旧版から zip を作ると新しい2つの鉄則を消してしまう。
-  → 次セッションで、現在の SKILL.md 全文を Claude に渡してから追記する。
-  追記したい内容: squash マージ運用では、PR の取り込みを SHA の祖先判定
-  （git merge-base --is-ancestor / git branch --merged）で判定しない。squash は元コミットの
-  SHA を破棄するため必ず false になる。main の現物を grep して内容で判定する。
+★重要: zip の「納品」と、スキルの「反映」は別である。反映は慎太郎さんが
+アップロードして初めて成立し、Claude 側からは検証できない。次セッションの冒頭で
+スキル本体を開き、下記の識別行が入っているかを確認すること。
+
+### 納品した zip（この2つだけを上げる）
+
+- 2026-08-29_file-write-verification_r11.zip … 410行・鉄則1〜11
+  識別行: 「## 鉄則11：★squash マージの取り込みは SHA ではなく「内容」で判定する」
+  追加内容: squash は元コミットの SHA を破棄するため
+  git merge-base --is-ancestor / git branch --merged は必ず false になる。
+  main の現物を grep して内容で判定する。migration はディレクトリ名でパス指定の git log。
+  gone は「未マージ」の意味ではない。
+- 2026-08-29_shunya-session-start_date-gate.zip … 198行
+  識別行: 第3層のコマンドブロック先頭の date、および
+  「### ★スキルの「納品」は「反映」ではない」
+  追加内容: 確認ブロックに date を必須化／貼られた出力は日付を先に見る／
+  現在地の宣言に確認時刻／メモに「スキル更新」とあれば本体を開いて確認する
+
+### ★skill/ フォルダの同名 zip 問題（2026-08-29 に判明）
+
+skill/ には filewriteverification.zip という名前の 2026-08-22 版（349行・鉄則1〜8）が
+残っており、今日の更新版と名前が同一だった。慎太郎さんがチャットに上げた2つの zip の
+うち片方がこの旧版で、上げていれば鉄則5-2（exit 1）・5-3（subshell）・9（SQL 前の
+スキーマ実測）・10（近似スキャン）が消えていた。
+
+- ★zip のファイル名には必ず日付と版を入れる。外側のファイル名はスキルの同一性に
+  影響しない（同一性は zip 内のフォルダ名と frontmatter の name で決まる）
+- ★skill/ は repo に入れない方針のまま（untracked）。旧版の整理は未実施
 
 ## ⑭ ブランチ
 
