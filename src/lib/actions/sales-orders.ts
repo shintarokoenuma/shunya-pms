@@ -5,6 +5,7 @@ import {
   Prisma,
   Currency,
   SalesOrderStatus,
+  YieldMode,
   type SkuMoqStatus,
   type OrderSourceType,
 } from "@prisma/client"
@@ -14,6 +15,7 @@ import {
   salesOrderInputSchema,
   type SalesOrderInput,
 } from "@/lib/validators/sales-order"
+import { computeProductionQuantity } from "@/lib/calc/sales-order-quantity"
 
 /**
  * B-148 PR-1: 受注（SalesOrder / SoItem）Server Actions。
@@ -98,15 +100,17 @@ async function computeNextSoNumber(
 }
 
 // =============================================================================
-// ★Sku.orderedQuantity 再集計（PR-1 の中核・ブリーフ §5 / D-4）
+// ★Sku の受注数量・量産数量 再集計（PR-1 の中核・ブリーフ §5 / D-4、PR-2a で拡張・E-3/D-1）
 //
+// SO 由来を正とし（B-168 D-1）、CONFIRMED 以降の SoItem を集計して
+// Sku.orderedQuantity と Sku.productionQuantity の両方を書き戻す。
 // tx を Prisma.TransactionClient として渡すと $extends 済みクライアントで型が合わない
 // （既知問題）。house style（PeNumberFinder/ModelCodeFinder）に倣い、必要な delegate
 // （tx.soItem / tx.sku）だけを構造的に受け取る。呼び出しは常に同一 tx 内。
 // =============================================================================
 type SoItemAggregator = {
   aggregate: (args: {
-    _sum: { orderedQuantity: true }
+    _sum: { orderedQuantity: true; productionQuantity: true }
     where: {
       skuId: string
       so: {
@@ -116,12 +120,14 @@ type SoItemAggregator = {
         status: { in: SalesOrderStatus[] }
       }
     }
-  }) => Promise<{ _sum: { orderedQuantity: number | null } }>
+  }) => Promise<{
+    _sum: { orderedQuantity: number | null; productionQuantity: number | null }
+  }>
 }
 type SkuUpdater = {
   update: (args: {
     where: { id: string }
-    data: { orderedQuantity: number }
+    data: { orderedQuantity: number; productionQuantity: number }
   }) => Promise<unknown>
 }
 
@@ -134,7 +140,7 @@ async function recomputeSkuOrderedQuantities(
   const ids = [...new Set(skuIds.filter((v): v is string => !!v))]
   for (const skuId of ids) {
     const agg = await soItemDelegate.aggregate({
-      _sum: { orderedQuantity: true },
+      _sum: { orderedQuantity: true, productionQuantity: true },
       where: {
         skuId,
         so: {
@@ -145,10 +151,13 @@ async function recomputeSkuOrderedQuantities(
         },
       },
     })
-    // 該当 SoItem が0件なら _sum は null → 0 を書く（更新対象から外さない）。
+    // 該当 SoItem が0件なら _sum は null → 0 を書く（更新対象から外さない・D-4/E-4）。
     await skuDelegate.update({
       where: { id: skuId },
-      data: { orderedQuantity: agg._sum.orderedQuantity ?? 0 },
+      data: {
+        orderedQuantity: agg._sum.orderedQuantity ?? 0,
+        productionQuantity: agg._sum.productionQuantity ?? 0,
+      },
     })
   }
 }
@@ -176,11 +185,16 @@ async function revalidateForSkus(skuIds: string[]): Promise<void> {
 type SoItemRow = {
   skuId: string
   orderedQuantity: number
-  unitPrice: Prisma.Decimal
-  subtotal: Prisma.Decimal
+  unitPrice: Prisma.Decimal | null // B-167: 単価未定を許す
+  subtotal: Prisma.Decimal | null // 単価が null なら null（0 と区別する）
   currency: Currency
   moqStatus: SkuMoqStatus
   moqDecisionReason: string | null
+  // 歩留まり（B-168 D-3/D-6）
+  yieldMode: YieldMode
+  yieldRate: Prisma.Decimal | null
+  yieldQuantity: number | null
+  productionQuantity: number
 }
 
 async function buildAndValidateItems(
@@ -212,19 +226,45 @@ async function buildAndValidateItems(
           error: "SKU が指定の品番の配下ではありません",
         }
       }
-      const unitPrice = new Prisma.Decimal(p.unitPrice)
+      // 単価は品番単位（D-2）。未入力（null）なら小計も null（E-1）。
+      const unitPrice = p.unitPrice === null ? null : new Prisma.Decimal(p.unitPrice)
+      const subtotal =
+        unitPrice === null ? null : unitPrice.mul(s.orderedQuantity)
+      // 量産数量 = 受注数 ＋ 歩留まり（D-6）。
+      const productionQuantity = computeProductionQuantity(
+        s.orderedQuantity,
+        s.yieldMode,
+        s.yieldRate,
+        s.yieldQuantity,
+      )
       rows.push({
         skuId: s.skuId,
         orderedQuantity: s.orderedQuantity,
         unitPrice,
-        subtotal: unitPrice.mul(s.orderedQuantity),
+        subtotal,
         currency: input.currency,
         moqStatus: s.moqStatus,
         moqDecisionReason: s.moqDecisionReason || null,
+        yieldMode: s.yieldMode,
+        yieldRate:
+          s.yieldMode === YieldMode.RATE && s.yieldRate !== null
+            ? new Prisma.Decimal(s.yieldRate)
+            : null,
+        yieldQuantity:
+          s.yieldMode === YieldMode.QUANTITY ? s.yieldQuantity : null,
+        productionQuantity,
       })
     }
   }
   return { ok: true, rows }
+}
+
+/** 非 null の小計を合算する（E-2: 全て null なら 0）。ヘッダは NOT NULL のため常に数値を書く。 */
+function sumSubtotals(rows: SoItemRow[]): Prisma.Decimal {
+  return rows.reduce(
+    (s, r) => (r.subtotal === null ? s : s.add(r.subtotal)),
+    new Prisma.Decimal(0),
+  )
 }
 
 // =============================================================================
@@ -234,12 +274,15 @@ export type SalesOrderItemDTO = {
   id: string
   skuId: string
   orderedQuantity: number
-  unitPrice: number
-  subtotal: number
+  unitPrice: number | null // B-167: 単価未定は null
+  subtotal: number | null
   currency: Currency
   moqStatus: SkuMoqStatus
   moqDecisionReason: string | null
   productionQuantity: number | null
+  yieldMode: YieldMode | null
+  yieldRate: number | null
+  yieldQuantity: number | null
 }
 
 export type SalesOrderDTO = {
@@ -387,12 +430,15 @@ export async function getSalesOrder(
           id: it.id,
           skuId: it.skuId,
           orderedQuantity: it.orderedQuantity,
-          unitPrice: Number(it.unitPrice),
-          subtotal: Number(it.subtotal),
+          unitPrice: dnum(it.unitPrice),
+          subtotal: dnum(it.subtotal),
           currency: it.currency,
           moqStatus: it.moqStatus,
           moqDecisionReason: it.moqDecisionReason,
           productionQuantity: it.productionQuantity,
+          yieldMode: it.yieldMode,
+          yieldRate: dnum(it.yieldRate),
+          yieldQuantity: it.yieldQuantity,
         })),
       },
     }
@@ -435,10 +481,7 @@ export async function createSalesOrder(
     const rows = built.rows
 
     const totalQuantity = rows.reduce((s, r) => s + r.orderedQuantity, 0)
-    const subtotal = rows.reduce(
-      (s, r) => s.add(r.subtotal),
-      new Prisma.Decimal(0),
-    )
+    const subtotal = sumSubtotals(rows) // E-2: 非 null 小計の合計（全 null なら 0）
     const affectedSkuIds = rows.map((r) => r.skuId)
     const prefix = salesOrderNumberPrefix(new Date().getFullYear())
 
@@ -492,6 +535,10 @@ export async function createSalesOrder(
                 currency: r.currency,
                 moqStatus: r.moqStatus,
                 moqDecisionReason: r.moqDecisionReason,
+                yieldMode: r.yieldMode,
+                yieldRate: r.yieldRate,
+                yieldQuantity: r.yieldQuantity,
+                productionQuantity: r.productionQuantity,
               })),
             })
             await recomputeSkuOrderedQuantities(
@@ -587,10 +634,7 @@ export async function updateSalesOrder(
     const unionSkuIds = [...new Set([...oldSkuIds, ...newSkuIds])]
 
     const totalQuantity = rows.reduce((s, r) => s + r.orderedQuantity, 0)
-    const subtotal = rows.reduce(
-      (s, r) => s.add(r.subtotal),
-      new Prisma.Decimal(0),
-    )
+    const subtotal = sumSubtotals(rows) // E-2
 
     await prisma.$transaction(
       async (tx) => {
@@ -630,6 +674,10 @@ export async function updateSalesOrder(
               currency: r.currency,
               moqStatus: r.moqStatus,
               moqDecisionReason: r.moqDecisionReason,
+              yieldMode: r.yieldMode,
+              yieldRate: r.yieldRate,
+              yieldQuantity: r.yieldQuantity,
+              productionQuantity: r.productionQuantity,
             },
             update: {
               orderedQuantity: r.orderedQuantity,
@@ -638,6 +686,10 @@ export async function updateSalesOrder(
               currency: r.currency,
               moqStatus: r.moqStatus,
               moqDecisionReason: r.moqDecisionReason,
+              yieldMode: r.yieldMode,
+              yieldRate: r.yieldRate,
+              yieldQuantity: r.yieldQuantity,
+              productionQuantity: r.productionQuantity,
             },
           })
         }
