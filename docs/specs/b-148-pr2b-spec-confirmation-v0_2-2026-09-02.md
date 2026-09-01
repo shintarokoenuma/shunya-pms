@@ -1,6 +1,6 @@
-# B-148 PR-2b 仕様確認書 v0.1（2026-09-02）
+# B-148 PR-2b 仕様確認書 v0.2（2026-09-02）
 
-- 種別: 仕様確認書 v0.1（確定・実装ブリーフ着手可）
+- 種別: 仕様確認書 v0.2（確定・実装ブリーフ着手可）
 - 対象: B-148 PR-2b（受注 → 量産発注の接続）／B-156（Σ入力数量0）／B-142（再生成ガード・警告のみ）
 - 上位: 原マイルストーン M4（受注MVP＝受注登録・量産発注連動が動く）。本書の実装完了で M4 が完了する
 - 根拠 spec:
@@ -11,13 +11,16 @@
   - b-148-pr1-implementation-brief-2026-08-13.md §11（D-3 = SalesOrder.productId に値を書かない）
   - docs/SALES_ORDER_QUANTITY_DESIGN.md §1-2 / §3 / §6
   - 20260516_01_仕様書_Part1 §2.6（量産発注は受注合計＋歩留まり率で自動計算）
-- 現物確認: 2026-08-29 10:30-10:46 JST の read-only recon（main HEAD 40f54a6・DB 非書き込み）。★本書の作成日は 2026-09-02 であり recon から中3日空いている。2026-09-02 に origin/main の HEAD と §0 の主要4点を再検証したうえで採用した
+- 現物確認:
+  - v0.1: 2026-08-29 10:30-10:46 JST の read-only recon（main HEAD 40f54a6）を 2026-09-02 に再検証して採用
+  - v0.2: 2026-09-02 08:38 JST の実装前 read-only recon（main HEAD cdf65f7・DB 非書き込み）。
+    ★この recon で v0.1 §0 の1点（Σ0 のサーバ側ガード）に**誤りが見つかったため訂正した**（§5）
 
 ---
 
 ## 0. recon で確定した事実（本書の前提）
 
-すべて main 40f54a6 の実コード・実 schema から採取した。推測で埋めていない。
+main cdf65f7 の実コード・実 schema から採取した。
 
 - SalesOrder.isConvertedToProduction（schema 4480・Boolean @default(false)）と
   SalesOrder.convertedAt（4481・DateTime?）は **本番に既存で、参照ゼロの休眠列**。
@@ -31,22 +34,29 @@
   いずれも本書の対象外。
 - **SalesOrder.productId には値を書かない運用**（PR-1 §11 の D-3）。
   SO から品番を辿る経路は SoItem → Sku → Product のみ。
-- 生成 action generateProductionOrders（421行）は SalesOrder を一切参照しない。
+- 生成 action generateProductionOrders（421行）は SalesOrder を一切参照しない（grep 0件）。
   呼び出し元は production-order-generate-form.tsx の1箇所のみ。
-- 生成フォームは canGenerate = missingCount === 0 かつ totalQty > 0 で
-  **画面上は Σ0 を既にブロックしている**が、validator は quantity >= 0 を許容しており
-  **サーバ側は Σ0 を弾かない**。
+- 生成 action の return は3系統で、いずれも data に ctx.pe.productId を載せている:
+  PO 生成失敗（:343）／WO 生成失敗（:370）／成功（:417）。
+- ★**Σ入力数量0 は、画面とサーバの両方で既にブロックされている**（v0.2 で訂正・詳細は §5）:
+  画面 = canGenerate（generate-form.tsx:126）／
+  サーバ = generateProductionOrders 本体の早期 return（production-order-generation.ts:207）。
+  validator（zod）は行単位の quantity >= 0 のみを見ており Σ は見ないが、Σ の検査は action が担っている。
+- ★SalesOrderDTO / getSalesOrder に isConvertedToProduction / convertedAt は**含まれていない**
+  （include は items のみ）。§7 のヘッダ表示には DTO の拡張が要る。
+- 受注詳細（sales-orders/[id]/page.tsx・239行）は既に明細を productId でグルーピングし、
+  productInfo から品番コードを表示している（:135 / :143）。ヘッダは Cell label の並び（:113-118）。
 - SO は「クライアントからの発注1通＝1受注（複数品番可）」。複数品番 SO は例外ではなく通常形。
 
 ## 1. スコープ
 
-PR-2b は B-148 PR-2b・B-156・B-142（警告のみ）を **一体で扱う**。
+PR-2b は B-148 PR-2b・B-156（判定のみ）・B-142（警告のみ）を **一体で扱う**。
 3件は同一の生成パイプライン上にあり、別々に触ると同じ場所を2回改修することになるため。
 
 | 項目 | 本書 |
 |---|---|
 | SalesOrder.isConvertedToProduction / convertedAt の稼働 | 対象 |
-| B-156（Σ入力数量0 のサーバ側拒否） | 対象 |
+| B-156（Σ入力数量0） | ★実装なし。既に解消済みと判定し dev で確認するのみ（§5） |
 | B-142（再生成時の警告表示。ブロックはしない） | 対象（B-142 は閉じない） |
 | 受注詳細から品番カルテへの動線 | 対象（B-182 の受注分を消化） |
 | migration | **なし**（既存列への書き込み開始のみ） |
@@ -87,6 +97,9 @@ isConvertedToProduction は「この受注は量産へ流れた」という受�
 この集合は **Sku.productionQuantity の Σ に寄与した SO 集合と完全に一致する**。
 生成の既定数量の出どころと、消し込む対象の定義がズレない。
 
+★条件は recomputeSkuOrderedQuantities（sales-orders.ts:134）の where 句と同一であり、
+COUNTED_STATUSES（同 :62）をそのまま再利用する。条件を書き写して二重定義にしない。
+
 ### ★仕様として明記する粗さ
 
 **複数品番の SO で1品番だけ生成しても、SO 全体にフラグが立つ。**
@@ -105,28 +118,46 @@ SoItem 側に変換状態を持つ列が無く、本書は migration なしの�
   フラグは事実の記録であり、事実が成立した後に書く。思想が異なるので同じにしない。
 - (B) は文書間が非アトミック。**1本でも生成できたら立てる**。
   部分生成でも受注数量は実際に使われているため。
+  ★したがって挿入位置は3箇所（:343 / :370 / :417 の各 return の直前）であり、
+  条件は createdPos.length + createdWos.length > 0。
 - **降ろす経路は作らない**（v1）。手動で false に戻す UI は用意しない。
 - **SO をキャンセルしてもフラグは降ろさない。** CANCELLED は COUNTED から外れるため
   Sku の集計からは差し引かれるが、既に生成された DRAFT の PO / WO は残る。
   「使われた」という事実は消えない。
 - フラグの書き込みは、生成 action と同一の tx に入れない。
   生成が非アトミックである以上、フラグだけを厳密にしても意味が無いため、
-  生成完了後の独立ステップとする。失敗しても生成物は残す（ログに残す）。
+  生成完了後の独立ステップとする。失敗しても生成物は残す（B-101 のタスク生成と同じ扱い）。
 
 ## 5. P-4 B-156 — Σ入力数量0
 
-B-156 原文: 「Σ入力数量0でも量産発注を生成できる。SKU 未登録の品番で
+B-156 原文（2026-08-13 dev で発見）: 「Σ入力数量0でも量産発注を生成できる。SKU 未登録の品番で
 Σ入力数量 0 / 見積数量 100 のまま生成ボタンが押せる。§4 の警告のみ・ブロックしないは
 受注ずれを想定したものでΣ0を含まない。同§4 の WO 工程明細数量 = Σ入力数量 の厳守と矛盾する」
 
+### ★v0.2 での訂正 — B-156 は既に解消されている
+
+v0.1 §0 は「validator は quantity >= 0 を許容しており **サーバ側は Σ0 を弾かない**」と書いた。
+**これは誤りだった。** 2026-09-02 08:38 の実装前 recon で、生成 action 本体に早期 return が実在した。
+
+    production-order-generation.ts:207
+    if (totalQty <= 0) return { ok: false, error: "SKU 数量が全て 0 です（1つ以上入力してください）" }
+
+画面側（generate-form.tsx:126 の canGenerate）と合わせ、Σ0 は画面とサーバの両方で塞がれている。
+B-156 が発見された 2026-08-13 以降のどこかで解消されたものと見られる。
+
+**なぜ誤ったか**: v0.1 は validator（zod）だけを grep して「サーバ側」を断定した。
+zod は行単位の quantity しか見ておらず、Σ の検査は action 本体にある。
+**近似スキャンの結果を確定として扱った**（file-write-verification 鉄則10 と同型）。
+以後、「サーバ側に無い」と断定する前に action 本体を必ず読む。
+
 ### 確定
 
-- **サーバ側でも Σ0 を拒否する。** generateProductionOrdersInputSchema に
-  superRefine を追加し、skuQuantities の合計が 0 より大きいことを検証する。
-- **行単位の quantity >= 0 は変更しない。** 特定の色・サイズを作らない指定は正常な業務であり、
-  0 は行としては正しい値である。禁じるのは合計が 0 の生成のみ。
-- 根拠: 数量0の WO は業務上意味を持たず、R-d の「WO 工程明細数量 = Σ入力数量」の厳守と矛盾する。
-- 画面側の canGenerate（totalQty > 0）は現行のまま残す。**多重防御**とする。
+- **本 PR で B-156 に対する新規の実装は行わない。**
+- **validator への superRefine 追加は却下する。** 同一条件を zod と action で二重に定義すると
+  エラーメッセージが2系統に割れ、どちらが出るかが呼び出し経路に依存する。
+  検査は信頼境界である action の1箇所に残す。
+- **§11 の動作確認4 で dev の実画面・実 action で確認し、確認できた時点で BACKLOG の B-156 を完了にする。**
+  ★コードの存在だけを根拠に「完了」と書かない（file-write-verification 鉄則4）。
 
 ### 不変（誤って触らないこと）
 
@@ -159,9 +190,11 @@ B-142 は「PE 単位で生成済みかを判定する列も導線も無い」�
 
 ### 確定: 受注詳細の明細に、品番カルテへのリンクを置く。生成ボタンは置かない
 
-- 受注詳細（sales-orders/[id]）の明細行の品番名を /products/[id] へのリンクにする
-- **生成の起点は PE のまま**（R-b 不変。PE の無い品番からの直接生成は v1 不許可）
-- 受注詳細のヘッダに「量産へ反映済み」の状態と convertedAt を表示する
+- 受注詳細（sales-orders/[id]/page.tsx）の品番見出し（:143 の productCode）を
+  /products/[productId] へのリンクにする。★既存作法（products/${id} 形式）に合わせる
+- ヘッダの Cell 群（:113-118）に「量産へ反映」の1項目を足し、状態と convertedAt を表示する
+- **生成の起点は PE のまま**（R-b 不変。PE の無い品番からの直接生成は v1 不許可）。
+  受注詳細に生成ボタンは置かない
 
 ### 理由
 
@@ -174,14 +207,24 @@ B-142 は「PE 単位で生成済みかを判定する列も導線も無い」�
 
 ## 8. 変更ファイル（★網羅ガードが無いため手動で漏れなく）
 
-1. src/lib/validators/production-order-generation.ts — superRefine で Σ > 0（§5）
-2. src/lib/actions/production-order-generation.ts — 生成成功後にフラグを立てる独立ステップ（§4）
-3. src/lib/actions/sales-orders.ts — 対象 SO を引くヘルパー（§3 の条件）。
+1. src/lib/actions/production-order-generation.ts —
+   生成後にフラグを立てる独立ステップ（§4）。挿入は3箇所（:343 / :370 / :417 の各 return の直前）、
+   条件は createdPos.length + createdWos.length > 0
+2. src/lib/actions/sales-orders.ts —
+   ①§3 の条件で対象 SO を引き、フラグを立てるヘルパーを追加（COUNTED_STATUSES を再利用）
+   ②★SalesOrderDTO と getSalesOrder に isConvertedToProduction / convertedAt を追加
+   （現状 DTO に無く §7 のヘッダ表示ができない・2026-09-02 recon で判明）
    ★recomputeSkuOrderedQuantities は触らない
-4. src/app/(app)/production-estimates/_components/production-order-generate-form.tsx — 反映済み受注の警告表示（§6）
-5. src/app/(app)/sales-orders/[id]/page.tsx — 反映状態の表示＋明細の品番リンク（§7）
+3. src/lib/actions/production-estimates.ts —
+   生成 context に「反映済み SO」の情報を載せる（§6 の警告表示に必要な場合のみ。
+   別 action で取得する形にするなら本ファイルは触らない）
+4. src/app/(app)/production-estimates/_components/production-order-generate-form.tsx —
+   反映済み受注の警告表示（§6）
+5. src/app/(app)/sales-orders/[id]/page.tsx —
+   ヘッダに「量産へ反映」の Cell、品番見出しを品番カルテへのリンクに（§7）
 
 ★prisma/schema.prisma は変更しない。migration は発生しない。
+★src/lib/validators/production-order-generation.ts は変更しない（§5）。
 
 ## 9. migration
 
@@ -198,7 +241,7 @@ dev 動作確認 → PR レビュー → マージ の通常フローで足り�
 
 | 要件 | B番号 |
 |---|---|
-| 受注↔発注の対応追跡（案B・中間テーブルの新設） | **B-185（本書で新規起票）** |
+| 受注↔発注の対応追跡（案B・中間テーブルの新設） | **B-185** |
 | PE 単位の完全な再生成ガード | B-142（継続・§6） |
 | 同一品番の重複 SO 検知と主従の是正 | B-169 |
 | 納品↔SO の休眠列（DeliveryNoteItem.soId / soItemId / woId）の稼働 | 触らない（ステップ11・12 の領分） |
@@ -216,11 +259,12 @@ dev 動作確認 → PR レビュー → マージ の通常フローで足り�
 1. CONFIRMED な SO がある品番の PE から生成すると、受注詳細に「量産へ反映済み」と日時が出る
 2. 生成前は出ない
 3. 同じ PE で2回目の生成画面を開くと、反映済み受注の警告が出る。**生成ボタンは押せる**
-4. Σ入力数量0 で、画面のボタンが無効なだけでなく、**action を直接叩いてもサーバ側で拒否される**
+4. ★B-156 の消し込み確認: Σ入力数量0 で画面のボタンが無効であること、かつ
+   action を直接叩いた場合も「SKU 数量が全て 0 です」で拒否されること（既存 :207 の挙動確認）
 5. Σ入力数量 ≠ 見積数量 は従来どおり警告のみで生成できる（R-d 不変の確認）
 6. ★複数品番の SO で片方の品番だけ生成すると、SO 全体にフラグが立つ（§3 の粗さの確認・仕様どおり）
 7. SO をキャンセルしてもフラグは降りない（§4）
-8. 受注詳細の明細から品番カルテへ遷移できる
+8. 受注詳細の品番見出しから品番カルテへ遷移できる
 9. 既存の dev 残置データ（SO-2026-0001 CANCELLED / 0002 CONFIRMED / 0003 TENTATIVE / 0004）が壊れていない
 
 ★4 と 6 は画面の目視で確認する。build 成功だけで完了としない。
@@ -228,12 +272,13 @@ dev 動作確認 → PR レビュー → マージ の通常フローで足り�
 ## 12. 実装上の禁止事項
 
 - prisma/schema.prisma を変更しない。migration を作らない
+- src/lib/validators/production-order-generation.ts に Σ の検査を足さない（§5）
 - recomputeSkuOrderedQuantities のロジックを変更しない（PR-2a の確定事項）
-- COUNTED_STATUSES を変更しない（D-4）
+- COUNTED_STATUSES を変更しない。条件を書き写して二重定義にしない（D-4・§3）
 - 行単位の quantity >= 0 を >= 1 に変えない（§5）
 - Σ ≠ 見積数量 をブロックしない（R-d）
 - 再生成をブロックしない（§6）
-- 生成の起点を PE 以外に増やさない（R-b）
+- 生成の起点を PE 以外に増やさない（R-b）。受注詳細に生成ボタンを置かない
 - SalesOrder.productId に値を書かない（D-3）
 - DeliveryNoteItem の soId / soItemId / woId に触らない
 - git add は明示的なファイルパスのみ（-A / . / --all は使わない）
@@ -245,13 +290,14 @@ dev 動作確認 → PR レビュー → マージ の通常フローで足り�
 |---|---|---|
 | P-1 | 接続方式 | 案A（SalesOrder のフラグのみ・migration なし）。追跡は B-185 に分離 |
 | P-2 | 消し込む SO | PE の品番の Sku を含む COUNTED な SO 全件。★複数品番 SO では粗い。ラベルは「量産へ反映済み」 |
-| P-3 | タイミング | 生成成功後・独立ステップ。部分生成でも立てる。降ろす経路は作らない |
-| P-4 | B-156 | サーバ側でも Σ0 を拒否（superRefine）。行単位の >= 0 と Σ≠見積の警告のみは不変 |
+| P-3 | タイミング | 生成後・独立ステップ。部分生成でも立てる（:343 / :370 / :417 の3箇所）。降ろす経路は作らない |
+| P-4 | B-156 | ★v0.2 訂正: action:207 で既に解消済み。新規実装なし・validator superRefine は却下。dev 目視で確認して BACKLOG を完了にする |
 | P-5 | B-142 | 警告のみ・ブロックなし。B-142 は閉じない |
-| P-6 | 動線 | 受注詳細の明細に品番カルテへのリンク。生成ボタンは置かない。B-182 の受注分を消化 |
+| P-6 | 動線 | 受注詳細の品番見出しを品番カルテへのリンクに。生成ボタンは置かない。B-182 の受注分を消化 |
 
 ## 改訂履歴
 
 | 日付 | 版 | 内容 |
 |---|---|---|
 | 2026-09-02 | v0.1 | 初版確定。2026-08-29 の recon（main 40f54a6）を 2026-09-02 に再検証したうえで P-1〜P-6 を確定。B-185 を新規起票 |
+| 2026-09-02 | v0.2 | 実装前 recon（08:38 JST・main cdf65f7）で v0.1 §0 の誤り（Σ0 のサーバ側ガード）を訂正。B-156 は解消済みと判定し新規実装を取り止め、validator への superRefine を却下。§8 に SalesOrderDTO の拡張とフラグ挿入位置の file:line を追加 |
