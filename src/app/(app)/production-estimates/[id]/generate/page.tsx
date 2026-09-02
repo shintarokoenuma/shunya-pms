@@ -4,6 +4,7 @@ import { ChevronLeft } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { getProductionOrderGenerationContext } from "@/lib/actions/production-estimates"
+import { listConvertedSalesOrdersForProduct } from "@/lib/actions/sales-orders"
 import { ProductionOrderGenerateForm } from "../../_components/production-order-generate-form"
 
 type Params = Promise<{ id: string }>
@@ -21,6 +22,10 @@ export default async function GenerateProductionOrdersPage({
   if (!result.ok) notFound()
   const ctx = result.data
 
+  // B-148 PR-2b §6: この品番に「量産へ反映済み」の受注があれば警告表示する（再生成ガード・警告のみ）。
+  const convertedResult = await listConvertedSalesOrdersForProduct(ctx.pe.productId)
+  const convertedOrders = convertedResult.ok ? convertedResult.data : []
+
   return (
     <div className="space-y-6 p-6">
       <div className="space-y-2">
@@ -37,7 +42,7 @@ export default async function GenerateProductionOrdersPage({
           {" "}を種に、仕入先別 PO・相手先別 WO の下書き（DRAFT）を生成します。
         </p>
       </div>
-      <ProductionOrderGenerateForm ctx={ctx} />
+      <ProductionOrderGenerateForm ctx={ctx} convertedOrders={convertedOrders} />
     </div>
   )
 }

@@ -14,6 +14,7 @@ import {
 } from "@/lib/actions/production-estimates"
 import { createPurchaseOrder } from "@/lib/actions/purchase-orders"
 import { createWorkOrder } from "@/lib/actions/work-orders"
+import { markSalesOrdersConvertedForProduct } from "@/lib/actions/sales-orders"
 import { buildProductionTaskRows } from "@/lib/progress-task-template"
 import { recomputeProductionTasksForProduct } from "@/lib/actions/progress-tasks"
 import {
@@ -340,6 +341,10 @@ export async function generateProductionOrders(
     }
     const r = await createPurchaseOrder(poInput)
     if (!r.ok) {
+      // B-148 PR-2b §4: 部分生成でも1本でも作れたら受注へ反映済みを立てる（独立ステップ）。
+      if (createdPos.length + createdWos.length > 0) {
+        await markSalesOrdersConvertedForProduct(ctx.pe.productId)
+      }
       return {
         ok: true,
         data: { productId: ctx.pe.productId, createdPos, createdWos, partialError: `PO 生成に失敗: ${r.error}` },
@@ -367,6 +372,10 @@ export async function generateProductionOrders(
     }
     const r = await createWorkOrder(woInput)
     if (!r.ok) {
+      // B-148 PR-2b §4: 部分生成でも1本でも作れたら受注へ反映済みを立てる（独立ステップ）。
+      if (createdPos.length + createdWos.length > 0) {
+        await markSalesOrdersConvertedForProduct(ctx.pe.productId)
+      }
       return {
         ok: true,
         data: { productId: ctx.pe.productId, createdPos, createdWos, partialError: `WO 生成に失敗: ${r.error}` },
@@ -412,6 +421,11 @@ export async function generateProductionOrders(
     }
   } catch {
     // B-101: タスク生成の失敗は PO/WO 生成を巻き込まない（通常 return へ）。
+  }
+
+  // B-148 PR-2b §4: 生成成功後の独立ステップ。受注へ「量産へ反映済み」を立てる。
+  if (createdPos.length + createdWos.length > 0) {
+    await markSalesOrdersConvertedForProduct(ctx.pe.productId)
   }
 
   return {

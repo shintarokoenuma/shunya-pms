@@ -303,6 +303,8 @@ export type SalesOrderDTO = {
   totalQuantity: number
   subtotal: number | null
   totalAmount: number | null
+  isConvertedToProduction: boolean // B-148 PR-2b: 量産へ反映済みか
+  convertedAt: string | null // 反映日時（YYYY-MM-DD）
   items: SalesOrderItemDTO[]
 }
 
@@ -426,6 +428,10 @@ export async function getSalesOrder(
         totalQuantity: so.totalQuantity,
         subtotal: dnum(so.subtotal),
         totalAmount: dnum(so.totalAmount),
+        isConvertedToProduction: so.isConvertedToProduction,
+        convertedAt: so.convertedAt
+          ? so.convertedAt.toISOString().slice(0, 10)
+          : null,
         items: so.items.map((it) => ({
           id: it.id,
           skuId: it.skuId,
@@ -942,6 +948,104 @@ export async function getSalesOrderSectionForProduct(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "受注セクションの取得に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
+// 8. B-148 PR-2b: 受注 → 量産発注の接続（案A・SalesOrder フラグのみ・migration なし）
+//
+// 生成成功後に、その品番に紐づく COUNTED な SO へ isConvertedToProduction を立てる。
+// 対象条件は §3（spec v0.2）＝ recomputeSkuOrderedQuantities と同一（COUNTED_STATUSES 再利用）。
+// SoItem に sku リレーションが無いため、Sku.productId → skuId → SoItem.skuId で辿る。
+// ★複数品番 SO では1品番の生成でも SO 全体にフラグが立つ（粗さは仕様・B-185 で解消）。
+// =============================================================================
+
+/**
+ * 品番に紐づく COUNTED な SO を「量産へ反映済み」にする（冪等・false→true のみ）。
+ * ★生成完了後の独立ステップ。失敗は握りつぶす（生成物は残す・B-101 と同方針）。tx には入れない。
+ */
+export async function markSalesOrdersConvertedForProduct(
+  productId: string,
+): Promise<void> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return
+
+    // Sku は TENANT（companyId/deletedAt 自動注入）。
+    const skus = await prisma.sku.findMany({
+      where: { productId },
+      select: { id: true },
+    })
+    const skuIds = skus.map((s) => s.id)
+    if (skuIds.length === 0) return
+
+    // SalesOrder は TENANT 非対象＝companyId を明示。§3 の条件で対象を特定する。
+    const targets = await prisma.salesOrder.findMany({
+      where: {
+        companyId: sess.companyId,
+        deletedAt: null,
+        isLatest: true,
+        status: { in: COUNTED_STATUSES },
+        isConvertedToProduction: false,
+        items: { some: { skuId: { in: skuIds } } },
+      },
+      select: { id: true },
+    })
+    if (targets.length === 0) return
+
+    await prisma.salesOrder.updateMany({
+      where: {
+        id: { in: targets.map((t) => t.id) },
+        companyId: sess.companyId,
+        isConvertedToProduction: false,
+      },
+      data: { isConvertedToProduction: true, convertedAt: new Date() },
+    })
+  } catch {
+    // 独立ステップ。フラグの失敗は生成を巻き込まない（spec §4）。
+  }
+}
+
+/** この品番に「量産へ反映済み」の SO があれば返す（再生成時の警告用・§6）。 */
+export async function listConvertedSalesOrdersForProduct(
+  productId: string,
+): Promise<ActionResult<{ soNumber: string; convertedAt: string | null }[]>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const skus = await prisma.sku.findMany({
+      where: { productId },
+      select: { id: true },
+    })
+    const skuIds = skus.map((s) => s.id)
+    if (skuIds.length === 0) return { ok: true, data: [] }
+
+    const orders = await prisma.salesOrder.findMany({
+      where: {
+        companyId: sess.companyId,
+        deletedAt: null,
+        isLatest: true,
+        isConvertedToProduction: true,
+        items: { some: { skuId: { in: skuIds } } },
+      },
+      select: { soNumber: true, convertedAt: true },
+      orderBy: { convertedAt: "desc" },
+    })
+    return {
+      ok: true,
+      data: orders.map((o) => ({
+        soNumber: o.soNumber,
+        convertedAt: o.convertedAt
+          ? o.convertedAt.toISOString().slice(0, 10)
+          : null,
+      })),
+    }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "反映済み受注の取得に失敗しました",
     }
   }
 }
