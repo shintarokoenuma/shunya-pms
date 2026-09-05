@@ -283,6 +283,8 @@ export type ProductListItem = ProductBaseRow & {
   brand: BrandSummary | null
   category: CategorySummary | null
   sketchThumbUrl?: string // B-027: 一覧サムネの署名URL（listProducts でまとめて生成）
+  // B-090 P-6: 量産数（Sku.productionQuantity の品番合計・SO 由来）。0 は表示側で「—」にする。
+  productionQuantity: number
 }
 
 export async function listProducts(
@@ -309,7 +311,17 @@ export async function listProducts(
       companyId: sess.companyId,
       deletedAt: null,
     }
-    if (params.status) where.status = params.status
+    // B-190 P-7: アーカイブ既定非表示。★固定除外ではなくフィルタ既定値で実現する。
+    //   未指定（既定）→ ARCHIVED を除外／"all" → 全件（アーカイブ含む）／
+    //   特定ステータス（ARCHIVED 直指定を含む）→ その値。「アーカイブを見たい」も実現できる。
+    const rawStatus = params.status as string | undefined
+    if (rawStatus === "all") {
+      // 全件（status 条件を付けない）
+    } else if (rawStatus) {
+      where.status = rawStatus as ProductStatus
+    } else {
+      where.status = { not: ProductStatus.ARCHIVED }
+    }
     if (params.brandId) where.brandId = params.brandId
     if (params.categoryId) where.categoryId = params.categoryId
     if (params.season) where.season = params.season
@@ -356,6 +368,24 @@ export async function listProducts(
       [...new Set(rows.map((r) => r.categoryId).filter((v): v is string => !!v))],
     )
 
+    // B-090 P-6: 量産数（Sku.productionQuantity）を品番単位で合計。
+    // ★ID 群 → Map の1本（N+1 にしない）。where に companyId / deletedAt を明示する。
+    const productIds = rows.map((r) => r.id)
+    const skuSums = productIds.length
+      ? await prisma.sku.groupBy({
+          by: ["productId"],
+          where: {
+            companyId: sess.companyId,
+            deletedAt: null,
+            productId: { in: productIds },
+          },
+          _sum: { productionQuantity: true },
+        })
+      : []
+    const productionMap = new Map(
+      skuSums.map((g) => [g.productId, g._sum.productionQuantity ?? 0]),
+    )
+
     // B-027: 一覧サムネは行数ぶん署名URLをまとめて発行（client で N 回 action を呼ばせない）
     const thumbUrls = await Promise.all(
       rows.map((r) =>
@@ -368,6 +398,7 @@ export async function listProducts(
       brand: brandMap.get(r.brandId) ?? null,
       category: r.categoryId ? categoryMap.get(r.categoryId) ?? null : null,
       sketchThumbUrl: thumbUrls[idx] ?? undefined,
+      productionQuantity: productionMap.get(r.id) ?? 0,
     }))
 
     return {
