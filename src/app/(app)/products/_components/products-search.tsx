@@ -32,7 +32,8 @@ export function ProductsSearch({ brands }: Props) {
   const [isPending, startTransition] = useTransition()
 
   const [q, setQ] = useState(searchParams.get("q") ?? "")
-  const [status, setStatus] = useState(searchParams.get("status") ?? "all")
+  // B-190 P-7: 既定は "active"（アーカイブ以外）。"all" を選ぶとアーカイブ含む全件。
+  const [status, setStatus] = useState(searchParams.get("status") ?? "active")
   const [brandId, setBrandId] = useState(
     searchParams.get("brandId") ?? NO_BRAND,
   )
@@ -42,7 +43,7 @@ export function ProductsSearch({ brands }: Props) {
     e.preventDefault()
     const params = new URLSearchParams()
     if (q.trim()) params.set("q", q.trim())
-    if (status !== "all") params.set("status", status)
+    if (status !== "active") params.set("status", status) // active は既定＝param を付けない
     if (brandId !== NO_BRAND) params.set("brandId", brandId)
     if (season.trim()) params.set("season", season.trim())
     startTransition(() => {
@@ -54,7 +55,7 @@ export function ProductsSearch({ brands }: Props) {
 
   const handleClear = () => {
     setQ("")
-    setStatus("all")
+    setStatus("active")
     setBrandId(NO_BRAND)
     setSeason("")
     startTransition(() => {
@@ -64,7 +65,7 @@ export function ProductsSearch({ brands }: Props) {
 
   const hasFilter =
     q.trim().length > 0 ||
-    status !== "all" ||
+    status !== "active" ||
     brandId !== NO_BRAND ||
     season.trim().length > 0
 
@@ -107,7 +108,8 @@ export function ProductsSearch({ brands }: Props) {
             <SelectValue placeholder="ステータス" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">ステータス（全て）</SelectItem>
+            <SelectItem value="active">アクティブ（アーカイブ以外）</SelectItem>
+            <SelectItem value="all">すべて（アーカイブ含む）</SelectItem>
             {PRODUCT_STATUS_FILTER_OPTIONS.map((o) => (
               <SelectItem key={o.value} value={o.value}>
                 {o.label}

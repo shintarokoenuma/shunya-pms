@@ -1,4 +1,20 @@
 import { ProductStatus } from "@prisma/client"
+import {
+  Lightbulb,
+  Inbox,
+  Scissors,
+  CircleCheck,
+  CalendarClock,
+  ClipboardCheck,
+  Factory,
+  Search,
+  Truck,
+  CheckCheck,
+  Ban,
+  Pause,
+  Archive,
+  type LucideIcon,
+} from "lucide-react"
 
 /**
  * S-1: 品番カルテ（Product）ラベル定義
@@ -26,6 +42,29 @@ export const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
   CANCELLED: "キャンセル",
   ON_HOLD: "保留中",
   ARCHIVED: "アーカイブ",
+}
+
+// =============================================================================
+// B-091 P-8: ステータスの「形」アイコン（色に依存せず区別する）
+// 各ステータスに一意のシルエットの lucide アイコンを与える。色（badge variant）は補助であり、
+// グレースケールでもアイコン＋ラベルで13値すべてが互いに区別できる。
+// ★テキスト記号はフォント依存で Windows で豆腐になりうるため SVG（lucide）にする（B-187 の学び）。
+// ★色トークン（globals.css）には手を付けない。色の体系は B-188。
+// =============================================================================
+export const PRODUCT_STATUS_ICON: Record<ProductStatus, LucideIcon> = {
+  PLANNING: Lightbulb, // 企画中
+  SAMPLE_REQUESTED: Inbox, // 依頼受付
+  SAMPLE_IN_PROGRESS: Scissors, // 製作中
+  SAMPLE_APPROVED: CircleCheck, // 承認
+  ORDERING_PERIOD: CalendarClock, // 受注期間
+  ORDER_CONFIRMED: ClipboardCheck, // 受注確定
+  MASS_PRODUCTION: Factory, // 量産中
+  INSPECTION: Search, // 検品中
+  DELIVERED: Truck, // 納品済
+  COMPLETED: CheckCheck, // 完了
+  CANCELLED: Ban, // キャンセル
+  ON_HOLD: Pause, // 保留
+  ARCHIVED: Archive, // アーカイブ
 }
 
 // =============================================================================
