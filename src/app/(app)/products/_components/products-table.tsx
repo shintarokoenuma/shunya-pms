@@ -17,7 +17,7 @@ import {
 import {
   PRODUCT_STATUS_LABELS,
   PRODUCT_STATUS_BADGE_VARIANT,
-  PRODUCT_STATUS_MARKER,
+  PRODUCT_STATUS_ICON,
 } from "./labels"
 
 type Props = {
@@ -65,6 +65,7 @@ export function ProductsTable({ items }: Props) {
             const primary = primaryProductCode(item)
             const secondary = secondaryProductCode(item)
             const mismatch = isClassificationMismatch(item)
+            const StatusIcon = PRODUCT_STATUS_ICON[item.status]
             return (
               <TableRow key={item.id}>
                 {/* 絵型（メイン・大） */}
@@ -136,9 +137,7 @@ export function ProductsTable({ items }: Props) {
                 {/* ステータス（形マーカー＋ラベル・色に依存しない） */}
                 <TableCell className="align-top">
                   <Badge variant={PRODUCT_STATUS_BADGE_VARIANT[item.status]}>
-                    <span aria-hidden className="mr-1">
-                      {PRODUCT_STATUS_MARKER[item.status]}
-                    </span>
+                    <StatusIcon aria-hidden className="mr-1 h-3 w-3" />
                     {PRODUCT_STATUS_LABELS[item.status]}
                   </Badge>
                 </TableCell>

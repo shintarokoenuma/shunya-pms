@@ -1,4 +1,20 @@
 import { ProductStatus } from "@prisma/client"
+import {
+  Lightbulb,
+  Inbox,
+  Scissors,
+  CircleCheck,
+  CalendarClock,
+  ClipboardCheck,
+  Factory,
+  Search,
+  Truck,
+  CheckCheck,
+  Ban,
+  Pause,
+  Archive,
+  type LucideIcon,
+} from "lucide-react"
 
 /**
  * S-1: 品番カルテ（Product）ラベル定義
@@ -29,25 +45,26 @@ export const PRODUCT_STATUS_LABELS: Record<ProductStatus, string> = {
 }
 
 // =============================================================================
-// B-091 P-8: ステータスの「形」マーカー（色に依存せず区別する）
-// 各ステータスに一意の単色グリフを与える。色（badge variant）は補助であり、
-// グレースケールでもグリフ＋ラベルで13値すべてが互いに区別できる。
+// B-091 P-8: ステータスの「形」アイコン（色に依存せず区別する）
+// 各ステータスに一意のシルエットの lucide アイコンを与える。色（badge variant）は補助であり、
+// グレースケールでもアイコン＋ラベルで13値すべてが互いに区別できる。
+// ★テキスト記号はフォント依存で Windows で豆腐になりうるため SVG（lucide）にする（B-187 の学び）。
 // ★色トークン（globals.css）には手を付けない。色の体系は B-188。
 // =============================================================================
-export const PRODUCT_STATUS_MARKER: Record<ProductStatus, string> = {
-  PLANNING: "○", // 未着手（空）
-  SAMPLE_REQUESTED: "◔", // 依頼受付（1/4）
-  SAMPLE_IN_PROGRESS: "◑", // 製作中（1/2）
-  SAMPLE_APPROVED: "◕", // 承認（3/4）
-  ORDERING_PERIOD: "◇", // 受注期間（菱形・枠）
-  ORDER_CONFIRMED: "◆", // 受注確定（菱形・塗り）
-  MASS_PRODUCTION: "▶", // 量産中（進行）
-  INSPECTION: "◎", // 検品中（二重丸）
-  DELIVERED: "△", // 納品済
-  COMPLETED: "●", // 完了（塗り）
-  CANCELLED: "✕", // キャンセル
-  ON_HOLD: "‖", // 保留（一時停止）
-  ARCHIVED: "▢", // アーカイブ
+export const PRODUCT_STATUS_ICON: Record<ProductStatus, LucideIcon> = {
+  PLANNING: Lightbulb, // 企画中
+  SAMPLE_REQUESTED: Inbox, // 依頼受付
+  SAMPLE_IN_PROGRESS: Scissors, // 製作中
+  SAMPLE_APPROVED: CircleCheck, // 承認
+  ORDERING_PERIOD: CalendarClock, // 受注期間
+  ORDER_CONFIRMED: ClipboardCheck, // 受注確定
+  MASS_PRODUCTION: Factory, // 量産中
+  INSPECTION: Search, // 検品中
+  DELIVERED: Truck, // 納品済
+  COMPLETED: CheckCheck, // 完了
+  CANCELLED: Ban, // キャンセル
+  ON_HOLD: Pause, // 保留
+  ARCHIVED: Archive, // アーカイブ
 }
 
 // =============================================================================
