@@ -215,9 +215,12 @@ B-142 は「PE 単位で生成済みかを判定する列も導線も無い」�
    ②★SalesOrderDTO と getSalesOrder に isConvertedToProduction / convertedAt を追加
    （現状 DTO に無く §7 のヘッダ表示ができない・2026-09-02 recon で判明）
    ★recomputeSkuOrderedQuantities は触らない
-3. src/lib/actions/production-estimates.ts —
-   生成 context に「反映済み SO」の情報を載せる（§6 の警告表示に必要な場合のみ。
-   別 action で取得する形にするなら本ファイルは触らない）
+3. ★実装追従（PR #137・fb129d5）: production-estimates.ts は変更しなかった。
+   §8-3 が用意した逃げ道「別 action で取得する形にするなら本ファイルは触らない」を選んだ結果、
+   生成 context には載せず、sales-orders.ts に読み取り action listConvertedSalesOrdersForProduct を
+   足し、src/app/(app)/production-estimates/[id]/generate/page.tsx がそれを fetch して
+   フォームへ props で渡す形にした。production-estimates.ts の context を太らせないこの実装が正しい。
+   （変更したのは generate/page.tsx。production-estimates.ts は不変）
 4. src/app/(app)/production-estimates/_components/production-order-generate-form.tsx —
    反映済み受注の警告表示（§6）
 5. src/app/(app)/sales-orders/[id]/page.tsx —
@@ -301,3 +304,4 @@ dev 動作確認 → PR レビュー → マージ の通常フローで足り�
 |---|---|---|
 | 2026-09-02 | v0.1 | 初版確定。2026-08-29 の recon（main 40f54a6）を 2026-09-02 に再検証したうえで P-1〜P-6 を確定。B-185 を新規起票 |
 | 2026-09-02 | v0.2 | 実装前 recon（08:38 JST・main cdf65f7）で v0.1 §0 の誤り（Σ0 のサーバ側ガード）を訂正。B-156 は解消済みと判定し新規実装を取り止め、validator への superRefine を却下。§8 に SalesOrderDTO の拡張とフラグ挿入位置の file:line を追加 |
+| 2026-09-05 | v0.3 | PR #137 マージ後、§8 の変更ファイル一覧を実装に追従（production-estimates.ts は不変・generate ページを変更）。§11 の動作確認9項目すべて dev で完了。B-156 を完了に更新 |

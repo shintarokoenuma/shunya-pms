@@ -193,8 +193,77 @@
 
 ---
 
+## 8. 受注 → 量産発注の接続（PR-2b）
+
+PR-2b（PR #137・`fb129d5`）で、量産発注の生成が成功したとき、その品番に紐づく受注（SO）へ
+「量産へ反映済み」の印を付ける経路が加わった。仕様は spec v0.2（案A・migration なし）。
+
+### 8-1. 書き込む列と型
+
+`SalesOrder.isConvertedToProduction`（Boolean・schema 既存の休眠列）と `SalesOrder.convertedAt`
+（DateTime?）に書く。DTO 側は `SalesOrderDTO.isConvertedToProduction: boolean`
+（`sales-orders.ts:306`）／`convertedAt: string | null`（同 `:307`・YYYY-MM-DD）で、
+`getSalesOrder` が `:431` で載せる。★schema 変更なし・DDL ゼロ。
+
+### 8-2. 対象 SO の決定アルゴリズム
+
+`markSalesOrdersConvertedForProduct(productId)`（`sales-orders.ts:968`）:
+
+1. `Sku.findMany({ where: { productId } })` で品番配下の skuId を得る（Sku は TENANT・`:976`）
+2. `salesOrder.findMany` の where（`:984-992`）:
+   - `companyId`（SalesOrder は TENANT 非対象のため明示）
+   - `deletedAt: null` / `isLatest: true`
+   - `status: { in: COUNTED_STATUSES }`（`:989`・§3 の condition を再定義せず `:62` の定数を再利用）
+   - `isConvertedToProduction: false`（未反映のみ）
+   - `items: { some: { skuId: { in: skuIds } } }`（`:991`・SoItem に sku リレーションが無いため skuId で辿る）
+3. `salesOrder.updateMany`（`:997-1004`）で `isConvertedToProduction: true, convertedAt: new Date()` を書く
+
+★対象集合は `recomputeSkuOrderedQuantities`（§3・`:134`）の where と同一＝
+`Sku.productionQuantity` の Σ に寄与した SO 集合と一致する。
+
+### 8-3. 更新タイミング（成功「後」・tx 外・独立ステップ）
+
+生成 action `production-order-generation.ts` が **PO/WO の生成が成功した後**に呼ぶ。
+呼び出しは3箇所（`:346` PO 失敗時 / `:377` WO 失敗時 / `:428` 成功時）で、いずれも
+`createdPos.length + createdWos.length > 0` のときだけ実行する。
+★生成 tx とは**別**（独立ステップ）。生成が非アトミックである以上フラグだけ厳密にしても
+意味がないため、tx に入れない（spec v0.2 §4）。
+
+### 8-4. 冪等性・失敗時の挙動
+
+- `updateMany` は `isConvertedToProduction: false` の行だけを true にする＝**冪等**。
+  再生成で二度呼ばれても `convertedAt` は最初の一度だけ入り、値はぶれない。
+- ヘルパー全体が try/catch で、失敗は**握りつぶす**（`:1005-1006`）。フラグ書き込みが失敗しても
+  生成済みの DRAFT PO/WO は残す（B-101 のタスク生成と同方針）。
+- **部分生成**（PO だけ・WO だけ成功）でもフラグは立つ（`:346`/`:377` の失敗 return でも
+  created が1本でもあれば呼ぶため）。
+
+### 8-5. ★降ろす経路は無い
+
+`isConvertedToProduction` を false に戻す経路は実装していない。**SO をキャンセルしても
+フラグは降りない**（CANCELLED は COUNTED から外れて Sku 集計からは差し引かれるが、
+既に生成された DRAFT は残り、「量産に使われた」事実は消えないため）。
+
+### 8-6. ★既知の粗さ（仕様・バグではない）
+
+**複数品番を含む SO で1品番だけ生成しても、SO 全体にフラグが立つ。** SoItem 側に変換状態を
+持つ列が無く migration なしのため、これ以上細かくできない。ゆえに表示は「量産へ反映済み」
+（＝1回でも量産生成に使われた）であり「全品番の発注が済んだ」ではない（spec v0.2 §3）。
+厳密な受注↔発注の対応追跡は **B-185** に分離。
+
+### 8-7. 表示（下流 UI）
+
+- 再生成時の警告: `listConvertedSalesOrdersForProduct`（`sales-orders.ts:1011`）を
+  generate ページが fetch し、生成フォームが「量産へ反映済みの受注があります」を表示
+  （`production-order-generate-form.tsx:178`・**生成はブロックしない**・B-142 は警告のみ）。
+- 受注詳細: ヘッダに「量産へ反映」（`sales-orders/[id]/page.tsx:132`）＋品番見出しを
+  品番カルテへのリンク化（同 `:150`・B-182 の受注分を消化）。
+
+---
+
 ## 改訂履歴
 
 | 日付 | 版 | 内容 |
 |---|---|---|
 | 2026-08-28 | v1.0 | PR #136（`c622467`）の実装から起こした初版。file:line は main 実コードから採取 |
+| 2026-09-05 | v1.1 | PR-2b（PR #137・`fb129d5`）の受注→量産発注の接続を §8 として追記 |
