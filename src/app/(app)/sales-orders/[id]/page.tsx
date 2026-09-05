@@ -128,6 +128,14 @@ export default async function SalesOrderDetailPage({
                 : `${so.currency} ${so.totalAmount.toLocaleString("ja-JP")}`
             }
           />
+          <Cell
+            label="量産へ反映"
+            value={
+              so.isConvertedToProduction
+                ? `反映済み${so.convertedAt ? `（${so.convertedAt}）` : ""}`
+                : "未反映"
+            }
+          />
         </CardContent>
       </Card>
 
@@ -138,12 +146,15 @@ export default async function SalesOrderDetailPage({
             <CardHeader>
               <CardTitle className="text-base">
                 {p ? (
-                  <span>
+                  <Link
+                    href={`/products/${p.id}`}
+                    className="inline-flex items-center gap-2 hover:underline"
+                  >
                     <span className="font-mono text-sm text-muted-foreground">
                       {p.productCode}
-                    </span>{" "}
+                    </span>
                     {p.productName}
-                  </span>
+                  </Link>
                 ) : (
                   "（不明な品番）"
                 )}

@@ -36,8 +36,11 @@ function decodeTarget(
 
 export function ProductionOrderGenerateForm({
   ctx,
+  convertedOrders = [],
 }: {
   ctx: ProductionOrderGenerationContext
+  /** B-148 PR-2b §6: この品番で既に量産へ反映済みの受注（再生成の警告用・ブロックはしない）。 */
+  convertedOrders?: { soNumber: string; convertedAt: string | null }[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -171,6 +174,26 @@ export function ProductionOrderGenerateForm({
 
   return (
     <div className="space-y-6">
+      {/* B-148 PR-2b §6: 量産へ反映済みの受注がある場合の警告（生成はブロックしない） */}
+      {convertedOrders.length > 0 && (
+        <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">
+              この品番には量産へ反映済みの受注があります（{convertedOrders.length} 件）
+            </p>
+            <p className="mt-1 text-xs">
+              {convertedOrders
+                .map((o) => `${o.soNumber}${o.convertedAt ? `（${o.convertedAt}）` : ""}`)
+                .join(" / ")}
+            </p>
+            <p className="mt-1 text-xs">
+              リピート・追加生産であればそのまま生成できます。重複でないか確認してください。
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* SKU 数量マトリクス */}
       <Card>
         <CardHeader>
