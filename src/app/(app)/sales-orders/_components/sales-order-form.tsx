@@ -171,15 +171,18 @@ export function SalesOrderForm({
           ymode: Object.fromEntries(
             g.skus.map((s) => [s.skuId, s.yieldMode ?? DEFAULT_YIELD_MODE]),
           ),
+          // B-192: 旧行（yield 列が NULL）は「歩留まり加算なし」として復元する。値が null のときは
+          // 既定値に倒す（calc の null→0 と整合・B-168 addendum v0.1 §1 D-4「既定は加算枚数0」）。
+          // ここで "" にすると loadSkus の既定敷き（=== undefined）に拾われず、送信チェックで保存できなくなる。
           yval: Object.fromEntries(
             g.skus.map((s) => [
               s.skuId,
               (s.yieldMode ?? DEFAULT_YIELD_MODE) === YieldMode.QUANTITY
                 ? s.yieldQuantity === null
-                  ? ""
+                  ? DEFAULT_YIELD_VALUE
                   : String(s.yieldQuantity)
                 : s.yieldRate === null
-                  ? ""
+                  ? DEFAULT_YIELD_VALUE
                   : String(s.yieldRate),
             ]),
           ),
