@@ -62,7 +62,7 @@
 `enum YieldMode { RATE, QUANTITY }`（`prisma/schema.prisma:4545`）。
 
 書き込み規則（`src/lib/actions/sales-orders.ts:229-255`）:
-- `unitPrice = null` なら `subtotal = null`、そうでなければ `unitPrice.mul(orderedQuantity)`（`:230-232`）。
+- `unitPrice = null` なら `subtotal = null`、そうでなければ `unitPrice.mul(orderedQuantity)`（`:231-232`）。
 - `yieldRate`: `mode===RATE && s.yieldRate!==null` のときのみ Decimal、他は `null`（`:249-252`）。
 - `yieldQuantity`: `mode===QUANTITY` のときのみ値、他は `null`（`:253-254`）。
 - `productionQuantity`: §1-1 の戻り値（`:234-239, 255`）。
@@ -89,14 +89,14 @@
 
 | アクション | 定義(line) | recompute 呼出(line) | 何の後に呼ぶか |
 |---|---|---|---|
-| `createSalesOrder` | `:458` | `:544` | `tx.soItem.createMany`（`:528`）の後 |
-| `updateSalesOrder` | `:607` | `:700` | `upsert`（`:666`）＋ `deleteMany`（`:697`）の後 |
-| `updateSalesOrderStatus` | `:738` | `:765` | `salesOrder.update`(status) の後 |
-| `cancelSalesOrder` | `:800` | `:821` | `status=CANCELLED` の後 |
+| `createSalesOrder` | `:464` | `:550` | `tx.soItem.createMany`（`:534`）の後 |
+| `updateSalesOrder` | `:613` | `:709` | `upsert`（`:675`）＋ `deleteMany`（`:706`）の後 |
+| `updateSalesOrderStatus` | `:747` | `:774` | `salesOrder.update`(status) の後 |
+| `cancelSalesOrder` | `:809` | `:830` | `status=CANCELLED` の後 |
 
-- **トランザクション内/外**: 書き戻しは SoItem の書き込み・status 変更と**同一 tx 内**（`timeout: 15000`・`:552/707/772/828`）。
+- **トランザクション内/外**: 書き戻しは SoItem の書き込み・status 変更と**同一 tx 内**（`timeout: 15000`・`:558/716/781/837`）。
   → SoItem とキャッシュ Sku は原子的に整合する。
-- **成功の前/後**: `auditLog.create` は tx の**外**・後（`:577/710/775/831`）。`revalidateForSkus` も tx 外・後（`:594/725/787/843`）。
+- **成功の前/後**: `auditLog.create` は tx の**外**・後（`:583/719/784/840`）。`revalidateForSkus` も tx 外・後（`:600/734/796/852`）。
 
 ### SO のステータス変更・削除で何が起きるか
 
@@ -106,6 +106,40 @@
   CANCELLED は COUNTED 外のため、同 tx の recompute で当該分が Sku から**差し引かれる**。
 - **物理削除 / soft delete**: SO を削除するアクションは**現状存在しない**（キャンセルは status のみ）。
   集計条件に `so.deletedAt: null` はあるが、`deletedAt` を立てる経路は未実装。
+
+### ★status を書ける経路は2つだけ（B-193・2026-09-06 追記）
+
+SalesOrder.status に書き込む action は次の2つに限られる。
+
+- updateSalesOrderStatus … ステータス変更の正規経路。UI は sales-order-status-control.tsx
+- cancelSalesOrder … CANCELLED を書く
+
+★updateSalesOrder（受注の編集保存）は status を書かない。PR #140（squash 20ede40）で
+update の data から除去した。理由コメントは src/lib/actions/sales-orders.ts:663 にある。
+
+除去前に何が起きていたか（B-193 の経路）:
+
+    編集フォーム sales-order-form.tsx の payload は9項目で status を含まない
+      → salesOrderInputSchema（src/lib/validators/sales-order.ts:151）が status に
+        .default(TENTATIVE) を敷いており、zod が undefined を「値」に変換する
+      → Prisma の「update data の undefined はスキップ」が効かなくなり、
+        updateSalesOrder が CONFIRMED を TENTATIVE で上書きする
+      → COUNTED_STATUSES から外れる
+      → 同一 tx 内の recomputeSkuOrderedQuantities が Sku.productionQuantity を 0 にする
+      → 品番カルテ一覧の量産数が「—」になる
+
+★一般化: zod の .default() は「送られてこない値を作り出す」機構であり、Prisma の
+undefined スキップを無効化する。フォームが送らない列に .default() が付いていると、
+編集保存のたびに既存値が既定値で上書きされる。UI に入力欄が無いことは、この上書きが
+起きない理由にはならない（むしろ default が効く条件そのものである）。
+
+★同じ構造は buyerId / buyerSpecialRequests / originalFiles にも残っている。ただしこの3列は
+spec 上フォームが持つべき任意項目で、UI が未実装なだけである。将来フォームが送るようになるため
+update からは外していない（外すと逆に保存できなくなる）。追跡は B-194。
+現状は値を入れる経路自体が無いため実害はゼロ。
+
+監査ログ: updateSalesOrder の afterData.status には、編集後の実際の値を載せる。
+既存レコード取得の select に status を含め、その値を使う（src/lib/actions/sales-orders.ts:727）。
 
 ---
 
@@ -142,17 +176,17 @@
 
 ## 5. 失敗時の挙動・冪等性
 
-- **途中で落ちたら**: 書き戻しは SoItem 書き込みと**同一 `$transaction` 内**（`:552/707/772/828`）。
+- **途中で落ちたら**: 書き戻しは SoItem 書き込みと**同一 `$transaction` 内**（`:558/716/781/837`）。
   tx 途中で例外が出れば SoItem 書き込みも Sku 書き戻しも**両方ロールバック**。
   → Sku は古い値のまま整合（部分適用は起きない）。
-- **create の採番衝突**: P2002 のみリトライ（`:559`・`CREATE_MAX_RETRIES`）。
+- **create の採番衝突**: P2002 のみリトライ（`:565`・`CREATE_MAX_RETRIES`）。
 - **冪等性**: `recomputeSkuOrderedQuantities` は Sku 値を「その時点の集計値」で **set** する（加算しない・`:157-160`）。
   同じ再計算を二重に走らせても同じ集計を書くだけで**ずれない**。
 - **★並行実行の窓（未保護）**: 別々の tx が同一 `skuId` に対し同時に「集計→書き込み」する場合、
   各 tx の集計スナップショットのタイミング次第で最後の write が勝つ。
   `Sku.update` の行ロックは `where id` に対してのみで、**同一 SKU への並行 SO 操作を直列化するロックは未実装**。
   実務上、同一 SKU に対する SO 操作の同時多発は稀という前提。保護が要るなら別途。
-- **★tx 外の副作用**: `auditLog.create` と `revalidateForSkus` は tx コミット後（`:577+` 等）。
+- **★tx 外の副作用**: `auditLog.create` と `revalidateForSkus` は tx コミット後（`:583+` 等）。
   コミット成功後に auditLog が失敗すると、DB は反映済みのまま監査ログだけ欠ける可能性がある（catch で error を返すが数量はコミット済み）。
 
 ---
@@ -207,16 +241,16 @@ PR-2b（PR #137・`fb129d5`）で、量産発注の生成が成功したとき�
 
 ### 8-2. 対象 SO の決定アルゴリズム
 
-`markSalesOrdersConvertedForProduct(productId)`（`sales-orders.ts:968`）:
+`markSalesOrdersConvertedForProduct(productId)`（`sales-orders.ts:971`）:
 
-1. `Sku.findMany({ where: { productId } })` で品番配下の skuId を得る（Sku は TENANT・`:976`）
-2. `salesOrder.findMany` の where（`:984-992`）:
+1. `Sku.findMany({ where: { productId } })` で品番配下の skuId を得る（Sku は TENANT・`:979`）
+2. `salesOrder.findMany` の where（`:987-995`）:
    - `companyId`（SalesOrder は TENANT 非対象のため明示）
    - `deletedAt: null` / `isLatest: true`
-   - `status: { in: COUNTED_STATUSES }`（`:989`・§3 の condition を再定義せず `:62` の定数を再利用）
+   - `status: { in: COUNTED_STATUSES }`（`:992`・§3 の condition を再定義せず `:62` の定数を再利用）
    - `isConvertedToProduction: false`（未反映のみ）
-   - `items: { some: { skuId: { in: skuIds } } }`（`:991`・SoItem に sku リレーションが無いため skuId で辿る）
-3. `salesOrder.updateMany`（`:997-1004`）で `isConvertedToProduction: true, convertedAt: new Date()` を書く
+   - `items: { some: { skuId: { in: skuIds } } }`（`:994`・SoItem に sku リレーションが無いため skuId で辿る）
+3. `salesOrder.updateMany`（`:1000-1007`）で `isConvertedToProduction: true, convertedAt: new Date()` を書く
 
 ★対象集合は `recomputeSkuOrderedQuantities`（§3・`:134`）の where と同一＝
 `Sku.productionQuantity` の Σ に寄与した SO 集合と一致する。
@@ -233,7 +267,7 @@ PR-2b（PR #137・`fb129d5`）で、量産発注の生成が成功したとき�
 
 - `updateMany` は `isConvertedToProduction: false` の行だけを true にする＝**冪等**。
   再生成で二度呼ばれても `convertedAt` は最初の一度だけ入り、値はぶれない。
-- ヘルパー全体が try/catch で、失敗は**握りつぶす**（`:1005-1006`）。フラグ書き込みが失敗しても
+- ヘルパー全体が try/catch で、失敗は**握りつぶす**（`:1008-1010`）。フラグ書き込みが失敗しても
   生成済みの DRAFT PO/WO は残す（B-101 のタスク生成と同方針）。
 - **部分生成**（PO だけ・WO だけ成功）でもフラグは立つ（`:346`/`:377` の失敗 return でも
   created が1本でもあれば呼ぶため）。
@@ -253,7 +287,7 @@ PR-2b（PR #137・`fb129d5`）で、量産発注の生成が成功したとき�
 
 ### 8-7. 表示（下流 UI）
 
-- 再生成時の警告: `listConvertedSalesOrdersForProduct`（`sales-orders.ts:1011`）を
+- 再生成時の警告: `listConvertedSalesOrdersForProduct`（`sales-orders.ts:1014`）を
   generate ページが fetch し、生成フォームが「量産へ反映済みの受注があります」を表示
   （`production-order-generate-form.tsx:178`・**生成はブロックしない**・B-142 は警告のみ）。
 - 受注詳細: ヘッダに「量産へ反映」（`sales-orders/[id]/page.tsx:132`）＋品番見出しを
@@ -267,3 +301,4 @@ PR-2b（PR #137・`fb129d5`）で、量産発注の生成が成功したとき�
 |---|---|---|
 | 2026-08-28 | v1.0 | PR #136（`c622467`）の実装から起こした初版。file:line は main 実コードから採取 |
 | 2026-09-05 | v1.1 | PR-2b（PR #137・`fb129d5`）の受注→量産発注の接続を §8 として追記 |
+| 2026-09-06 | v1.2 | B-193（PR #140・squash 20ede40）を反映。§3 に「status を書ける経路は2つだけ」を追加し、v1.1 以降にずれていた sales-orders.ts 系の file:line を実測値へ一括補正 |
