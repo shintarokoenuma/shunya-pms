@@ -2,6 +2,7 @@
 
 - 対象: B-148 PR-2a / B-167 / B-168（PR #136・main `c622467`）
 - 起こした日: 2026-08-28（main の実コードから file:line を採取。推測で埋めていない）
+- ★v1.2（2026-09-06）で B-193（PR #140・squash `20ede40`）を反映し、file:line を main HEAD `3a885fa` 時点の実測値へ一括補正した
 - 根拠 spec: docs/specs/b-168-production-quantity-spec-confirmation-v0_1-2026-08-19.md（D-1〜D-9）
   ／ docs/specs/b-168-production-quantity-spec-addendum-v0_1-2026-08-22.md（D-4 改訂）
 - ★指示では `src/lib/production-order-generation.ts` / `src/lib/material-requirement.ts` と
@@ -202,6 +203,9 @@ update からは外していない（外すと逆に保存できなくなる）�
 | 量産見積の見積数量 | `src/lib/actions/production-estimates.ts:463-469` | 見積数量 = `Σ Sku.productionQuantity` |
 | 発注生成フォームの既定 | `src/lib/actions/production-estimates.ts:1304` | 既定数量 = `Sku.productionQuantity` |
 | 発注生成の数量分配 | `src/lib/actions/production-order-generation.ts:176→179-184→225-232` | `data.skuQuantities`（既定=Sku.productionQuantity）→ `qtyByColorway`（色別合算）→ 色別 PoItem |
+
+★§6 の file:line は v1.0（2026-08-28）時点の値で、v1.2 では実測していない（実測していない行は動かさない方針）。
+参照する前に grep で確認すること。
 
 - 発注生成は Sku.productionQuantity を**既定値**として拾い、生成画面で人が編集できる（D-8。生成時に入力値を焼き込む）。
 - 品番カルテの数量マトリクス下段は **読み取り専用**（SO 由来・D-2）。
