@@ -627,7 +627,7 @@ export async function updateSalesOrder(
 
     const existing = await prisma.salesOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
-      select: { id: true, items: { select: { skuId: true } } },
+      select: { id: true, status: true, items: { select: { skuId: true } } },
     })
     if (!existing) return { ok: false, error: "受注が見つかりません" }
 
@@ -660,7 +660,10 @@ export async function updateSalesOrder(
             title: data.title || null,
             internalNotes: data.internalNotes || null,
             buyerSpecialRequests: data.buyerSpecialRequests || null,
-            status: data.status,
+            // ★B-193: status はここで書かない。変更の正規経路は updateSalesOrderStatus と
+            // sales-order-status-control.tsx（PR-1 ブリーフ §5 が別関数化を許可している）。
+            // 編集フォームは status を送らないため、salesOrderInputSchema の
+            // .default(TENTATIVE) がここに入り込み、CONFIRMED を巻き戻していた。
             originalFiles: data.originalFiles as Prisma.InputJsonValue,
             totalQuantity,
             subtotal,
@@ -721,7 +724,7 @@ export async function updateSalesOrder(
         entityType: "SalesOrder",
         entityId: id,
         afterData: {
-          status: data.status,
+          status: existing.status,
           itemCount: rows.length,
           totalQuantity,
         },
