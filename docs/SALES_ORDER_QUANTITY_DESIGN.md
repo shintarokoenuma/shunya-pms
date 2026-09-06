@@ -3,6 +3,7 @@
 - 対象: B-148 PR-2a / B-167 / B-168（PR #136・main `c622467`）
 - 起こした日: 2026-08-28（main の実コードから file:line を採取。推測で埋めていない）
 - ★v1.2（2026-09-06）で B-193（PR #140・squash `20ede40`）を反映し、file:line を main HEAD `3a885fa` 時点の実測値へ一括補正した
+- ★v1.3（2026-09-06）で B-192（PR #141・squash `7def52a`）を反映し、sales-order-form.tsx 系の file:line を origin/main `7def52a` 時点の実測値へ補正した
 - 根拠 spec: docs/specs/b-168-production-quantity-spec-confirmation-v0_1-2026-08-19.md（D-1〜D-9）
   ／ docs/specs/b-168-production-quantity-spec-addendum-v0_1-2026-08-22.md（D-4 改訂）
 - ★指示では `src/lib/production-order-generation.ts` / `src/lib/material-requirement.ts` と
@@ -154,18 +155,40 @@ update からは外していない（外すと逆に保存できなくなる）�
 ### 「新規入力の既定」に効く箇所
 
 - `newBlock()`（`:99-100`）: 一括適用 UI の初期値 `yBulkMode=DEFAULT_YIELD_MODE` / `yBulkUniform=DEFAULT_YIELD_VALUE`。
-- `loadSkus`（`:236-237`）: **各 SKU の実効既定** `ymode[id]=DEFAULT_YIELD_MODE` / `yval[id]=DEFAULT_YIELD_VALUE`
+- `loadSkus`（`:239-240`）: **各 SKU の実効既定** `ymode[id]=DEFAULT_YIELD_MODE` / `yval[id]=DEFAULT_YIELD_VALUE`
   （未設定の SKU にだけ敷く。編集復元済みの値は保持）。
   → 無操作時に各 SKU が `QUANTITY / 0` になる中核。
 
 ### 「既存行（yieldMode が null）の復元フォールバック」に効く箇所
 
-編集画面で既存 SO を開いたとき、`yieldMode` が `null` の行に既定を当てる:
+編集画面で既存 SO を開いたとき、`yieldMode` が `null` の行に既定を当てる
+（file:line は origin/main `7def52a` 時点の実測）:
 - edit 復元・mode map（`:172`）: `s.yieldMode ?? DEFAULT_YIELD_MODE`
-- edit 復元・値の三項式（`:177`）: `(s.yieldMode ?? DEFAULT_YIELD_MODE) === YieldMode.QUANTITY` で分岐
-- プレビュー（`:277`）/ 送信（`:341`）/ 行の方式 Select value（`:750`）: `b.ymode[id] ?? DEFAULT_YIELD_MODE`
+- edit 復元・値の三項式（`:180` で方式を分岐 → QUANTITY 側 `:182` / RATE 側 `:185`）:
+  値が `null` のとき **`DEFAULT_YIELD_VALUE`（"0"）に倒す**。方式に関わらず倒すので RATE の旧行も同じ扱い。
+  理由コメントは `:174-176`
+- プレビュー（`:280`）/ 送信（`:344`）/ 行の方式 Select value（`:753`）: `b.ymode[id] ?? DEFAULT_YIELD_MODE`
 
-★新規と復元の**両方**を QUANTITY/0 に倒しているため、旧データ（yieldMode=null）を開いても 5% は復活しない。
+★新規と復元の**両方**が QUANTITY/0 に倒るため、旧データ（yieldMode=null）を開いても 5% は復活しない。
+
+### ★復元の値が空文字だと保存できなくなる（B-192・2026-09-06 追記）
+
+★PR #141（squash `7def52a`）より前は、mode だけを既定に倒し、**値は空文字のままにしていた**
+（`s.yieldQuantity === null ? "" : ...`）。この非対称が B-192 の原因である。
+
+    旧行（so_items の yield_mode / yield_quantity が NULL）を編集で開く
+      → 復元で ymode は QUANTITY に倒るが、yval は空文字になる
+      → loadSkus の既定敷き（`:240`）は === undefined 判定なので、空文字は "0" で埋め直されない
+      → 送信チェック（raw === "" || raw === undefined の分岐）が return し、保存がブロックされる
+
+★設計上の区別: **空欄＝入力ミス（弾く）／0＝明示のゼロ加算（通す）**。
+validator の `superRefine`（次節）と送信チェックはこの区別を守るためにあるので、
+B-192 の修正でも**緩めていない**。直したのは「旧行の NULL を復元段でどう読むか」だけである。
+`calc/sales-order-quantity.ts` が `null` を 0 として扱う（§1-1）のと同じ読み方に揃えた。
+
+★dev DB 実測（2026-09-06・hopper:12921）: `so_items` の yield 3列は nullable で、
+内訳は `NULL / NULL` が3行、`QUANTITY / 0` が3行。**旧行は実在する**。
+本番の受注は0件のため本番影響はゼロだった。
 
 ### validator 側
 
@@ -306,3 +329,4 @@ PR-2b（PR #137・`fb129d5`）で、量産発注の生成が成功したとき�
 | 2026-08-28 | v1.0 | PR #136（`c622467`）の実装から起こした初版。file:line は main 実コードから採取 |
 | 2026-09-05 | v1.1 | PR-2b（PR #137・`fb129d5`）の受注→量産発注の接続を §8 として追記 |
 | 2026-09-06 | v1.2 | B-193（PR #140・squash 20ede40）を反映。§3 に「status を書ける経路は2つだけ」を追加し、v1.1 以降にずれていた sales-orders.ts 系の file:line を実測値へ一括補正 |
+| 2026-09-06 | v1.3 | B-192（PR #141・squash 7def52a）を反映。§4 の復元フォールバックを実装準拠に書き換え（値も DEFAULT_YIELD_VALUE に倒す・非対称だった経緯と「空欄と0は別」の設計上の区別を明記）し、sales-order-form.tsx 系の file:line を origin/main 7def52a 時点の実測値へ補正 |
