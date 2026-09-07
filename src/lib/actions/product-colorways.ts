@@ -24,6 +24,7 @@ export type ColorwayRow = {
   id: string
   colorwayCode: string
   colorwayName: string
+  clientColorName: string | null
   colorId: string | null
   colorHex: string | null
   patternId: string | null
@@ -50,6 +51,7 @@ export async function listColorways(
         id: true,
         colorwayCode: true,
         colorwayName: true,
+        clientColorName: true,
         colorId: true,
         colorHex: true,
         patternId: true,
@@ -85,6 +87,7 @@ export async function getColorway(
         productId: true,
         colorwayCode: true,
         colorwayName: true,
+        clientColorName: true,
         colorId: true,
         colorHex: true,
         patternId: true,
@@ -151,6 +154,7 @@ export async function createColorway(
           productId,
           colorwayCode: data.colorwayCode,
           colorwayName: data.colorwayName,
+          clientColorName: data.clientColorName.trim() || null,
           colorId: data.colorId,
           colorHex: data.colorHex || null,
           patternId: data.patternId,
@@ -170,6 +174,7 @@ export async function createColorway(
             productId,
             colorwayCode: data.colorwayCode,
             colorwayName: data.colorwayName,
+            clientColorName: data.clientColorName.trim() || null,
             status: data.status,
           },
         },
@@ -240,6 +245,7 @@ export async function updateColorway(
         data: {
           colorwayCode: data.colorwayCode,
           colorwayName: data.colorwayName,
+          clientColorName: data.clientColorName.trim() || null,
           colorId: data.colorId,
           colorHex: data.colorHex || null,
           patternId: data.patternId,
@@ -257,6 +263,7 @@ export async function updateColorway(
           beforeData: {
             colorwayCode: existing.colorwayCode,
             colorwayName: existing.colorwayName,
+            clientColorName: existing.clientColorName,
             colorHex: existing.colorHex,
             sortOrder: existing.sortOrder,
             status: existing.status,
@@ -264,6 +271,7 @@ export async function updateColorway(
           afterData: {
             colorwayCode: updated.colorwayCode,
             colorwayName: updated.colorwayName,
+            clientColorName: updated.clientColorName,
             colorHex: updated.colorHex,
             sortOrder: updated.sortOrder,
             status: updated.status,

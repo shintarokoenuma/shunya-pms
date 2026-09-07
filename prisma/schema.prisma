@@ -2124,7 +2124,7 @@ model Sku {
 
   // SKU コード
   skuCode       String  @map("sku_code") @db.VarChar(100)
-  clientSkuCode String? @map("client_sku_code") @db.VarChar(100) // 先方SKUコード
+  clientSkuCode String? @map("client_sku_code") @db.VarChar(100) // 先方SKUコード。★未使用（src 参照ゼロ・2026-09-07 実測）。B-170 では使わない（SKU 単位では粒度が細かすぎるため、品番＝Product.clientProductCode・配色＝ProductColorway.clientColorName で持つ）。廃止せず残置（v1.0 Q5）
 
   // カラー
   colorCode   String  @map("color_code") @db.VarChar(20) // BLK / WHT / NVY
@@ -2783,6 +2783,8 @@ model ProductColorway {
 
   colorwayCode String @map("colorway_code") @db.VarChar(50)
   colorwayName String @map("colorway_name") @db.VarChar(100)
+
+  clientColorName String? @map("client_color_name") @db.VarChar(100) // 先方色名（B-170）。クライアントが呼ぶ配色名。未登録可・空文字は保存せず null にする
 
   colorId   String? @map("color_id") // B-063: Color マスターの id を緩く保持（FK 制約なし・@relation なし＝純 scalar。markingRecordId/purchaseOrderId と同方式）
   colorHex  String? @map("color_hex") @db.VarChar(7)

@@ -146,6 +146,19 @@ export function ColorwaySection({
                   <TableCell className="font-mono text-sm">{cw.colorwayCode}</TableCell>
                   <TableCell className="text-sm">
                     {cw.colorwayName}
+                    {/* B-170: 先方色名。未登録はひと目で分かるよう amber バッジで示す */}
+                    {cw.clientColorName ? (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        先方: {cw.clientColorName}
+                      </span>
+                    ) : (
+                      <Badge
+                        variant="outline"
+                        className="ml-2 border-amber-400 text-[10px] text-amber-700"
+                      >
+                        先方色名 未登録
+                      </Badge>
+                    )}
                     {cw.patternId &&
                       (() => {
                         const p = patternOptions.find((o) => o.id === cw.patternId)
@@ -265,6 +278,7 @@ function emptyValues(): ProductColorwayFormValues {
   return {
     colorwayCode: "",
     colorwayName: "",
+    clientColorName: "",
     colorHex: "",
     sortOrder: 0,
     status: "ACTIVE",
@@ -287,6 +301,7 @@ function useColorwayForm(
     ? {
         colorwayCode: editing.colorwayCode,
         colorwayName: editing.colorwayName,
+        clientColorName: editing.clientColorName ?? "",
         colorHex: editing.colorHex ?? "",
         sortOrder: editing.sortOrder,
         status: editing.status as ProductColorwayStatusValue,
@@ -375,6 +390,24 @@ function ColorwayCommonFields({
             <FormLabel>カラー名 *</FormLabel>
             <FormControl>
               <Input placeholder="例：ブラック / マリンボーダー" {...field} />
+            </FormControl>
+            <FormMessage />
+          </FormItem>
+        )}
+      />
+
+      {/* B-170: 先方色名（任意）。クライアントが呼ぶ配色名。未登録可 */}
+      <FormField
+        control={form.control}
+        name="clientColorName"
+        render={({ field }) => (
+          <FormItem>
+            <FormLabel>先方色名</FormLabel>
+            <FormControl>
+              <Input
+                placeholder="例：BLACK / BLACK×襟BLUEDENIM（クライアント表記）"
+                {...field}
+              />
             </FormControl>
             <FormMessage />
           </FormItem>
