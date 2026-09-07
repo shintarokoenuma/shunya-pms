@@ -26,6 +26,12 @@ export const productColorwayInputSchema = z.object({
     .trim()
     .min(1, "カラーウェイ名は必須です")
     .max(100, "100文字以内で入力してください"),
+  // B-170: 先方色名（任意メモ・空は action 側で null に正規化）。手本は bom-item-colorway.ts の supplierColorName
+  clientColorName: z
+    .string()
+    .trim()
+    .max(100, "100文字以内で入力してください")
+    .default(""),
   colorHex: z
     .string()
     .trim()
