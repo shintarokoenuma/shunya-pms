@@ -70,7 +70,12 @@ shunya-session-start スキルを発動する。発動せずに指示文を出�
 **`(app)` 配下に auth を強制していないページが無いか**は**確定していない**。
 Claude Code から「93ページ中 auth import なし10・redirect なし10」という報告があったが、
 **その raw 出力が claude.ai 側の会話に届いていないため、数値としては採用しない**（file-write-verification 鉄則4・鉄則8）。
-★次セッションで RECON-F を再実行して確定すること。**import の有無だけでは断定できない**点にも注意（防御が action 層にある可能性・鉄則10-2）。
+★2026-09-08 14:57 に RECON-F の raw 出力が claude.ai 側に届いたため、数値を採用する。
+(app) 配下の page.tsx は **93**。auth を import しないもの **10**（clients / suppliers / brands / factories / contractors の new と [id]/edit）。
+import はあるが redirect が無いもの **10**（同じ5マスターの一覧と [id] 詳細）。
+★散発ではなく **マスター系5画面の一族がまるごと同じ形**である。
+★ただしこれで「無防備」とは断定できない。これらの画面は listClients 等の action を呼び、その action は withTenantContext（内部で auth() を呼び、セッションが無ければ throw）を通る。
+**防御が action 層にある可能性が高い。** B-172 着手時に action 本体まで読んで確定させること（鉄則10-2 / 10-3）。
 
 ## ⑥ 慎太郎さんの実務回答（2026-09-08・メモ受信箱 M-002・b7341f2）
 
