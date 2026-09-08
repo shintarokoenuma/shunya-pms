@@ -85,14 +85,25 @@ trim してから `name || null` で**空文字を null に落としている**�
 
 ### 2-2. migration（1本）
 
+★**このリポジトリでは `prisma migrate dev` を使わない。** dev DB には `_prisma_migrations` が存在しない（`db push` 由来・BACKLOG_EVIDENCE.md:2304「B-097 と同根」）ため、`migrate dev` は schema 全体を未適用と誤認し **DB 全体の reset（dev データ全消失）を要求する**。2026-09-08 に実際に要求され、実行せず停止した（被害ゼロ）。`prisma migrate reset` と `--accept-data-loss` も使わない・提案しない。
+
+**作成手順（この順で）**
+
+1. dev の接続先が hopper.proxy.rlwy.net:12921 であることを確認する（本番 shuttle ではない）
+2. `npx prisma db push` で dev に反映する（ADD COLUMN は非破壊）
+3. `prisma/migrations/20260908000000_b170_product_colorway_client_color_name/migration.sql` を **手書きする**（prisma に生成させない。既存 51 本はすべて手書きで 3〜12行）
+4. `npx prisma migrate diff --from-schema-datasource --to-schema-datamodel --script` の出力と、手書きした SQL が一致することを検証する
+5. 本番は Railway が `start: prisma migrate deploy` で自動適用する（package.json:9）。手で本番に流さない
+
 - 命名は直近の慣習に合わせる（実測: 20260819000000_b167_b168_so_item_yield）
-- 名前: 20260907000000_b170_product_colorway_client_color_name
+- ★本ブリーフ初版は名前を 20260907000000_… と記したが、実装日に合わせ **20260908000000_b170_product_colorway_client_color_name** で作成した（2026-09-08 実測）
 - 期待する SQL は次の1文だけ
 
     ALTER TABLE "product_colorways" ADD COLUMN "client_color_name" VARCHAR(100);
 
-★**停止条件**: 生成された migration の SQL に、上記以外の DDL が1行でも含まれていたら止める。他テーブルへの ALTER や DROP が出るのは schema と DB のドリフトの兆候であり、B-170 とは無関係の変更を巻き込むことになる。
+★**停止条件**: 手書きした migration の SQL、および手順4の `migrate diff` の出力に、上記以外の DDL が1行でも含まれていたら止める。他テーブルへの ALTER や DROP が出るのは schema と DB のドリフトの兆候であり、B-170 とは無関係の変更を巻き込むことになる。
 ★NOT NULL を付けない。DEFAULT を付けない。既存行は null のままでよい。
+★出典: docs/SALES_ORDER_QUANTITY_DESIGN.md:252 ／ docs/BACKLOG_EVIDENCE.md:1529・2304・2307 ／ package.json:9。★BACKLOG_EVIDENCE.md:782・788（B-033 当時）は「今後 migrate dev が素直に使える」と記すが、行番号がより後の 2304・2307 と 2026-09-08 の実測が現況として優先する。
 
 ### 2-3. validator（src/lib/validators/product-colorway.ts）
 
@@ -180,3 +191,4 @@ colorwayName が出てくる箇所と同じ5種類に clientColorName を通す�
 |---|---|---|
 | 2026-09-07 | v0.1 | 初版。v1.0 の確定内容と BLOCK-I のコード実測を根拠に、4層の変更箇所・migration の停止条件・dev 動作確認10項目を具体化 |
 | 2026-09-07 | v0.1（追補） | §5 を確定に格上げ。未入力警告は「一覧で分かる」まで本PR・能動的な警告は B-171 と同時（慎太郎さん確定）。§0 のやらないこと表に1行追加 |
+| 2026-09-08 | v0.2 | ★§2-2 を訂正。migration の作成手順（`db push` → 手書き → `migrate diff` 一致検証 → 本番 `migrate deploy`）を追記し、`prisma migrate dev` を使わない理由を明記。停止条件の「生成された migration」を「手書きした migration」に修正。migration 名を実装した 20260908000000 に合わせた。★初版は migration 運用を実測せずに書いており、実環境で通らない手順だった |
