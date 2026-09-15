@@ -342,20 +342,20 @@ export default async function ProductDetailPage({
         </div>
       </div>
 
-      {/* 3カラムグリッド（D-12・モック .onescreen: 216px / 1fr / 1.05fr。狭幅では1カラム） */}
-      <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[216px_minmax(0,1fr)_minmax(0,1.05fr)]">
-        {/* 左カラム: ② 絵型（B-027） */}
-        <div className="flex min-w-0 flex-col gap-3">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">絵型</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SketchSection productId={item.id} sketches={sketches} />
-            </CardContent>
-          </Card>
-        </div>
+      {/* ② 絵型（B-027）― ヘッダ直下の横スクロール帯。
+          ★addendum v0.3 D-12（左カラム固定幅）からの暫定変更: 既存の絵型セクションは複数枚サムネ＋操作ボタンの構成で
+            細い左カラムに収まらないため、PR-2（1枚＝1タブ・caption 入力）までは帯で置く。3カラム→2カラム（中／右）に畳む */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">絵型</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SketchSection productId={item.id} sketches={sketches} />
+        </CardContent>
+      </Card>
 
+      {/* 2カラムグリッド（暫定・モック .onescreen の 中 1fr / 右 1.05fr。狭幅では1カラム） */}
+      <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
         {/* 中カラム: ③ 品番・分類 ／ ④ 縫製指示 */}
         <div className="flex min-w-0 flex-col gap-3">
           <Card>

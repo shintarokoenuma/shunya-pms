@@ -154,14 +154,16 @@ export function SketchSection({
           画像をここにドラッグ&ドロップ、または「絵型を追加」からアップロードしてください。
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+        <div className="flex gap-3 overflow-x-auto pb-1">
+          {/* B-202 PR-1r: ヘッダ直下の横スクロール帯（高さ固定）。PR-2 のタブ化までの暫定。
+              並び順・追加・削除・前後入替のロジックは無変更（コンテナの className のみ） */}
           {sketches.map((s, i) => (
-            <div key={s.gcsPath} className="rounded-md border p-2">
+            <div key={s.gcsPath} className="w-52 shrink-0 rounded-md border p-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={s.url}
                 alt={s.caption ?? `絵型 ${i + 1}`}
-                className="h-40 w-full rounded object-contain"
+                className="h-60 w-full rounded object-contain"
               />
               {s.caption && (
                 <div className="mt-1 truncate text-xs text-muted-foreground">
