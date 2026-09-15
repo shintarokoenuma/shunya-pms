@@ -48,6 +48,7 @@ import {
   listActiveProcessingTypesForSelect,
 } from "@/lib/actions/progress-tasks"
 import { ProductionProgressChecklist } from "../_components/production-progress-checklist"
+import { ProductionProgressChips } from "../_components/production-progress-chips"
 import { RoughEstimateSection } from "../_components/rough-estimate-section"
 import {
   listRoughEstimatesByProduct,
@@ -479,57 +480,19 @@ export default async function ProductDetailPage({
             categoryId={item.category?.id ?? null}
           />
 
-          {/* ⑥ 進行（B-101・上段: 量産進行チェックリスト / 下段: ステータス履歴）
-              状態の描き分け（Badge / Select）は production-progress-checklist.tsx のまま・不変 */}
+          {/* ⑥ 進行 ― 要約チップ（モック案C .tasks・★直列に並べない＝v1.0 D-4）。
+              編集（量産進行チェックリスト）とステータス履歴は共有パネル「進行（編集）」へ移設（既存 JSX を無改変で移動） */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">進行</CardTitle>
+              <CardTitle className="text-base">
+                進行
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  — 直列に並べない（並行・前後あり）
+                </span>
+              </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div>
-                <h3 className="mb-2 text-sm font-medium">量産進行</h3>
-                <ProductionProgressChecklist
-                  productId={item.id}
-                  tasks={productionTasks}
-                  processingOptions={processingOptions}
-                />
-              </div>
-              <div>
-                <h3 className="mb-2 text-sm font-medium">ステータス履歴</h3>
-                {item.statusHistory.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">履歴がありません</p>
-                ) : (
-                  <ul className="space-y-2 text-sm">
-                    {item.statusHistory.map((h) => (
-                      <li
-                        key={h.id}
-                        className="flex flex-wrap items-center gap-2 border-b pb-2 last:border-b-0 last:pb-0"
-                      >
-                        <span className="text-muted-foreground">
-                          {new Date(h.changedAt).toLocaleString("ja-JP")}
-                        </span>
-                        <span>
-                          {h.fromStatus
-                            ? PRODUCT_STATUS_LABELS[h.fromStatus]
-                            : "（新規）"}
-                          {" → "}
-                          <Badge
-                            variant={PRODUCT_STATUS_BADGE_VARIANT[h.toStatus]}
-                            className="ml-1"
-                          >
-                            {PRODUCT_STATUS_LABELS[h.toStatus]}
-                          </Badge>
-                        </span>
-                        {h.changeReason && (
-                          <span className="text-muted-foreground">
-                            （{h.changeReason}）
-                          </span>
-                        )}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+            <CardContent>
+              <ProductionProgressChips tasks={productionTasks} />
             </CardContent>
           </Card>
 
@@ -540,6 +503,59 @@ export default async function ProductDetailPage({
       {/* ボタンバー＋共有パネル1枚（D-2r / Q5r）。6グループは D-13 のとおり */}
       <KarteDrawerBar
         groups={[
+          {
+            id: "prog",
+            title: "進行（編集）",
+            hint: "チェックリスト／履歴",
+            children: (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="mb-2 text-sm font-medium">量産進行</h3>
+                  <ProductionProgressChecklist
+                    productId={item.id}
+                    tasks={productionTasks}
+                    processingOptions={processingOptions}
+                  />
+                </div>
+                <div>
+                  <h3 className="mb-2 text-sm font-medium">ステータス履歴</h3>
+                  {item.statusHistory.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">履歴がありません</p>
+                  ) : (
+                    <ul className="space-y-2 text-sm">
+                      {item.statusHistory.map((h) => (
+                        <li
+                          key={h.id}
+                          className="flex flex-wrap items-center gap-2 border-b pb-2 last:border-b-0 last:pb-0"
+                        >
+                          <span className="text-muted-foreground">
+                            {new Date(h.changedAt).toLocaleString("ja-JP")}
+                          </span>
+                          <span>
+                            {h.fromStatus
+                              ? PRODUCT_STATUS_LABELS[h.fromStatus]
+                              : "（新規）"}
+                            {" → "}
+                            <Badge
+                              variant={PRODUCT_STATUS_BADGE_VARIANT[h.toStatus]}
+                              className="ml-1"
+                            >
+                              {PRODUCT_STATUS_LABELS[h.toStatus]}
+                            </Badge>
+                          </span>
+                          {h.changeReason && (
+                            <span className="text-muted-foreground">
+                              （{h.changeReason}）
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            ),
+          },
           {
             id: "bom",
             title: "資材表 BOM",

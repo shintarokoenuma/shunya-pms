@@ -104,8 +104,12 @@ export function SketchSection({
       />
 
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
-          PNG / JPEG / WebP・1枚5MBまで・最大{MAX_COUNT}枚（{sketches.length}/{MAX_COUNT}）
+        {/* B-202 PR-1r: 1画面の左カラム（216px）に収めるため形式説明は title に逃がし、枚数だけ出す */}
+        <p
+          className="truncate text-xs text-muted-foreground"
+          title={`PNG / JPEG / WebP・1枚5MBまで・最大${MAX_COUNT}枚`}
+        >
+          {sketches.length}/{MAX_COUNT} 枚
         </p>
         <Button
           size="sm"
