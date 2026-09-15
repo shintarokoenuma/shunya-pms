@@ -26,7 +26,6 @@ import { listActiveTextilePatterns } from "@/lib/actions/textile-patterns"
 import { getProductSketchUrls } from "@/lib/actions/product-sketches"
 import { SketchSection } from "../_components/sketch-section"
 import { KarteDrawerBar } from "../_components/karte-drawer"
-import { listAssignableUsers } from "@/lib/actions/clients"
 import { listColorwaysByBomItems } from "@/lib/actions/bom-item-colorways"
 import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
 import { ColorQuantitySection } from "../_components/color-quantity-section"
@@ -256,11 +255,8 @@ export default async function ProductDetailPage({
   ]
 
   // B-202 PR-1r（Q6r・慎太郎さん決定 2026-09-15）: 担当者はヘッダ右端に出す。
-  //   Product に User へのリレーションは無いため、new / edit ページと同じ listAssignableUsers()
-  //   （tenant スコープ済み・{id, name}）で assignedToUserId を名前に引く。
-  const assignableUsers = item.assignedToUserId ? await listAssignableUsers() : []
-  const assigneeName =
-    assignableUsers.find((u) => u.id === item.assignedToUserId)?.name ?? null
+  //   名前解決は getProduct 側（ProductDetail.assignedTo・manual join）に寄せた。
+  const assigneeName = item.assignedTo?.name ?? null
 
   return (
     <div className="space-y-4 p-6">
@@ -389,6 +385,24 @@ export default async function ProductDetailPage({
                         {item.category.categoryCode}
                       </span>
                       {item.category.categoryName}
+                    </span>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
+              {/* モック案C の「型番」。getProduct の manual join（ProductDetail.modelCode）から */}
+              <DetailRow
+                label="型番"
+                value={
+                  item.modelCode ? (
+                    <span>
+                      <span className="font-mono">{item.modelCode.modelCode}</span>
+                      {item.modelCode.modelName && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          {item.modelCode.modelName}
+                        </span>
+                      )}
                     </span>
                   ) : (
                     "—"
