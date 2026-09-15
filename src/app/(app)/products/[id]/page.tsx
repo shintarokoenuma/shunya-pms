@@ -26,6 +26,7 @@ import { listActiveTextilePatterns } from "@/lib/actions/textile-patterns"
 import { getProductSketchUrls } from "@/lib/actions/product-sketches"
 import { SketchSection } from "../_components/sketch-section"
 import { KarteDrawerBar } from "../_components/karte-drawer"
+import { listAssignableUsers } from "@/lib/actions/clients"
 import { listColorwaysByBomItems } from "@/lib/actions/bom-item-colorways"
 import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
 import { ColorQuantitySection } from "../_components/color-quantity-section"
@@ -254,6 +255,13 @@ export default async function ProductDetailPage({
     ),
   ]
 
+  // B-202 PR-1r（Q6r・慎太郎さん決定 2026-09-15）: 担当者はヘッダ右端に出す。
+  //   Product に User へのリレーションは無いため、new / edit ページと同じ listAssignableUsers()
+  //   （tenant スコープ済み・{id, name}）で assignedToUserId を名前に引く。
+  const assignableUsers = item.assignedToUserId ? await listAssignableUsers() : []
+  const assigneeName =
+    assignableUsers.find((u) => u.id === item.assignedToUserId)?.name ?? null
+
   return (
     <div className="space-y-4 p-6">
       <EntityBreadcrumb
@@ -317,6 +325,7 @@ export default async function ProductDetailPage({
                     : "—"
                 }
               />
+              <HeaderStat label="担当者" value={assigneeName ?? "—"} />
             </dl>
           </div>
           <div className="flex flex-wrap items-center gap-2">
