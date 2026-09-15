@@ -6,6 +6,14 @@ import { toast } from "sonner"
 import { Loader2, ImagePlus, Trash2, ArrowLeft, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
   addProductSketch,
   deleteProductSketch,
   reorderProductSketches,
@@ -104,8 +112,12 @@ export function SketchSection({
       />
 
       <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">
-          PNG / JPEG / WebP・1枚5MBまで・最大{MAX_COUNT}枚（{sketches.length}/{MAX_COUNT}）
+        {/* B-202 PR-1r: 1画面の左カラム（216px）に収めるため形式説明は title に逃がし、枚数だけ出す */}
+        <p
+          className="truncate text-xs text-muted-foreground"
+          title={`PNG / JPEG / WebP・1枚5MBまで・最大${MAX_COUNT}枚`}
+        >
+          {sketches.length}/{MAX_COUNT} 枚
         </p>
         <Button
           size="sm"
@@ -150,15 +162,43 @@ export function SketchSection({
           画像をここにドラッグ&ドロップ、または「絵型を追加」からアップロードしてください。
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+        <div className="flex gap-3 overflow-x-auto pb-1">
+          {/* B-202 PR-1r: ヘッダ直下の横スクロール帯（高さ固定）。PR-2 のタブ化までの暫定。
+              並び順・追加・削除・前後入替のロジックは無変更（コンテナの className のみ） */}
           {sketches.map((s, i) => (
-            <div key={s.gcsPath} className="rounded-md border p-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={s.url}
-                alt={s.caption ?? `絵型 ${i + 1}`}
-                className="h-40 w-full rounded object-contain"
-              />
+            <div key={s.gcsPath} className="w-52 shrink-0 rounded-md border p-2">
+              {/* B-202 PR-1r: 「クリックで拡大」（モック sketchbox の文言）。帯はサムネ（thumbUrl）・
+                  拡大は原本（url）＝addendum v0.1 Q10。表示のみ・action なし・非制御 Dialog（開閉 state を持たない） */}
+              <Dialog>
+                <DialogTrigger asChild>
+                  <button
+                    type="button"
+                    title="クリックで拡大"
+                    className="block w-full rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={s.thumbUrl}
+                      alt={s.caption ?? `絵型 ${i + 1}`}
+                      className="h-60 w-full rounded object-contain"
+                    />
+                  </button>
+                </DialogTrigger>
+                <DialogContent className="max-w-[90vw] sm:max-w-3xl">
+                  <DialogHeader>
+                    <DialogTitle>{s.caption ?? `絵型 ${i + 1}`}</DialogTitle>
+                    <DialogDescription className="sr-only">
+                      絵型の原本を表示しています
+                    </DialogDescription>
+                  </DialogHeader>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={s.url}
+                    alt={s.caption ?? `絵型 ${i + 1}`}
+                    className="max-h-[80vh] w-full rounded object-contain"
+                  />
+                </DialogContent>
+              </Dialog>
               {s.caption && (
                 <div className="mt-1 truncate text-xs text-muted-foreground">
                   {s.caption}

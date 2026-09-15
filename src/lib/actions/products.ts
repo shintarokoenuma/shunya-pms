@@ -86,6 +86,20 @@ export type CategorySummary = {
   level: number
 }
 
+// B-202 PR-1r: 品番カルテ詳細の「型番」（Product.modelCodeId は FK 列のみで relation 宣言が無い）
+export type ModelCodeSummary = {
+  id: string
+  modelCode: string
+  modelName: string
+}
+
+// B-202 PR-1r: 品番カルテ詳細の「担当者」（Product.assignedToUserId は FK 列のみ）。
+//   name の合成は listAssignableUsers()（clients.ts）と同じ式。
+export type UserSummary = {
+  id: string
+  name: string
+}
+
 async function fetchBrandSummariesByIds(
   companyId: string,
   brandIds: string[],
@@ -133,6 +147,47 @@ async function fetchCategorySummariesByIds(
         categoryName: r.categoryName,
         level: r.level,
       } satisfies CategorySummary,
+    ]),
+  )
+}
+
+async function fetchModelCodeSummariesByIds(
+  companyId: string,
+  modelCodeIds: string[],
+): Promise<Map<string, ModelCodeSummary>> {
+  if (modelCodeIds.length === 0) return new Map()
+  const rows = await prisma.modelCode.findMany({
+    where: { id: { in: modelCodeIds }, companyId },
+    select: { id: true, modelCode: true, modelName: true },
+  })
+  return new Map(
+    rows.map((r) => [
+      r.id,
+      {
+        id: r.id,
+        modelCode: r.modelCode,
+        modelName: r.modelName,
+      } satisfies ModelCodeSummary,
+    ]),
+  )
+}
+
+async function fetchUserSummariesByIds(
+  companyId: string,
+  userIds: string[],
+): Promise<Map<string, UserSummary>> {
+  if (userIds.length === 0) return new Map()
+  const rows = await prisma.user.findMany({
+    where: { id: { in: userIds }, companyId },
+    select: { id: true, displayName: true, lastName: true, firstName: true },
+  })
+  return new Map(
+    rows.map((r) => [
+      r.id,
+      {
+        id: r.id,
+        name: r.displayName ?? `${r.lastName} ${r.firstName}`,
+      } satisfies UserSummary,
     ]),
   )
 }
@@ -434,6 +489,8 @@ export type ProductStatusHistoryItem = {
 export type ProductDetail = Product & {
   brand: BrandSummary | null
   category: CategorySummary | null
+  modelCode: ModelCodeSummary | null // B-202 PR-1r: 型番
+  assignedTo: UserSummary | null // B-202 PR-1r: 担当者（名前解決済み）
   statusHistory: ProductStatusHistoryItem[]
 }
 
@@ -465,11 +522,16 @@ export async function getProduct(
     }
 
     const { statusHistory, ...product } = row
-    const [brandMap, categoryMap] = await Promise.all([
+    // B-202 PR-1r: 型番・担当者も同じ manual join で解決（modelCodeId は NOT NULL・assignedToUserId は null 可）
+    const [brandMap, categoryMap, modelCodeMap, userMap] = await Promise.all([
       fetchBrandSummariesByIds(sess.companyId, [row.brandId]),
       row.categoryId
         ? fetchCategorySummariesByIds(sess.companyId, [row.categoryId])
         : Promise.resolve(new Map<string, CategorySummary>()),
+      fetchModelCodeSummariesByIds(sess.companyId, [row.modelCodeId]),
+      row.assignedToUserId
+        ? fetchUserSummariesByIds(sess.companyId, [row.assignedToUserId])
+        : Promise.resolve(new Map<string, UserSummary>()),
     ])
 
     return {
@@ -479,6 +541,10 @@ export async function getProduct(
         brand: brandMap.get(row.brandId) ?? null,
         category: row.categoryId
           ? categoryMap.get(row.categoryId) ?? null
+          : null,
+        modelCode: modelCodeMap.get(row.modelCodeId) ?? null,
+        assignedTo: row.assignedToUserId
+          ? userMap.get(row.assignedToUserId) ?? null
           : null,
         statusHistory,
       },

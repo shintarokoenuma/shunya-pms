@@ -25,6 +25,7 @@ import { listActiveColorsForPicker } from "@/lib/actions/colors"
 import { listActiveTextilePatterns } from "@/lib/actions/textile-patterns"
 import { getProductSketchUrls } from "@/lib/actions/product-sketches"
 import { SketchSection } from "../_components/sketch-section"
+import { KarteDrawerBar } from "../_components/karte-drawer"
 import { listColorwaysByBomItems } from "@/lib/actions/bom-item-colorways"
 import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
 import { ColorQuantitySection } from "../_components/color-quantity-section"
@@ -47,6 +48,7 @@ import {
   listActiveProcessingTypesForSelect,
 } from "@/lib/actions/progress-tasks"
 import { ProductionProgressChecklist } from "../_components/production-progress-checklist"
+import { ProductionProgressChips } from "../_components/production-progress-chips"
 import { RoughEstimateSection } from "../_components/rough-estimate-section"
 import {
   listRoughEstimatesByProduct,
@@ -241,15 +243,38 @@ export default async function ProductDetailPage({
     ? productionTasksResult.data.items
     : []
 
+  // B-202 PR-1r: 品番・分類に出す「工場」は、この品番に紐づく量産の作業発注（WO・PRODUCTION）の発注先から導出する。
+  //   Product に工場列は無い（R-6-1）。productOrders は既に取得済みなので新規クエリは足さない（R-6-10）。
+  //   PATTERN / GRADING の WO は外注パタンナー（contractor）なので対象外。
+  const productionFactoryNames = [
+    ...new Set(
+      productOrders
+        .filter((r) => r.kind === "WO" && r.workCategory === "PRODUCTION")
+        .map((r) => r.counterpartyName)
+        .filter((n) => n !== "—"),
+    ),
+  ]
+
+  // B-202 PR-1r（Q6r・慎太郎さん決定 2026-09-15）: 担当者はヘッダ右端に出す。
+  //   名前解決は getProduct 側（ProductDetail.assignedTo・manual join）に寄せた。
+  const assigneeName = item.assignedTo?.name ?? null
+
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-6">
       <EntityBreadcrumb
         segments={[
           { label: "品番カルテ", href: "/products" },
           { label: primary },
         ]}
       />
-      {/* ヘッダー */}
+
+      {/* B-202 PR-1r: 1画面（ヘッダ＋3カラム）＋ 横1列のボタンバー＋共有パネル1枚。
+          一次資料: モック「品番カルテ 3案」案C（addendum v0.3 §0 の URL）
+          仕様: addendum v0.3 D-2r / D-12 / D-13 / D-14 ＋ v1.0 D-2 の7面
+          ★本 PR は移設と並べ替えのみ。各 Section コンポーネントの中身は変えていない。 */}
+
+      {/* ① ヘッダ（モック .viewhead: 品番・先方品番・状態 ＋ 右端に シーズン／クライアント／数量／納期）
+          旧「シーズン」「数量・納期」Card と、旧「基本情報」のクライアント・状態をここに吸収（D-14） */}
       <div className="space-y-2">
         <Button asChild variant="ghost" size="sm" className="-ml-2">
           <Link href="/products">
@@ -257,30 +282,48 @@ export default async function ProductDetailPage({
             一覧に戻る
           </Link>
         </Button>
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-semibold tracking-tight">
                 {item.productName}
               </h1>
+              <span className="font-mono text-sm text-muted-foreground">
+                {primary}
+              </span>
+              {secondary && (
+                <Badge variant="outline" className="font-mono text-xs">
+                  {clientPrimary ? "社内" : "先方"}: {secondary}
+                </Badge>
+              )}
               <Badge variant={PRODUCT_STATUS_BADGE_VARIANT[item.status]}>
                 {PRODUCT_STATUS_LABELS[item.status]}
               </Badge>
             </div>
-            <div className="mt-1 flex items-center gap-3 text-sm text-muted-foreground">
-              <span className="font-mono">{primary}</span>
-              {secondary && (
-                <>
-                  <span>·</span>
-                  <span className="font-mono">社内: {secondary}</span>
-                </>
-              )}
-              {clientPrimary && (
-                <Badge variant="outline" className="text-xs">
-                  先方品番
-                </Badge>
-              )}
-            </div>
+            <dl className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
+              <HeaderStat label="シーズン" value={`${item.season}（${item.year}）`} />
+              <HeaderStat
+                label="クライアント"
+                value={item.brand?.client?.companyName ?? "—"}
+              />
+              <HeaderStat
+                label="想定数量"
+                value={
+                  item.expectedQuantity != null
+                    ? `${item.expectedQuantity.toLocaleString("ja-JP")} 点`
+                    : "—"
+                }
+              />
+              <HeaderStat
+                label="希望納期"
+                value={
+                  item.desiredDeliveryDate
+                    ? new Date(item.desiredDeliveryDate).toLocaleDateString("ja-JP")
+                    : "—"
+                }
+              />
+              <HeaderStat label="担当者" value={assigneeName ?? "—"} />
+            </dl>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
@@ -299,217 +342,9 @@ export default async function ProductDetailPage({
         </div>
       </div>
 
-      {/* ①進行（B-101・上段: 量産進行チェックリスト / 下段: ステータス履歴） */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">進行</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* 上段: 量産進行チェックリスト */}
-          <div>
-            <h3 className="mb-2 text-sm font-medium">量産進行</h3>
-            <ProductionProgressChecklist
-              productId={item.id}
-              tasks={productionTasks}
-              processingOptions={processingOptions}
-            />
-          </div>
-          {/* 下段: ステータス履歴（既存 JSX をそのまま移設・read-only） */}
-          <div>
-            <h3 className="mb-2 text-sm font-medium">ステータス履歴</h3>
-            {item.statusHistory.length === 0 ? (
-              <p className="text-sm text-muted-foreground">履歴がありません</p>
-            ) : (
-              <ul className="space-y-2 text-sm">
-                {item.statusHistory.map((h) => (
-                  <li
-                    key={h.id}
-                    className="flex flex-wrap items-center gap-2 border-b pb-2 last:border-b-0 last:pb-0"
-                  >
-                    <span className="text-muted-foreground">
-                      {new Date(h.changedAt).toLocaleString("ja-JP")}
-                    </span>
-                    <span>
-                      {h.fromStatus
-                        ? PRODUCT_STATUS_LABELS[h.fromStatus]
-                        : "（新規）"}
-                      {" → "}
-                      <Badge
-                        variant={PRODUCT_STATUS_BADGE_VARIANT[h.toStatus]}
-                        className="ml-1"
-                      >
-                        {PRODUCT_STATUS_LABELS[h.toStatus]}
-                      </Badge>
-                    </span>
-                    {h.changeReason && (
-                      <span className="text-muted-foreground">
-                        （{h.changeReason}）
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* ②サンプル製作ラウンド（SampleProduction・1st/2nd/3rd）。
-          量産に「ラウンド」概念は無い（追加生産は ProductRepetitionLineage で
-          別 Product として派生する設計）ため、本セクションはサンプル専用・S-2 */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">サンプル製作ラウンド</CardTitle>
-            <Button asChild size="sm">
-              <Link href={`/samples/new?productId=${item.id}`}>
-                <Plus className="mr-1 h-4 w-4" />
-                ラウンド追加
-              </Link>
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <SampleProductionsTable
-            items={samples}
-            showProduct={false}
-            showEstimateBaseControl
-          />
-        </CardContent>
-      </Card>
-
-      {/* ③④基本情報 + 品番・分類 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">基本情報</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DetailRow label="品名" value={item.productName} />
-            <DetailRow label="品名（英語）" value={item.productNameEn ?? "—"} />
-            <DetailRow label="シルエット" value={item.silhouette ?? "—"} />
-            <DetailRow
-              label="説明"
-              value={
-                item.description ? (
-                  <p className="whitespace-pre-wrap">{item.description}</p>
-                ) : (
-                  "—"
-                )
-              }
-            />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">品番・分類</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DetailRow
-              label="社内品番"
-              value={<span className="font-mono">{item.productCode}</span>}
-            />
-            <DetailRow
-              label="先方品番"
-              value={
-                item.clientProductCode ? (
-                  <span className="font-mono">{item.clientProductCode}</span>
-                ) : (
-                  "—"
-                )
-              }
-            />
-            <DetailRow
-              label="ブランド"
-              value={
-                item.brand ? (
-                  <span>
-                    <span className="font-mono text-xs text-muted-foreground mr-1">
-                      {item.brand.brandCode}
-                    </span>
-                    {item.brand.brandName}
-                  </span>
-                ) : (
-                  "—"
-                )
-              }
-            />
-            <DetailRow
-              label="クライアント"
-              value={
-                item.brand?.client ? (
-                  <Link
-                    href={`/clients/${item.brand.client.id}`}
-                    className="inline-flex items-center gap-1 hover:underline"
-                  >
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {item.brand.client.clientCode}
-                    </span>
-                    <span>{item.brand.client.companyName}</span>
-                  </Link>
-                ) : (
-                  "—"
-                )
-              }
-            />
-            <DetailRow
-              label="商品カテゴリ"
-              value={
-                item.category ? (
-                  <span>
-                    <span className="font-mono text-xs text-muted-foreground mr-1">
-                      {item.category.categoryCode}
-                    </span>
-                    {item.category.categoryName}
-                  </span>
-                ) : (
-                  "—"
-                )
-              }
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* シーズン + 数量・納期 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">シーズン</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DetailRow label="シーズン" value={item.season} />
-            <DetailRow label="年度" value={String(item.year)} />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">数量・納期</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <DetailRow
-              label="想定数量"
-              value={
-                item.expectedQuantity != null
-                  ? `${item.expectedQuantity.toLocaleString("ja-JP")} 点`
-                  : "—"
-              }
-            />
-            <DetailRow
-              label="希望納期"
-              value={
-                item.desiredDeliveryDate
-                  ? new Date(item.desiredDeliveryDate).toLocaleDateString("ja-JP")
-                  : "—"
-              }
-            />
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* 絵型（服のスケッチ・B-027） */}
+      {/* ② 絵型（B-027）― ヘッダ直下の横スクロール帯。
+          ★addendum v0.3 D-12（左カラム固定幅）からの暫定変更: 既存の絵型セクションは複数枚サムネ＋操作ボタンの構成で
+            細い左カラムに収まらないため、PR-2（1枚＝1タブ・caption 入力）までは帯で置く。3カラム→2カラム（中／右）に畳む */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">絵型</CardTitle>
@@ -519,144 +354,384 @@ export default async function ProductDetailPage({
         </CardContent>
       </Card>
 
-      {/* ⑧カラー×数量（B-062β カラー展開＋B-064 数量マトリクスを1ボックスに統合） */}
-      <ColorQuantitySection
-        productId={item.id}
-        colorways={colorways}
-        colorOptions={colorOptions}
-        patternOptions={patternOptions}
-        skus={skus}
-        defaultSizeOptions={defaultSizeOptions}
-        categoryId={item.category?.id ?? null}
+      {/* 2カラムグリッド（暫定・モック .onescreen の 中 1fr / 右 1.05fr。狭幅では1カラム） */}
+      <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+        {/* 中カラム: ③ 品番・分類 ／ ④ 縫製指示 */}
+        <div className="flex min-w-0 flex-col gap-3">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">品番・分類</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <DetailRow
+                label="先方品番"
+                value={
+                  item.clientProductCode ? (
+                    <span className="font-mono">{item.clientProductCode}</span>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
+              <DetailRow
+                label="社内品番"
+                value={<span className="font-mono">{item.productCode}</span>}
+              />
+              <DetailRow
+                label="商品カテゴリ"
+                value={
+                  item.category ? (
+                    <span>
+                      <span className="font-mono text-xs text-muted-foreground mr-1">
+                        {item.category.categoryCode}
+                      </span>
+                      {item.category.categoryName}
+                    </span>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
+              {/* モック案C の「型番」。getProduct の manual join（ProductDetail.modelCode）から */}
+              <DetailRow
+                label="型番"
+                value={
+                  item.modelCode ? (
+                    <span>
+                      <span className="font-mono">{item.modelCode.modelCode}</span>
+                      {item.modelCode.modelName && (
+                        <span className="ml-1 text-xs text-muted-foreground">
+                          {item.modelCode.modelName}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
+              <DetailRow
+                label="ブランド"
+                value={
+                  item.brand ? (
+                    <span>
+                      <span className="font-mono text-xs text-muted-foreground mr-1">
+                        {item.brand.brandCode}
+                      </span>
+                      {item.brand.brandName}
+                    </span>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
+              <DetailRow
+                label="クライアント"
+                value={
+                  item.brand?.client ? (
+                    <Link
+                      href={`/clients/${item.brand.client.id}`}
+                      className="inline-flex items-center gap-1 hover:underline"
+                    >
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {item.brand.client.clientCode}
+                      </span>
+                      <span>{item.brand.client.companyName}</span>
+                    </Link>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
+              {/* D-14: 工場は量産 WO の発注先から導出（読み取り表示のみ） */}
+              <DetailRow
+                label="工場"
+                value={
+                  productionFactoryNames.length > 0
+                    ? productionFactoryNames.join("／")
+                    : "—"
+                }
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">縫製指示</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <SewingInstructionSection
+                productId={item.id}
+                value={parseSewingInstruction(item.sewingInstructions)}
+              />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 右カラム: ⑤ SKU 数量（色×サイズ） ／ ⑥ 進行 ／ ⑦ メモ */}
+        <div className="flex min-w-0 flex-col gap-3">
+          <ColorQuantitySection
+            productId={item.id}
+            colorways={colorways}
+            colorOptions={colorOptions}
+            patternOptions={patternOptions}
+            skus={skus}
+            defaultSizeOptions={defaultSizeOptions}
+            categoryId={item.category?.id ?? null}
+          />
+
+          {/* ⑥ 進行 ― 要約チップ（モック案C .tasks・★直列に並べない＝v1.0 D-4）。
+              編集（量産進行チェックリスト）とステータス履歴は共有パネル「進行（編集）」へ移設（既存 JSX を無改変で移動） */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">
+                進行
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  — 直列に並べない（並行・前後あり）
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ProductionProgressChips tasks={productionTasks} />
+            </CardContent>
+          </Card>
+
+          {/* ⑦ メモ（進行の直下）― B-202 PR-3 で Comment を配線する。本 PR では場所のみ確保 */}
+        </div>
+      </div>
+
+      {/* ボタンバー＋共有パネル1枚（D-2r / Q5r）。6グループは D-13 のとおり */}
+      <KarteDrawerBar
+        groups={[
+          {
+            id: "prog",
+            title: "進行（編集）",
+            hint: "チェックリスト／履歴",
+            children: (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="mb-2 text-sm font-medium">量産進行</h3>
+                  <ProductionProgressChecklist
+                    productId={item.id}
+                    tasks={productionTasks}
+                    processingOptions={processingOptions}
+                  />
+                </div>
+                <div>
+                  <h3 className="mb-2 text-sm font-medium">ステータス履歴</h3>
+                  {item.statusHistory.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">履歴がありません</p>
+                  ) : (
+                    <ul className="space-y-2 text-sm">
+                      {item.statusHistory.map((h) => (
+                        <li
+                          key={h.id}
+                          className="flex flex-wrap items-center gap-2 border-b pb-2 last:border-b-0 last:pb-0"
+                        >
+                          <span className="text-muted-foreground">
+                            {new Date(h.changedAt).toLocaleString("ja-JP")}
+                          </span>
+                          <span>
+                            {h.fromStatus
+                              ? PRODUCT_STATUS_LABELS[h.fromStatus]
+                              : "（新規）"}
+                            {" → "}
+                            <Badge
+                              variant={PRODUCT_STATUS_BADGE_VARIANT[h.toStatus]}
+                              className="ml-1"
+                            >
+                              {PRODUCT_STATUS_LABELS[h.toStatus]}
+                            </Badge>
+                          </span>
+                          {h.changeReason && (
+                            <span className="text-muted-foreground">
+                              （{h.changeReason}）
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "bom",
+            title: "資材表 BOM",
+            children: (
+              <BomSection
+                productId={item.id}
+                bomId={bom?.id ?? null}
+                items={bomItems}
+                materials={bomMaterials}
+                suppliers={bomSuppliers}
+                markings={bomMarkings}
+                colorwayColumns={colorways.filter((c) => c.status === "ACTIVE")}
+              />
+            ),
+          },
+          {
+            id: "est",
+            title: "見積・原価",
+            hint: "概算／量産見積／原価",
+            children: (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">概算量産見積（提示価格）</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <RoughEstimateSection
+                      productId={item.id}
+                      rows={roughEstimateRows}
+                      brandDefaultMarginRate={brandDefaultMarginRate}
+                      materials={qeMaterials}
+                      costCategories={qeCostCategories}
+                      suppliers={qeSuppliers}
+                    />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">量産見積（提示1枚単価）</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ProductionEstimateSection
+                      productId={item.id}
+                      rows={productionEstimateSection.rows}
+                      hasBaseSample={productionEstimateSection.hasBaseSample}
+                    />
+                  </CardContent>
+                </Card>
+                <ProductionCostSection
+                  skus={skus}
+                  materials={productionCostInputs.materials}
+                  labor={productionCostInputs.labor}
+                />
+              </div>
+            ),
+          },
+          {
+            id: "ord",
+            title: "受注・発注",
+            // ★発注生成後の着地先 `/products/[id]#orders` はこのグループを開く
+            hashTargets: ["orders"],
+            children: (
+              <div className="space-y-4">
+                {salesOrderSection.ok && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-base">受注</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <SalesOrderSection section={salesOrderSection.data} />
+                    </CardContent>
+                  </Card>
+                )}
+                <ProductOrdersSection rows={productOrders} />
+              </div>
+            ),
+          },
+          {
+            id: "docs",
+            title: "関連書類",
+            children: (
+              <p className="text-sm text-muted-foreground">
+                関連書類（輸出インボイス・パッキングリスト・原産地証明 ほか）の紐付け一覧は
+                B-110 で実装します（B-202 v1.0 D-5）。
+              </p>
+            ),
+          },
+          {
+            id: "mark",
+            title: "マーキング・所要量",
+            children: (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">マーキング実測</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <MarkingSection
+                      productId={item.id}
+                      items={markingViews}
+                      materials={bomMaterials}
+                    />
+                  </CardContent>
+                </Card>
+                <MaterialRequirementSection skus={skus} items={materialReqItems} />
+              </div>
+            ),
+          },
+          {
+            id: "meta",
+            title: "サンプル・メタ",
+            children: (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base">サンプル製作ラウンド</CardTitle>
+                      <Button asChild size="sm">
+                        <Link href={`/samples/new?productId=${item.id}`}>
+                          <Plus className="mr-1 h-4 w-4" />
+                          ラウンド追加
+                        </Link>
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <SampleProductionsTable
+                      items={samples}
+                      showProduct={false}
+                      showEstimateBaseControl
+                    />
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">メタ情報</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {/* 旧「基本情報」のうちヘッダ・品番分類に吸収しなかった3項目（情報を落とさないためここに置く） */}
+                    <DetailRow label="品名（英語）" value={item.productNameEn ?? "—"} />
+                    <DetailRow label="シルエット" value={item.silhouette ?? "—"} />
+                    <DetailRow
+                      label="説明"
+                      value={
+                        item.description ? (
+                          <p className="whitespace-pre-wrap">{item.description}</p>
+                        ) : (
+                          "—"
+                        )
+                      }
+                    />
+                    <DetailRow
+                      label="社内メモ"
+                      value={
+                        item.internalNotes ? (
+                          <p className="whitespace-pre-wrap">{item.internalNotes}</p>
+                        ) : (
+                          "—"
+                        )
+                      }
+                    />
+                    <DetailRow
+                      label="作成日時"
+                      value={new Date(item.createdAt).toLocaleString("ja-JP")}
+                    />
+                    <DetailRow
+                      label="最終更新"
+                      value={new Date(item.updatedAt).toLocaleString("ja-JP")}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
+            ),
+          },
+        ]}
       />
-
-      {/* 受注（SO・B-148・集約表示） */}
-      {salesOrderSection.ok && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">受注</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <SalesOrderSection section={salesOrderSection.data} />
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 資材表（BOM・QE-0b） */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">資材表（BOM）</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <BomSection
-            productId={item.id}
-            bomId={bom?.id ?? null}
-            items={bomItems}
-            materials={bomMaterials}
-            suppliers={bomSuppliers}
-            markings={bomMarkings}
-            colorwayColumns={colorways.filter((c) => c.status === "ACTIVE")}
-          />
-        </CardContent>
-      </Card>
-
-      {/* マーキング実測（QE-0c・用尺入力系統B） */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">マーキング実測</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <MarkingSection
-            productId={item.id}
-            items={markingViews}
-            materials={bomMaterials}
-          />
-        </CardContent>
-      </Card>
-
-      {/* 資材所要量（B-067 D4ア・量産数×用尺の計算ビュー・read-only） */}
-      <MaterialRequirementSection skus={skus} items={materialReqItems} />
-
-      {/* B-094: 縫製指示（固定5＋縫製指示6・Product.sewingInstructions Json） */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">縫製指示</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SewingInstructionSection
-            productId={item.id}
-            value={parseSewingInstruction(item.sewingInstructions)}
-          />
-        </CardContent>
-      </Card>
-
-      {/* ⑪概算量産見積（QE-1R・量産軸の提示価格） */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">概算量産見積（提示価格）</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <RoughEstimateSection
-            productId={item.id}
-            rows={roughEstimateRows}
-            brandDefaultMarginRate={brandDefaultMarginRate}
-            materials={qeMaterials}
-            costCategories={qeCostCategories}
-            suppliers={qeSuppliers}
-          />
-        </CardContent>
-      </Card>
-
-      {/* 量産見積（A-seed1・確定サンプル実績コピー＝受注前1枚単価提示・発行履歴） */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">量産見積（提示1枚単価）</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ProductionEstimateSection
-            productId={item.id}
-            rows={productionEstimateSection.rows}
-            hasBaseSample={productionEstimateSection.hasBaseSample}
-          />
-        </CardContent>
-      </Card>
-
-      {/* ⑬量産実績原価（QE-1・発注後の実績原価＝材料費＋工賃・請求突合用・read-only） */}
-      <ProductionCostSection
-        skus={skus}
-        materials={productionCostInputs.materials}
-        labor={productionCostInputs.labor}
-      />
-
-      {/* ⑭発注（PO / WO・品番直結・(B) 生成物の着地先／#orders アンカー） */}
-      <ProductOrdersSection rows={productOrders} />
-
-      {/* メタ情報 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">メタ情報</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <DetailRow
-            label="社内メモ"
-            value={
-              item.internalNotes ? (
-                <p className="whitespace-pre-wrap">{item.internalNotes}</p>
-              ) : (
-                "—"
-              )
-            }
-          />
-          <DetailRow
-            label="作成日時"
-            value={new Date(item.createdAt).toLocaleString("ja-JP")}
-          />
-          <DetailRow
-            label="最終更新"
-            value={new Date(item.updatedAt).toLocaleString("ja-JP")}
-          />
-        </CardContent>
-      </Card>
     </div>
   )
 }
@@ -672,6 +747,15 @@ function DetailRow({
     <div className="grid grid-cols-[160px_1fr] gap-3 text-sm py-1">
       <div className="text-muted-foreground">{label}</div>
       <div>{value}</div>
+    </div>
+  )
+}
+
+function HeaderStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline gap-1.5">
+      <dt className="text-xs">{label}</dt>
+      <dd className="font-medium text-foreground">{value}</dd>
     </div>
   )
 }
