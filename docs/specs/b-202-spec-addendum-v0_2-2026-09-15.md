@@ -1,5 +1,7 @@
 # B-202 品番カルテ 1画面化 仕様確認書 addendum v0.2 (2026-09-15)
 
+> ★2026-09-17 訂正（addendum v0.5（SKETCH-BAND） D-22）: 本書 D-10 と §1-4 の「caption は action 変更なし・保存経路に通している」は誤り。284行は読み取り側で、caption を書き込む action は存在しなかった。PR-2 で新しく作る。
+
 - 種別: addendum。`docs/specs/b-202-product-karte-one-screen-spec-confirmation-v1_0-2026-09-12.md` と `docs/specs/b-202-spec-addendum-v0_1-2026-09-13.md` を補完する（どちらも破棄しない）
 - ★本書にしかない識別文字列: **RECON-M**
 - 実測: RECON-M（2026-09-14 23:22 〜 2026-09-15 01:16 JST・main d7e1725・read-only・DB 無書込）
