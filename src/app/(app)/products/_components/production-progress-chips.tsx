@@ -23,7 +23,9 @@ import {
 const NOTE_MAX = 14
 
 function chipLabel(t: ProgressTaskItem): string {
-  if (t.taskType === "PROCESSING") return t.processingTypeName ?? "加工"
+  // B-202 PR-2（addendum v0.5 D-24）: 加工は「加工：◯◯」と出す（名前が無ければ「加工」）
+  if (t.taskType === "PROCESSING")
+    return t.processingTypeName ? `加工：${t.processingTypeName}` : "加工"
   return PROGRESS_TASK_TYPE_LABELS[t.taskType]
 }
 
