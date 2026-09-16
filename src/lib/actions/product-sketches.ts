@@ -96,6 +96,10 @@ export async function addProductSketch(
     let thumbBuffer: Buffer | null = null
     try {
       thumbBuffer = await sharp(originalBuffer)
+        // B-204: EXIF Orientation を先に適用する。sharp は既定で EXIF の向きを反映せず、
+        // かつ .webp() 出力で EXIF 自体が落ちるため、ここで回転しないと
+        // スマホ撮影の縦写真が「原本は正立・サムネだけ横倒し」になる。.resize() より前に置くこと。
+        .rotate()
         .resize({ width: 400, height: 400, fit: "inside", withoutEnlargement: true })
         .webp()
         .toBuffer()
