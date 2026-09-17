@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { uploadProductSketch, getSignedReadUrl } from "@/lib/gcs"
 import type { ProductSketch, ProductSketchView } from "@/lib/types/product-sketch"
+import { updateProductSketchCaptionSchema } from "@/lib/validators/product-sketch"
 
 /**
  * B-027: 品番カルテ 絵型（服のスケッチ）Server Actions。
@@ -289,5 +290,81 @@ export async function getProductSketchUrls(
     return { ok: true, data: views }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "絵型URLの取得に失敗しました" }
+  }
+}
+
+// =============================================================================
+// 5. caption の更新（B-202 PR-2・addendum v0.5 D-22）
+//    - 2026-09-17 の実測で caption を書き込む action が無かったため新設（v0.2 D-10 の訂正）。
+//    - add / delete と同じ骨格（requireSession → loadProduct(companyId) → readImages → update → AuditLog）。
+//    - 他の要素・sortOrder・thumbGcsPath は触らない。変更が無ければ update も AuditLog も出さない。
+// =============================================================================
+export async function updateProductSketchCaption(
+  productId: string,
+  gcsPath: string,
+  caption: string,
+): Promise<ActionResult<{ caption: string | null }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const parsed = updateProductSketchCaptionSchema.safeParse({
+      productId,
+      gcsPath,
+      caption,
+    })
+    if (!parsed.success) {
+      return {
+        ok: false,
+        error: parsed.error.issues.map((i) => i.message).join(", "),
+      }
+    }
+    const nextCaption = parsed.data.caption // undefined = caption なし
+
+    const product = await loadProduct(parsed.data.productId, sess.companyId)
+    if (!product) return { ok: false, error: "品番が見つかりません" }
+
+    const current = readImages(product.sketchImages)
+    const idx = current.findIndex((i) => i.gcsPath === parsed.data.gcsPath)
+    if (idx < 0) return { ok: false, error: "絵型が見つかりません" }
+
+    const before = current[idx].caption ?? null
+    const after = nextCaption ?? null
+    if (before === after) return { ok: true, data: { caption: after } }
+
+    const next: ProductSketch[] = current.map((img, i) => {
+      if (i !== idx) return img
+      const rest: ProductSketch = {
+        gcsPath: img.gcsPath,
+        thumbGcsPath: img.thumbGcsPath,
+        sortOrder: img.sortOrder,
+      }
+      return nextCaption === undefined ? rest : { ...rest, caption: nextCaption }
+    })
+
+    await prisma.product.update({
+      where: { id: parsed.data.productId },
+      data: { sketchImages: next, sketchThumbPath: syncThumbPath(next) },
+    })
+    await prisma.auditLog.create({
+      data: {
+        companyId: sess.companyId,
+        userId: sess.userId,
+        action: "UPDATE",
+        entityType: "Product",
+        entityId: parsed.data.productId,
+        beforeData: { action: "update_sketch_caption", gcsPath: parsed.data.gcsPath, caption: before },
+        afterData: { action: "update_sketch_caption", gcsPath: parsed.data.gcsPath, caption: after },
+      },
+    })
+
+    revalidatePath(`/products/${parsed.data.productId}`)
+    revalidatePath("/products")
+    return { ok: true, data: { caption: after } }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "絵型の説明の更新に失敗しました",
+    }
   }
 }

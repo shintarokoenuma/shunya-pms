@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, ImagePlus, Trash2, ArrowLeft, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 import {
   Dialog,
   DialogContent,
@@ -17,6 +19,7 @@ import {
   addProductSketch,
   deleteProductSketch,
   reorderProductSketches,
+  updateProductSketchCaption,
 } from "@/lib/actions/product-sketches"
 import type { ProductSketchView } from "@/lib/types/product-sketch"
 
@@ -163,8 +166,7 @@ export function SketchSection({
         </div>
       ) : (
         <div className="flex gap-3 overflow-x-auto pb-1">
-          {/* B-202 PR-1r: ヘッダ直下の横スクロール帯（高さ固定）。PR-2 のタブ化までの暫定。
-              並び順・追加・削除・前後入替のロジックは無変更（コンテナの className のみ） */}
+          {/* B-202 PR-2: 帯で確定（addendum v0.5 D-21）。並び順・追加・削除・前後入替のロジックは無変更 */}
           {sketches.map((s, i) => (
             <div key={s.gcsPath} className="w-52 shrink-0 rounded-md border p-2">
               {/* B-202 PR-1r: 「クリックで拡大」（モック sketchbox の文言）。帯はサムネ（thumbUrl）・
@@ -199,11 +201,13 @@ export function SketchSection({
                   />
                 </DialogContent>
               </Dialog>
-              {s.caption && (
-                <div className="mt-1 truncate text-xs text-muted-foreground">
-                  {s.caption}
-                </div>
-              )}
+              {/* B-202 PR-2（addendum v0.5 D-22）: caption の表示とその場編集 */}
+              <SketchCaptionEditor
+                productId={productId}
+                gcsPath={s.gcsPath}
+                caption={s.caption}
+                disabled={isPending}
+              />
               <div className="mt-1 flex items-center justify-between">
                 <div className="flex gap-1">
                   <Button
@@ -244,5 +248,92 @@ export function SketchSection({
       )}
       </div>
     </div>
+  )
+}
+
+/**
+ * B-202 PR-2（addendum v0.5 D-22）: サムネ直下の caption をその場で編集する。
+ * - 表示: caption があればその文字（truncate）／無ければ薄い字の「説明を追加」
+ * - 編集: クリックで Input（maxLength=50・autoFocus）。Enter か フォーカスが外れたら保存、Esc で取り消し。
+ *   変更が無ければ action を呼ばない。保存中は無効化。失敗は toast.error、成功は router.refresh()（成功 toast は出さない）
+ * - 非制御 Dialog と同じく、親（帯）の state には触らない
+ */
+function SketchCaptionEditor({
+  productId,
+  gcsPath,
+  caption,
+  disabled,
+}: {
+  productId: string
+  gcsPath: string
+  caption?: string
+  disabled?: boolean
+}) {
+  const router = useRouter()
+  const [editing, setEditing] = useState(false)
+  const [value, setValue] = useState(caption ?? "")
+  const [isSaving, startSave] = useTransition()
+
+  const startEdit = () => {
+    setValue(caption ?? "")
+    setEditing(true)
+  }
+  const cancel = () => {
+    setEditing(false)
+    setValue(caption ?? "")
+  }
+  const commit = () => {
+    const next = value.trim()
+    setEditing(false)
+    if (next === (caption ?? "")) return // 変更なし: action を呼ばない
+    startSave(async () => {
+      const r = await updateProductSketchCaption(productId, gcsPath, next)
+      if (!r.ok) {
+        toast.error(r.error)
+        setValue(caption ?? "")
+        return
+      }
+      router.refresh()
+    })
+  }
+
+  if (editing) {
+    return (
+      <Input
+        autoFocus
+        maxLength={50}
+        value={value}
+        disabled={isSaving}
+        aria-label="絵型の説明"
+        placeholder="説明（50文字まで）"
+        className="mt-1 h-7 text-xs"
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault()
+            e.currentTarget.blur() // onBlur → commit
+          } else if (e.key === "Escape") {
+            e.preventDefault()
+            cancel()
+          }
+        }}
+      />
+    )
+  }
+  return (
+    <button
+      type="button"
+      disabled={disabled || isSaving}
+      onClick={startEdit}
+      title={caption ? `${caption}（クリックで編集）` : "説明を追加"}
+      className={cn(
+        "mt-1 block w-full truncate rounded text-left text-xs hover:underline disabled:opacity-60",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        caption ? "text-muted-foreground" : "italic text-muted-foreground/60",
+      )}
+    >
+      {caption ?? "説明を追加"}
+    </button>
   )
 }

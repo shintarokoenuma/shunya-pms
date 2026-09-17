@@ -28,7 +28,8 @@ import { SketchSection } from "../_components/sketch-section"
 import { KarteDrawerBar } from "../_components/karte-drawer"
 import { listColorwaysByBomItems } from "@/lib/actions/bom-item-colorways"
 import { SampleProductionsTable } from "../../samples/_components/sample-productions-table"
-import { ColorQuantitySection } from "../_components/color-quantity-section"
+import { QuantityMatrixSection } from "../_components/quantity-matrix-section"
+import { ColorwaySection } from "../_components/colorway-section"
 import { BomSection, type BomItemView } from "../_components/bom-section"
 import { MaterialRequirementSection } from "../_components/material-requirement-section"
 import type { MaterialReqBomItem } from "@/lib/calc/material-requirement"
@@ -470,15 +471,22 @@ export default async function ProductDetailPage({
 
         {/* 右カラム: ⑤ SKU 数量（色×サイズ） ／ ⑥ 進行 ／ ⑦ メモ */}
         <div className="flex min-w-0 flex-col gap-3">
-          <ColorQuantitySection
-            productId={item.id}
-            colorways={colorways}
-            colorOptions={colorOptions}
-            patternOptions={patternOptions}
-            skus={skus}
-            defaultSizeOptions={defaultSizeOptions}
-            categoryId={item.category?.id ?? null}
-          />
+          {/* ⑤ SKU 数量（色 × サイズ）― モック案C の見出し文言。数量表のみ（addendum v0.5 D-23）。
+              カラー展開の一覧・編集（ColorwaySection）は共有パネル「カラー展開（編集）」へ移設 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">SKU 数量（色 × サイズ）</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <QuantityMatrixSection
+                skus={skus}
+                productId={item.id}
+                defaultSizeOptions={defaultSizeOptions}
+                categoryId={item.category?.id ?? null}
+                bare
+              />
+            </CardContent>
+          </Card>
 
           {/* ⑥ 進行 ― 要約チップ（モック案C .tasks・★直列に並べない＝v1.0 D-4）。
               編集（量産進行チェックリスト）とステータス履歴は共有パネル「進行（編集）」へ移設（既存 JSX を無改変で移動） */}
@@ -554,6 +562,20 @@ export default async function ProductDetailPage({
                   )}
                 </div>
               </div>
+            ),
+          },
+          {
+            // B-202 PR-2（addendum v0.5 D-23）: カラー展開の一覧・編集は1画面から共有パネルへ（進行（編集）の直後）
+            id: "colorways",
+            title: "カラー展開（編集）",
+            hint: "記号・色名・調達色",
+            children: (
+              <ColorwaySection
+                productId={item.id}
+                colorways={colorways}
+                colorOptions={colorOptions}
+                patternOptions={patternOptions}
+              />
             ),
           },
           {
