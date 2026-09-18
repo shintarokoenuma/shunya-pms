@@ -50,8 +50,10 @@ import {
 } from "@/lib/actions/progress-tasks"
 import { ProductionProgressChecklist } from "../_components/production-progress-checklist"
 import { ProductionProgressChips } from "../_components/production-progress-chips"
-import { MemoSection } from "../_components/memo-section"
+import { MemoSection, MemoPrefsDialog } from "../_components/memo-section"
 import { listProductComments } from "@/lib/actions/comments"
+import { getMemoUiPreferences } from "@/lib/actions/company-settings"
+import { MEMO_UI_PREFERENCES_DEFAULT } from "@/lib/types/ui-preferences"
 import { RoughEstimateSection } from "../_components/rough-estimate-section"
 import {
   listRoughEstimatesByProduct,
@@ -249,6 +251,12 @@ export default async function ProductDetailPage({
   // B-202 PR-3: メモ（Comment・product に紐づく・新しい順・社外ユーザーには空）
   const commentsResult = await listProductComments(id)
   const comments = commentsResult.ok ? commentsResult.data : []
+  // B-202 PR-4: メモ欄の表示スイッチ（会社の既定・CompanySetting.uiPreferences・行が無ければ既定＝3つともオン）
+  const memoPrefsResult = await getMemoUiPreferences()
+  const memoPrefs = memoPrefsResult.ok
+    ? memoPrefsResult.data.prefs
+    : { ...MEMO_UI_PREFERENCES_DEFAULT }
+  const canManageMemoPrefs = memoPrefsResult.ok && memoPrefsResult.data.canManage
 
   // B-202 PR-1r: 品番・分類に出す「工場」は、この品番に紐づく量産の作業発注（WO・PRODUCTION）の発注先から導出する。
   //   Product に工場列は無い（R-6-1）。productOrders は既に取得済みなので新規クエリは足さない（R-6-10）。
@@ -514,10 +522,14 @@ export default async function ProductDetailPage({
               Product.internalNotes（社内メモ・上書き型）は「サンプル・メタ」パネルに併存 */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">メモ</CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base">メモ</CardTitle>
+                {/* B-202 PR-4: 表示スイッチ（歯車）は管理者相当のみ。サーバ側（updateMemoUiPreferences）でも拒否する */}
+                {canManageMemoPrefs && <MemoPrefsDialog prefs={memoPrefs} />}
+              </div>
             </CardHeader>
             <CardContent>
-              <MemoSection productId={item.id} comments={comments} />
+              <MemoSection productId={item.id} comments={comments} prefs={memoPrefs} />
             </CardContent>
           </Card>
         </div>

@@ -3,8 +3,9 @@
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Loader2, Pencil, Trash2 } from "lucide-react"
+import { Loader2, Pencil, Settings, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Dialog,
@@ -20,6 +21,8 @@ import {
   deleteProductComment,
 } from "@/lib/actions/comments"
 import type { CommentView } from "@/lib/types/comment"
+import { updateMemoUiPreferences } from "@/lib/actions/company-settings"
+import type { MemoUiPreferences } from "@/lib/types/ui-preferences"
 
 /**
  * B-202 PR-3: 品番カルテ 1画面（右カラム⑦・進行の直下）の「メモ」欄。
@@ -46,9 +49,12 @@ function fmtDateTime(iso: string): string {
 export function MemoSection({
   productId,
   comments,
+  prefs,
 }: {
   productId: string
   comments: CommentView[]
+  /** B-202 PR-4: 表示スイッチ（会社の既定）。時刻／書いた人／「編集済み」の出し分け。本文は必ず出す */
+  prefs: MemoUiPreferences
 }) {
   const router = useRouter()
   const [draft, setDraft] = useState("")
@@ -75,7 +81,7 @@ export function MemoSection({
       ) : (
         <ul className="space-y-1.5">
           {comments.map((c) => (
-            <MemoRow key={c.id} productId={productId} comment={c} />
+            <MemoRow key={c.id} productId={productId} comment={c} prefs={prefs} />
           ))}
         </ul>
       )}
@@ -108,7 +114,15 @@ export function MemoSection({
   )
 }
 
-function MemoRow({ productId, comment }: { productId: string; comment: CommentView }) {
+function MemoRow({
+  productId,
+  comment,
+  prefs,
+}: {
+  productId: string
+  comment: CommentView
+  prefs: MemoUiPreferences
+}) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [value, setValue] = useState(comment.content)
@@ -193,11 +207,22 @@ function MemoRow({ productId, comment }: { productId: string; comment: CommentVi
       ) : (
         <div className="flex items-start gap-2">
           <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-foreground/90">
-            <b className="mr-1 text-xs font-medium text-foreground">
-              {fmtDateTime(comment.createdAt)} {comment.authorName}
-            </b>
-            　{comment.content}
-            {comment.isEdited && (
+            {/* B-202 PR-4: prefs で 時刻／書いた人 を出し分け。両方隠すと見出し部ごと消し、本文だけを出す（形は MM/DD HH:mm 名前　本文 のまま詰める） */}
+            {(prefs.showTimestamp || prefs.showAuthor) && (
+              <>
+                <b className="mr-1 text-xs font-medium text-foreground">
+                  {[
+                    prefs.showTimestamp ? fmtDateTime(comment.createdAt) : null,
+                    prefs.showAuthor ? comment.authorName : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
+                </b>
+                {"　"}
+              </>
+            )}
+            {comment.content}
+            {prefs.showEditedMark && comment.isEdited && (
               <span className="ml-1 text-xs text-muted-foreground">編集済み</span>
             )}
           </p>
@@ -251,5 +276,85 @@ function MemoRow({ productId, comment }: { productId: string; comment: CommentVi
         </DialogContent>
       </Dialog>
     </li>
+  )
+}
+
+/**
+ * B-202 PR-4（v1.0 D-8 段階1）: メモ欄の表示スイッチ（会社の既定）を変えるダイアログ。
+ * - 見出し「メモ」の右の歯車から開く。★呼び出し側（page.tsx）は管理者相当のときだけ描く。サーバ側でも拒否する
+ * - チェックボックス3つ（時刻／書いた人／編集済みの印）。保存で updateMemoUiPreferences → 会社の全員に効く
+ * - 既定は3つともオン（現状維持）。段階3（人ごとの上書き）は B-203
+ */
+export function MemoPrefsDialog({ prefs }: { prefs: MemoUiPreferences }) {
+  const router = useRouter()
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState<MemoUiPreferences>(prefs)
+  const [isPending, startTransition] = useTransition()
+
+  const save = () => {
+    startTransition(async () => {
+      const r = await updateMemoUiPreferences(draft)
+      if (!r.ok) {
+        toast.error(r.error)
+        return
+      }
+      setOpen(false)
+      router.refresh()
+    })
+  }
+
+  const rows: { key: keyof MemoUiPreferences; label: string }[] = [
+    { key: "showTimestamp", label: "時刻を表示" },
+    { key: "showAuthor", label: "書いた人を表示" },
+    { key: "showEditedMark", label: "編集済みの印を表示" },
+  ]
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (next) setDraft(prefs) // 開くたびに保存済みの値から始める
+        setOpen(next)
+      }}
+    >
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7"
+        title="メモ欄の表示設定"
+        aria-label="メモ欄の表示設定"
+        onClick={() => setOpen(true)}
+      >
+        <Settings className="h-4 w-4 text-muted-foreground" />
+      </Button>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>メモ欄の表示設定</DialogTitle>
+          <DialogDescription>この会社の全員に適用されます</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {rows.map((r) => (
+            <label key={r.key} className="flex cursor-pointer items-center gap-2 text-sm">
+              <Checkbox
+                checked={draft[r.key]}
+                disabled={isPending}
+                onCheckedChange={(v) => setDraft({ ...draft, [r.key]: v === true })}
+              />
+              {r.label}
+            </label>
+          ))}
+        </div>
+        <DialogFooter>
+          <Button variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
+            キャンセル
+          </Button>
+          <Button disabled={isPending} onClick={save}>
+            {isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+            保存
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
