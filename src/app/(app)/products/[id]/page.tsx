@@ -50,6 +50,8 @@ import {
 } from "@/lib/actions/progress-tasks"
 import { ProductionProgressChecklist } from "../_components/production-progress-checklist"
 import { ProductionProgressChips } from "../_components/production-progress-chips"
+import { MemoSection } from "../_components/memo-section"
+import { listProductComments } from "@/lib/actions/comments"
 import { RoughEstimateSection } from "../_components/rough-estimate-section"
 import {
   listRoughEstimatesByProduct,
@@ -243,6 +245,10 @@ export default async function ProductDetailPage({
   const productionTasks = productionTasksResult.ok
     ? productionTasksResult.data.items
     : []
+
+  // B-202 PR-3: メモ（Comment・product に紐づく・新しい順・社外ユーザーには空）
+  const commentsResult = await listProductComments(id)
+  const comments = commentsResult.ok ? commentsResult.data : []
 
   // B-202 PR-1r: 品番・分類に出す「工場」は、この品番に紐づく量産の作業発注（WO・PRODUCTION）の発注先から導出する。
   //   Product に工場列は無い（R-6-1）。productOrders は既に取得済みなので新規クエリは足さない（R-6-10）。
@@ -504,7 +510,16 @@ export default async function ProductDetailPage({
             </CardContent>
           </Card>
 
-          {/* ⑦ メモ（進行の直下）― B-202 PR-3 で Comment を配線する。本 PR では場所のみ確保 */}
+          {/* ⑦ メモ（進行の直下）― B-202 PR-3: 休眠中の Comment を配線（ログ型・v1.0 D-7）。
+              Product.internalNotes（社内メモ・上書き型）は「サンプル・メタ」パネルに併存 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">メモ</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MemoSection productId={item.id} comments={comments} />
+            </CardContent>
+          </Card>
         </div>
       </div>
 
