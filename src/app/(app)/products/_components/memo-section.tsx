@@ -31,13 +31,16 @@ import type { CommentView } from "@/lib/types/comment"
  * - 並びは新しい順（action 側で createdAt desc）・全件・ページングなし
  * - 自分のメモにだけ編集・削除（canEdit）。削除は確認ダイアログ。原文（originalContent）は画面に出さない
  * - Product.internalNotes（社内メモ・上書き型）は別物として併存
+ * ★時刻の表示はモック案C の原文（日付のみ）からの逸脱。慎太郎さん確認 2026-09-18（同日に複数のメモが並ぶため間隔が読めない）
  */
 
 const CONTENT_MAX = 2000
 
-function fmtMMDD(iso: string): string {
+/** 「MM/DD HH:mm」（24時間表記・ゼロ埋め・ブラウザのローカル時刻） */
+function fmtDateTime(iso: string): string {
   const d = new Date(iso)
-  return `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}`
+  const p = (n: number) => String(n).padStart(2, "0")
+  return `${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
 export function MemoSection({
@@ -191,7 +194,7 @@ function MemoRow({ productId, comment }: { productId: string; comment: CommentVi
         <div className="flex items-start gap-2">
           <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-foreground/90">
             <b className="mr-1 text-xs font-medium text-foreground">
-              {fmtMMDD(comment.createdAt)} {comment.authorName}
+              {fmtDateTime(comment.createdAt)} {comment.authorName}
             </b>
             　{comment.content}
             {comment.isEdited && (
