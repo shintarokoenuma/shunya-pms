@@ -52,6 +52,9 @@ import { ProductionProgressChecklist } from "../_components/production-progress-
 import { ProductionProgressChips } from "../_components/production-progress-chips"
 import { MemoSection, MemoPrefsDialog } from "../_components/memo-section"
 import { listProductComments } from "@/lib/actions/comments"
+import { listPatternVersions } from "@/lib/actions/pattern-versions"
+import { listActiveContractorsForWoSelect } from "@/lib/actions/work-orders"
+import { PatternVersionSection } from "../_components/pattern-version-section"
 import { getMemoUiPreferences } from "@/lib/actions/company-settings"
 import { MEMO_UI_PREFERENCES_DEFAULT } from "@/lib/types/ui-preferences"
 import { RoughEstimateSection } from "../_components/rough-estimate-section"
@@ -257,6 +260,13 @@ export default async function ProductDetailPage({
     ? memoPrefsResult.data.prefs
     : { ...MEMO_UI_PREFERENCES_DEFAULT }
   const canManageMemoPrefs = memoPrefsResult.ok && memoPrefsResult.data.canManage
+
+  // B-054/B-146 PR-2: 型紙の記録（型番に紐づく・受領日の新しい順）と、パタンナー選択肢（既存の WO 用 select を流用）
+  const [patternVersionsResult, patternContractors] = await Promise.all([
+    listPatternVersions(item.modelCodeId),
+    listActiveContractorsForWoSelect(),
+  ])
+  const patternVersions = patternVersionsResult.ok ? patternVersionsResult.data : []
 
   // B-202 PR-1r: 品番・分類に出す「工場」は、この品番に紐づく量産の作業発注（WO・PRODUCTION）の発注先から導出する。
   //   Product に工場列は無い（R-6-1）。productOrders は既に取得済みなので新規クエリは足さない（R-6-10）。
@@ -613,6 +623,20 @@ export default async function ProductDetailPage({
                 colorways={colorways}
                 colorOptions={colorOptions}
                 patternOptions={patternOptions}
+              />
+            ),
+          },
+          {
+            // B-054/B-146 PR-2: 型紙の記録（PatternVersion・休眠テーブルを起こす）。型番単位・カラー展開の直後
+            id: "patterns",
+            title: "型紙",
+            hint: "受領日・種別",
+            children: (
+              <PatternVersionSection
+                productId={item.id}
+                modelCodeId={item.modelCodeId}
+                rows={patternVersions}
+                contractors={patternContractors}
               />
             ),
           },
