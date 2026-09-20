@@ -775,6 +775,7 @@ enum FactoryType {
   SAMPLE_MAKING // サンプル製作
   ASSEMBLY // 組立
   OTHER
+  INSPECTION // 検品（検品所）― B-054 D-19
 }
 
 enum FactoryContractType {
@@ -1887,6 +1888,9 @@ model ModelCode {
   modelName   String  @map("model_name") @db.VarChar(255) // モデル名
   modelNameEn String? @map("model_name_en") @db.VarChar(255)
   description String? @db.Text
+  // B-054 D-13: 型紙そのものに振った番号（例 16sy-082）。版（v1/v2）ではない。一意制約なし。
+  //   品番作成時の自動生成では社内品番を初期値にし、型番編集で書き換える。
+  patternNumber String? @map("pattern_number") @db.VarChar(50)
 
   // 商品分類
   categoryId String? @map("category_id") // ProductCategory
@@ -4235,6 +4239,8 @@ model WorkOrder {
   isInternational Boolean @default(false) @map("is_international")
 
   // 納期情報
+  // B-054 D-17: 職出し予定日（工場・外注先が作業に着手する予定日）
+  plannedStartDate     DateTime? @map("planned_start_date") @db.Date
   expectedDeliveryDate DateTime? @map("expected_delivery_date") @db.Date
   actualDeliveryDate   DateTime? @map("actual_delivery_date") @db.Date
   isDeliveryDelayed    Boolean   @default(false) @map("is_delivery_delayed")
