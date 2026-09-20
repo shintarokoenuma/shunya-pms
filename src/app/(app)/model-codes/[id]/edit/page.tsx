@@ -39,6 +39,7 @@ export default async function EditModelCodePage({
     modelName: item.modelName,
     modelNameEn: item.modelNameEn ?? "",
     description: item.description ?? "",
+    patternNumber: item.patternNumber ?? "",
     categoryId: item.categoryId,
     silhouette: item.silhouette ?? "",
     patternOwnership: item.patternOwnership,

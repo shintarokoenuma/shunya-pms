@@ -104,6 +104,7 @@ const CREATE_DEFAULTS: ModelCodeBaseInput = {
   modelName: "",
   modelNameEn: "",
   description: "",
+  patternNumber: "",
   categoryId: null,
   silhouette: "",
   patternOwnership: OwnershipType.SHUNYA,
@@ -303,6 +304,25 @@ export function ModelCodeForm(props: Props) {
                 )}
               />
             </div>
+
+            {/* B-054 D-13: パターンNO（型紙そのものに振った番号）。品番作成時は社内品番が初期値で入り、ここで書き換える */}
+            <FormField
+              control={form.control}
+              name="patternNumber"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>パターンNO</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="例：16sy-082（型紙に振った番号）"
+                      className="md:w-[320px] font-mono"
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

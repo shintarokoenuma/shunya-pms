@@ -91,6 +91,7 @@ export type ModelCodeSummary = {
   id: string
   modelCode: string
   modelName: string
+  patternNumber: string | null // B-054 D-13
 }
 
 // B-202 PR-1r: 品番カルテ詳細の「担当者」（Product.assignedToUserId は FK 列のみ）。
@@ -158,7 +159,7 @@ async function fetchModelCodeSummariesByIds(
   if (modelCodeIds.length === 0) return new Map()
   const rows = await prisma.modelCode.findMany({
     where: { id: { in: modelCodeIds }, companyId },
-    select: { id: true, modelCode: true, modelName: true },
+    select: { id: true, modelCode: true, modelName: true, patternNumber: true },
   })
   return new Map(
     rows.map((r) => [
@@ -167,6 +168,7 @@ async function fetchModelCodeSummariesByIds(
         id: r.id,
         modelCode: r.modelCode,
         modelName: r.modelName,
+        patternNumber: r.patternNumber,
       } satisfies ModelCodeSummary,
     ]),
   )
@@ -660,6 +662,12 @@ export async function createProduct(
               status: data.status,
             },
             select: { id: true, productCode: true },
+          })
+
+          // (2b) B-054 D-13: 自動生成した型番のパターンNO は社内品番を初期値にする（型番編集で書き換え可）
+          await tx.modelCode.update({
+            where: { id: newModelCode.id },
+            data: { patternNumber: product.productCode },
           })
 
           // (3) 初期 status を履歴に記録（from=null → to=初期status）

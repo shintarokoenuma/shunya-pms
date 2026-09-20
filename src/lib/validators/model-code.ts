@@ -44,6 +44,8 @@ export const modelCodeBaseSchema = z.object({
   modelName: requiredString(255, "モデル名"),
   modelNameEn: optionalString(255),
   description: optionalString(10000),
+  // B-054 D-13: パターンNO（型紙そのものに振った番号）。任意・一意制約なし・あとから書き換え可
+  patternNumber: optionalString(50),
 
   // 商品分類
   categoryId: z

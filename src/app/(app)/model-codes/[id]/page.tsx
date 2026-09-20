@@ -114,6 +114,11 @@ export default async function ModelCodeDetailPage({
             <DetailRow label="モデルコード" value={<span className="font-mono">{item.modelCode}</span>} />
             <DetailRow label="モデル名" value={item.modelName} />
             <DetailRow label="モデル名（英語）" value={item.modelNameEn ?? "—"} />
+            {/* B-054 D-13: パターンNO（型紙そのものに振った番号） */}
+            <DetailRow
+              label="パターンNO"
+              value={item.patternNumber ? <span className="font-mono">{item.patternNumber}</span> : "—"}
+            />
             <DetailRow
               label="説明"
               value={
