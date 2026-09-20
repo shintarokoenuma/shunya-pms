@@ -363,6 +363,7 @@ export async function generateProductionOrders(
       title: peLabel,
       description: desc,
       currency: ctx.pe.currency,
+      plannedStartDate: null, // B-054 D-17: 生成時は未設定（WO 編集で入れる）
       expectedDeliveryDate: null,
       productId: ctx.pe.productId,
       progressTaskId: null,
