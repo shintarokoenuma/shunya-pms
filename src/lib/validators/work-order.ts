@@ -96,6 +96,8 @@ export const workOrderInputSchema = z
     title: optionalString(255),
     description: optionalString(10000),
     currency: z.nativeEnum(Currency).default(Currency.JPY),
+    // B-054 D-17: 職出し予定日（希望納期と同じ形）
+    plannedStartDate: optionalDateString,
     expectedDeliveryDate: optionalDateString,
     // 品番（直アクセス作成時に選択・§4-1(d) 案件化強制）。sample 経由なら省略可（action で導出）。
     productId: optionalRelationId,

@@ -715,6 +715,10 @@ export async function createWorkOrder(
     const deliveryDate = data.expectedDeliveryDate
       ? new Date(data.expectedDeliveryDate)
       : null
+    // B-054 D-17: 職出し予定日
+    const plannedStartDate = data.plannedStartDate
+      ? new Date(data.plannedStartDate)
+      : null
     const itemRows = buildItemRows(data)
     const prefix = woNumberPrefix(new Date().getFullYear())
 
@@ -745,6 +749,7 @@ export async function createWorkOrder(
                 title: data.title || null,
                 description: data.description || null,
                 currency: data.currency,
+                plannedStartDate,
                 expectedDeliveryDate: deliveryDate,
                 status: WorkOrderStatus.DRAFT,
                 createdByUserId: sess.userId,
@@ -857,6 +862,7 @@ function woSnapshot(r: WorkOrder): Record<WoAuditField, unknown> {
     paymentTermType: r.paymentTermType,
     paymentDueDate: r.paymentDueDate,
     isInternational: r.isInternational,
+    plannedStartDate: r.plannedStartDate,
     expectedDeliveryDate: r.expectedDeliveryDate,
     actualDeliveryDate: r.actualDeliveryDate,
     isDeliveryDelayed: r.isDeliveryDelayed,
@@ -915,6 +921,10 @@ export async function updateWorkOrder(
     const deliveryDate = data.expectedDeliveryDate
       ? new Date(data.expectedDeliveryDate)
       : null
+    // B-054 D-17: 職出し予定日
+    const plannedStartDate = data.plannedStartDate
+      ? new Date(data.plannedStartDate)
+      : null
     const itemRows = buildItemRows(data)
 
     const updated = await prisma.$transaction(
@@ -931,6 +941,7 @@ export async function updateWorkOrder(
             title: data.title || null,
             description: data.description || null,
             currency: data.currency,
+            plannedStartDate,
             expectedDeliveryDate: deliveryDate,
             progressTaskId: data.progressTaskId,
             samplProductionId: data.sampleProductionId,

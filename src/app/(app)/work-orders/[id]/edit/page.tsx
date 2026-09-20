@@ -56,6 +56,7 @@ export default async function EditWorkOrderPage({
     title: wo.title ?? "",
     description: wo.description ?? "",
     currency: wo.currency,
+    plannedStartDate: toDateInput(wo.plannedStartDate),
     expectedDeliveryDate: toDateInput(wo.expectedDeliveryDate),
     // 既存の紐付けを保持（refine: productId || sampleProductionId を満たす）
     productId: wo.productId,

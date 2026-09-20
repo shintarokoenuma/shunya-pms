@@ -441,6 +441,7 @@ export async function createModelCode(
               modelName: data.modelName,
               modelNameEn: data.modelNameEn || null,
               description: data.description || null,
+              patternNumber: data.patternNumber || null, // B-054 D-13
               categoryId: data.categoryId,
               silhouette: data.silhouette || null,
               patternOwnership: data.patternOwnership,
@@ -551,6 +552,7 @@ export async function updateModelCode(
         modelName: data.modelName,
         modelNameEn: data.modelNameEn || null,
         description: data.description || null,
+        patternNumber: data.patternNumber || null, // B-054 D-13
         categoryId: data.categoryId,
         silhouette: data.silhouette || null,
         patternOwnership: data.patternOwnership,
@@ -569,11 +571,13 @@ export async function updateModelCode(
         beforeData: {
           brandId: existing.brandId,
           modelName: existing.modelName,
+          patternNumber: existing.patternNumber,
           status: existing.status,
         },
         afterData: {
           brandId: updated.brandId,
           modelName: updated.modelName,
+          patternNumber: updated.patternNumber,
           status: updated.status,
         },
       },

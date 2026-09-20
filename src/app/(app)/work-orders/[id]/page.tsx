@@ -127,6 +127,15 @@ export default async function WorkOrderDetailPage({
             label="発注日"
             value={new Date(wo.orderDate).toLocaleDateString("ja-JP")}
           />
+          {/* B-054 D-17: 職出し予定日 */}
+          <Row
+            label="職出し予定日"
+            value={
+              wo.plannedStartDate
+                ? new Date(wo.plannedStartDate).toLocaleDateString("ja-JP")
+                : "—"
+            }
+          />
           <Row
             label="希望納期"
             value={

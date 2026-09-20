@@ -147,6 +147,7 @@ export function WorkOrderForm(props: Props) {
           title: "",
           description: "",
           currency: Currency.JPY,
+          plannedStartDate: "",
           expectedDeliveryDate: "",
           progressTaskId: context.progressTaskId ?? null,
           sampleProductionId: context.sampleProductionId ?? null,
@@ -568,6 +569,29 @@ export function WorkOrderForm(props: Props) {
                 )}
               />
             </div>
+
+            {/* B-054 D-17: 職出し予定日（希望納期と同じ体裁・そのすぐ上） */}
+            <FormField
+              control={form.control}
+              name="plannedStartDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>職出し予定日</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="date"
+                      className="md:w-[200px]"
+                      value={field.value ?? ""}
+                      onChange={(e) => field.onChange(e.target.value)}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

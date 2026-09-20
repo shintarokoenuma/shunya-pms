@@ -425,6 +425,17 @@ export default async function ProductDetailPage({
                   )
                 }
               />
+              {/* B-054 D-13: パターンNO（型紙そのものに振った番号・型番で編集） */}
+              <DetailRow
+                label="パターンNO"
+                value={
+                  item.modelCode?.patternNumber ? (
+                    <span className="font-mono">{item.modelCode.patternNumber}</span>
+                  ) : (
+                    "—"
+                  )
+                }
+              />
               <DetailRow
                 label="ブランド"
                 value={

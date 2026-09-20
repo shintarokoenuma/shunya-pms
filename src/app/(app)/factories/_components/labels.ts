@@ -36,6 +36,7 @@ export const FACTORY_TYPE_OPTIONS: Array<{
   { value: "SAMPLE_MAKING", label: "サンプル製作" },
   { value: "ASSEMBLY", label: "組立" },
   { value: "OTHER", label: "その他" },
+  { value: "INSPECTION", label: "検品" }, // B-054 D-19: 検品所
 ]
 
 export const FACTORY_TYPE_LABELS: Record<FactoryType, string> = {
@@ -51,6 +52,7 @@ export const FACTORY_TYPE_LABELS: Record<FactoryType, string> = {
   SAMPLE_MAKING: "サンプル製作",
   ASSEMBLY: "組立",
   OTHER: "その他",
+  INSPECTION: "検品", // B-054 D-19: 検品所
 }
 
 // =====================================================
