@@ -435,12 +435,25 @@ export default async function ProductDetailPage({
                   )
                 }
               />
-              {/* B-054 D-13: パターンNO（型紙そのものに振った番号・型番で編集） */}
+              {/* B-054 D-13 / B-207: パターンNO（型紙そのものに振った番号・値は型番が持つ） */}
               <DetailRow
                 label="パターンNO"
                 value={
-                  item.modelCode?.patternNumber ? (
-                    <span className="font-mono">{item.modelCode.patternNumber}</span>
+                  item.modelCode ? (
+                    <span className="inline-flex items-center gap-2">
+                      {item.modelCode.patternNumber ? (
+                        <span className="font-mono">{item.modelCode.patternNumber}</span>
+                      ) : (
+                        <span className="text-muted-foreground">未設定</span>
+                      )}
+                      <Link
+                        href={`/model-codes/${item.modelCode.id}/edit`}
+                        className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
+                      >
+                        <Pencil className="h-3 w-3" />
+                        型番で編集
+                      </Link>
+                    </span>
                   ) : (
                     "—"
                   )
