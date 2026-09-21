@@ -25,7 +25,8 @@ import type { ProductSketch } from "@/lib/types/product-sketch"
 
 const SKETCH_MAX_EDGE = 1600 // addendum v0.1 D-25
 const SKETCH_QUALITY = 85
-export const SEWING_SPEC_MAX_ACCESSORY_ROWS = 15 // D-6
+/** 付属は全行を返す（上限 60）。1枚目に 15 行、16 行目以降は「付属のつづき」のページ（addendum v0.3 D-37 / D-38） */
+export const SEWING_SPEC_MAX_ACCESSORY_ROWS = 60
 export const SEWING_SPEC_MAX_COLORWAYS = 5 // D-7
 
 const DASH = "—"
@@ -79,9 +80,8 @@ export type SewingSpecPdfData = {
   assignedToName: string
   instructions: SewingSpecInstruction[]
   colorwayNames: string[]
+  /** itemOrder 順の全行（上限 60）。colors が空の行＝全色共通、空でない行＝色が変わる行（色ごとの指定の表に出す） */
   accessories: SewingSpecAccessoryRow[]
-  /** 15行を超えた分の件数（0 なら注記なし） */
-  accessoriesOverflow: number
   skuMatrix: SewingSpecSkuMatrix | null
   issuedDate: string
   pages: SewingSpecPage[]
@@ -207,7 +207,6 @@ export async function getSewingSpecPdfData(
   const shownColorways = colorways.slice(0, SEWING_SPEC_MAX_COLORWAYS)
   const colorwayNames = shownColorways.map((c) => c.colorwayName)
   let accessories: SewingSpecAccessoryRow[] = []
-  let accessoriesOverflow = 0
   if (bom) {
     const items = await prisma.bomItem.findMany({
       where: { bomId: bom.id },
@@ -225,7 +224,6 @@ export async function getSewingSpecPdfData(
       },
     })
     const shown = items.slice(0, SEWING_SPEC_MAX_ACCESSORY_ROWS)
-    accessoriesOverflow = Math.max(0, items.length - shown.length)
     const materialIds = [...new Set(shown.map((i) => i.materialId).filter((v): v is string => !!v))]
     const supplierIds = [...new Set(shown.map((i) => i.supplierId).filter((v): v is string => !!v))]
     const [mats, sups, cwRows] = await Promise.all([
@@ -448,7 +446,6 @@ export async function getSewingSpecPdfData(
       instructions: readInstructions(product.sewingInstructions),
       colorwayNames,
       accessories,
-      accessoriesOverflow,
       skuMatrix,
       issuedDate: todayJst(),
       pages: outPages,
