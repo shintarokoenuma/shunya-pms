@@ -5,6 +5,8 @@ import { QuotationDocument } from "./quotation-document"
 import type { QuotationPdfData } from "./quotation-data"
 import { PeQuotationDocument } from "./pe-quotation-document"
 import type { PeQuotationPdfData } from "./pe-quotation-data"
+import { SewingSpecDocument } from "./sewing-spec-document"
+import type { SewingSpecPdfData } from "./sewing-spec-data"
 
 /**
  * S-4c-2(H2): 「組み立て(OrderDocument)」と「出力先」を分離するための生成層。
@@ -35,4 +37,11 @@ export async function renderPeQuotationPdfBuffer(
   data: PeQuotationPdfData,
 ): Promise<Buffer> {
   return renderToBuffer(<PeQuotationDocument data={data} />)
+}
+
+/** B-054 PR-4a 縫製仕様書 PDF。route はこの Buffer をレスポンスに載せる。 */
+export async function renderSewingSpecPdfBuffer(
+  data: SewingSpecPdfData,
+): Promise<Buffer> {
+  return renderToBuffer(<SewingSpecDocument data={data} />)
 }
