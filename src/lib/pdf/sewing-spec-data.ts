@@ -1,8 +1,10 @@
+import type { WorkOrderType } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { loadSketchForPdf, type PdfImage } from "./sketch-image"
 import {
   kindLabel,
   quantityMode,
+  type SewingSpecPageKind,
   type SewingSpecPageSpec,
   type SewingSpecQuantityMode,
 } from "./sewing-spec-format"
@@ -10,28 +12,43 @@ import {
   SEWING_DETAIL_ORDER,
   SEWING_FIXED_ORDER,
   SEWING_INSTRUCTION_LABELS,
+  type SewingDetailKey,
+  type SewingFixedKey,
   type SewingInstruction,
 } from "@/lib/types/sewing-instruction"
 import { PATTERN_WORK_TYPE_LABELS } from "@/lib/types/pattern-version"
+import { WORK_ORDER_TYPE_LABELS } from "@/lib/constants/work-order-types"
 import type { ProductSketch } from "@/lib/types/product-sketch"
 
 /**
- * B-054 PR-4a: 縫製仕様書 PDF のデータ取得（order-data.ts と同じく server action は呼ばず prisma を直接引く）。
+ * B-054 PR-4a/4b: 縫製仕様書 PDF のデータ取得（order-data.ts と同じく server action は呼ばず prisma を直接引く）。
  * - 全クエリに companyId（と deletedAt: null）。BomItem は material / supplier の relation が無いので手動 join。
  * - 金額・用尺は Decimal のまま持ち、文字列化は表示の直前（この層の末尾）で toString() する。
- * - 4a は 1枚目（縫製工場用・workType=SEWING の WO 宛て）のみ。2・3枚目は 4b。
- * 仕様: docs/specs/b-054-b-146-spec-confirmation-v1_0-2026-09-20.md（D-1〜D-21）／addendum v0.1（D-22〜D-26）
+ * - 1枚目（sewing・縫製工場用）＝workType SEWING の WO 宛て／2枚目（measure・採寸用）＝SEWING か INSPECTION／
+ *   3枚目（process・加工工場用）＝PRINTING / EMBROIDERY / WASHING / DYEING / FINISHING（addendum v0.2 D-34）
+ * 仕様: docs/specs/b-054-b-146-spec-confirmation-v1_0-2026-09-20.md（D-1〜D-21）／addendum v0.1〜v0.3
  */
 
 const SKETCH_MAX_EDGE = 1600 // addendum v0.1 D-25
 const SKETCH_QUALITY = 85
+
+/** ページ種別ごとに受け付ける宛先 WO の workType（addendum v0.2 D-34） */
+const WO_TYPES_BY_KIND: Record<SewingSpecPageKind, WorkOrderType[]> = {
+  sewing: ["SEWING"],
+  measure: ["SEWING", "INSPECTION"],
+  process: ["PRINTING", "EMBROIDERY", "WASHING", "DYEING", "FINISHING"],
+}
 /** 付属は全行を返す（上限 60）。1枚目に 15 行、16 行目以降は「付属のつづき」のページ（addendum v0.3 D-37 / D-38） */
 export const SEWING_SPEC_MAX_ACCESSORY_ROWS = 60
 export const SEWING_SPEC_MAX_COLORWAYS = 5 // D-7
 
 const DASH = "—"
 
-export type SewingSpecInstruction = { label: string; value: string }
+export type SewingSpecInstruction = {
+  key: SewingFixedKey | SewingDetailKey
+  label: string
+  value: string
+}
 
 export type SewingSpecAccessoryRow = {
   part: string
@@ -59,22 +76,27 @@ export type SewingSpecSketch = {
 }
 
 export type SewingSpecPage = {
-  kind: "sewing"
+  kind: SewingSpecPageKind
   recipientName: string
   /** 主担当が居なければ null（紙面で行ごと省く） */
   contactName: string | null
   plannedStartDate: string
   expectedDeliveryDate: string
   kindLabel: string | null
+  /** WO の workType の表示名（3枚目の「加工」） */
+  workTypeLabel: string
   orderQuantity: number
   orderUnit: string
   quantityMode: SewingSpecQuantityMode
   patternLabel: string
-  sketch: SewingSpecSketch | null
+  /** 載せる絵型（クエリの順）。省略時は最小の1枚。絵型が無い品番では空 */
+  sketches: SewingSpecSketch[]
 }
 
 export type SewingSpecPdfData = {
   productCode: string
+  productName: string
+  brandName: string
   clientProductCode: string
   patternNumber: string
   assignedToName: string
@@ -141,11 +163,11 @@ function readInstructions(raw: unknown): SewingSpecInstruction[] {
   const out: SewingSpecInstruction[] = []
   for (const k of SEWING_FIXED_ORDER) {
     const v = si.fixed?.[k]
-    if (typeof v === "string" && v.trim()) out.push({ label: SEWING_INSTRUCTION_LABELS[k], value: pdfText(v) })
+    if (typeof v === "string" && v.trim()) out.push({ key: k, label: SEWING_INSTRUCTION_LABELS[k], value: pdfText(v) })
   }
   for (const k of SEWING_DETAIL_ORDER) {
     const v = si.sewing?.[k]
-    if (typeof v === "string" && v.trim()) out.push({ label: SEWING_INSTRUCTION_LABELS[k], value: pdfText(v) })
+    if (typeof v === "string" && v.trim()) out.push({ key: k, label: SEWING_INSTRUCTION_LABELS[k], value: pdfText(v) })
   }
   return out
 }
@@ -160,8 +182,10 @@ export async function getSewingSpecPdfData(
     where: { id: productId, companyId, deletedAt: null },
     select: {
       productCode: true,
+      productName: true,
       clientProductCode: true,
       modelCodeId: true,
+      brandId: true,
       assignedToUserId: true,
       sewingInstructions: true,
       sketchImages: true,
@@ -169,7 +193,7 @@ export async function getSewingSpecPdfData(
   })
   if (!product) return { ok: false, reason: "product-not-found" }
 
-  const [modelCode, assignedTo, colorways, skus, bom] = await Promise.all([
+  const [modelCode, assignedTo, colorways, skus, bom, brand] = await Promise.all([
     prisma.modelCode.findFirst({
       where: { id: product.modelCodeId, companyId, deletedAt: null },
       select: { patternNumber: true },
@@ -200,6 +224,11 @@ export async function getSewingSpecPdfData(
     prisma.bom.findFirst({
       where: { productId, companyId, deletedAt: null },
       select: { id: true },
+    }),
+    // ブランド（Product.brandId は scalar FK・手動 join）
+    prisma.brand.findFirst({
+      where: { id: product.brandId, companyId, deletedAt: null },
+      select: { brandName: true },
     }),
   ])
 
@@ -343,11 +372,12 @@ export async function getSewingSpecPdfData(
         companyId,
         deletedAt: null,
         productId,
-        workType: "SEWING", // 1枚目＝縫製工場用（D-1）
+        workType: { in: WO_TYPES_BY_KIND[spec.kind] }, // ページ種別ごとの宛先条件（D-34）
       },
       select: {
         factoryId: true,
         contractorId: true,
+        workType: true,
         workCategory: true,
         sampleRound: true,
         plannedStartDate: true,
@@ -358,26 +388,26 @@ export async function getSewingSpecPdfData(
     })
     if (!wo) return { ok: false, reason: "wo-invalid", woId: spec.woId }
 
-    // 絵型: 指定の sortOrder（省略時は最小の1枚）。指定の絵型が無ければ sketch-not-found
-    let sketch: SewingSpecSketch | null = null
-    const wanted = spec.sortOrders?.[0]
-    if (wanted !== undefined) {
-      const target = sketches.find((s) => s.sortOrder === wanted)
-      if (!target) {
-        return { ok: false, reason: "sketch-not-found", woId: spec.woId, sortOrder: wanted }
-      }
-      sketch = {
-        image: await loadSketch(target.gcsPath),
-        caption: target.caption ? pdfText(target.caption) : null,
-        sortOrder: target.sortOrder,
+    // 絵型: 指定の sortOrder をクエリの順に（省略時は最小の1枚）。指定の絵型が無ければ sketch-not-found
+    const targets: ProductSketch[] = []
+    if (spec.sortOrders) {
+      for (const wanted of spec.sortOrders) {
+        const target = sketches.find((s) => s.sortOrder === wanted)
+        if (!target) {
+          return { ok: false, reason: "sketch-not-found", woId: spec.woId, sortOrder: wanted }
+        }
+        targets.push(target)
       }
     } else if (sketches.length > 0) {
-      const target = sketches[0]
-      sketch = {
+      targets.push(sketches[0])
+    }
+    const pageSketches: SewingSpecSketch[] = []
+    for (const target of targets) {
+      pageSketches.push({
         image: await loadSketch(target.gcsPath),
         caption: target.caption ? pdfText(target.caption) : null,
         sortOrder: target.sortOrder,
-      }
+      })
     }
 
     const [factory, contractor] = await Promise.all([
@@ -419,20 +449,21 @@ export async function getSewingSpecPdfData(
         })
 
     outPages.push({
-      kind: "sewing",
+      kind: spec.kind,
       recipientName:
         factory?.factoryName ?? contractor?.contractorName ?? "（発注先未設定）",
       contactName: contact ? personName(contact) : null,
       plannedStartDate: fmtDate(wo.plannedStartDate),
       expectedDeliveryDate: fmtDate(wo.expectedDeliveryDate),
       kindLabel: kindLabel(wo.workCategory, wo.sampleRound),
+      workTypeLabel: WORK_ORDER_TYPE_LABELS[wo.workType],
       orderQuantity: wo.items.reduce((a, it) => a + it.quantity, 0),
       orderUnit: wo.items[0]?.unit ?? "枚",
       quantityMode: quantityMode(wo.workCategory),
       patternLabel: pv
         ? `${fmtDate(pv.receivedAt)} ${PATTERN_WORK_TYPE_LABELS[pv.workType]}`
         : DASH,
-      sketch,
+      sketches: pageSketches,
     })
   }
 
@@ -440,6 +471,8 @@ export async function getSewingSpecPdfData(
     ok: true,
     data: {
       productCode: product.productCode,
+      productName: product.productName || DASH,
+      brandName: brand?.brandName || DASH,
       clientProductCode: product.clientProductCode || DASH,
       patternNumber: modelCode?.patternNumber || DASH,
       assignedToName: assignedTo ? personName(assignedTo) : DASH,
