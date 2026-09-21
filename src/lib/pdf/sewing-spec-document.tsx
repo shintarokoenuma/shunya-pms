@@ -186,8 +186,19 @@ function SkuMatrix({ data }: { data: SewingSpecPdfData }) {
   )
 }
 
-/** 付属の本表（案B）。色の欄は「色別（下表）」か「全色共通（…）」 */
-function AccessoryTable({ rows, title }: { rows: SewingSpecAccessoryRow[]; title: string }) {
+/** 色が変わる行の色の欄。色ごとの指定が同じページにあれば「色別（下表）」、無ければ「色別（別紙）」 */
+type ColorRefLabel = "色別（下表）" | "色別（別紙）"
+
+/** 付属の本表（案B）。色の欄は「色別（下表／別紙）」か「全色共通（…）」 */
+function AccessoryTable({
+  rows,
+  title,
+  colorRefLabel,
+}: {
+  rows: SewingSpecAccessoryRow[]
+  title: string
+  colorRefLabel: ColorRefLabel
+}) {
   return (
     <View>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -211,7 +222,7 @@ function AccessoryTable({ rows, title }: { rows: SewingSpecAccessoryRow[]; title
               <Cell style={[styles.cell, styles.accCode]}>{r.itemCode}</Cell>
               <Cell style={[styles.cell, styles.accSpec]}>{r.spec}</Cell>
               {r.colors.length > 0 ? (
-                <Cell style={[styles.cell, styles.accColor, styles.colorRef]}>色別（下表）</Cell>
+                <Cell style={[styles.cell, styles.accColor, styles.colorRef]}>{colorRefLabel}</Cell>
               ) : (
                 <Cell style={[styles.cell, styles.accColor]}>
                   {r.commonColor ? `全色共通（${r.commonColor}）` : "全色共通"}
@@ -327,17 +338,20 @@ function HeaderBlock({
   )
 }
 
-/** 1枚目（宛先ごと）。付属は 1〜15 行目 */
+/** 1枚目（宛先ごと）。付属は 1〜15 行目。色ごとの指定は付属が15行以下のときだけ（16行以上は最後のつづきページに） */
 function MainPage({
   data,
   page,
   rows,
+  colorSpecRows,
   pageNo,
   pageTotal,
 }: {
   data: SewingSpecPdfData
   page: SewingSpecPage
   rows: SewingSpecAccessoryRow[]
+  /** このページに出す色ごとの指定の対象行（null なら出さない＝色の欄は「色別（別紙）」） */
+  colorSpecRows: SewingSpecAccessoryRow[] | null
   pageNo: number
   pageTotal: number
 }) {
@@ -388,45 +402,65 @@ function MainPage({
         </View>
       </View>
 
-      {/* 6. 付属（案B）＋ 7. 色ごとの指定 */}
-      <AccessoryTable rows={rows} title="付属" />
-      <ColorSpecTable rows={rows} colorwayNames={data.colorwayNames} />
+      {/* 6. 付属（案B）＋ 7. 色ごとの指定（15行以下のときだけ。16行以上は最後のつづきページにまとめる） */}
+      <AccessoryTable rows={rows} title="付属" colorRefLabel={colorSpecRows ? "色別（下表）" : "色別（別紙）"} />
+      {colorSpecRows ? <ColorSpecTable rows={colorSpecRows} colorwayNames={data.colorwayNames} /> : null}
     </Page>
   )
 }
 
-/** 付属のつづき（D-38）。ヘッダーは1枚目と同じ。絵型・数量・仕様は出さない */
+/** 付属のつづき（D-38）。ヘッダーは1枚目と同じ。絵型・数量・仕様は出さない。色ごとの指定は最後のつづきページに1回だけ */
 function ContinuationPage({
   data,
   page,
   rows,
+  colorSpecRows,
   pageNo,
   pageTotal,
 }: {
   data: SewingSpecPdfData
   page: SewingSpecPage
   rows: SewingSpecAccessoryRow[]
+  /** 最後のつづきページだけ全行（色が変わる行）。途中のページは null＝「色別（別紙）」 */
+  colorSpecRows: SewingSpecAccessoryRow[] | null
   pageNo: number
   pageTotal: number
 }) {
   return (
     <Page size={B4_JIS} style={styles.page}>
       <HeaderBlock data={data} page={page} pageNo={pageNo} pageTotal={pageTotal} />
-      <AccessoryTable rows={rows} title="付属（つづき）" />
-      <ColorSpecTable rows={rows} colorwayNames={data.colorwayNames} />
+      <AccessoryTable rows={rows} title="付属（つづき）" colorRefLabel={colorSpecRows ? "色別（下表）" : "色別（別紙）"} />
+      {colorSpecRows ? <ColorSpecTable rows={colorSpecRows} colorwayNames={data.colorwayNames} /> : null}
     </Page>
   )
 }
 
-type PhysicalPage = { page: SewingSpecPage; rows: SewingSpecAccessoryRow[]; cont: boolean }
+type PhysicalPage = {
+  page: SewingSpecPage
+  rows: SewingSpecAccessoryRow[]
+  cont: boolean
+  /** 色ごとの指定を出すページだけ対象行を持つ（15行以下＝1枚目・16行以上＝最後のつづきページ） */
+  colorSpecRows: SewingSpecAccessoryRow[] | null
+}
 
-/** 宛先ごとのページを、付属の行数に応じて「1枚目＋つづき」の物理ページに展開する（ページ番号は通し） */
+/**
+ * 宛先ごとのページを、付属の行数に応じて「1枚目＋つづき」の物理ページに展開する（ページ番号は通し）。
+ * 色ごとの指定は、付属が15行以下なら1枚目に、16行以上なら最後のつづきページに全行分を1回だけ出す。
+ */
 function buildPhysicalPages(data: SewingSpecPdfData): PhysicalPage[] {
   const out: PhysicalPage[] = []
+  const acc = data.accessories
+  const hasCont = acc.length > MAIN_ACCESSORY_ROWS
   for (const page of data.pages) {
-    out.push({ page, rows: data.accessories.slice(0, MAIN_ACCESSORY_ROWS), cont: false })
-    for (let s = MAIN_ACCESSORY_ROWS; s < data.accessories.length; s += CONT_ACCESSORY_ROWS) {
-      out.push({ page, rows: data.accessories.slice(s, s + CONT_ACCESSORY_ROWS), cont: true })
+    out.push({
+      page,
+      rows: acc.slice(0, MAIN_ACCESSORY_ROWS),
+      cont: false,
+      colorSpecRows: hasCont ? null : acc,
+    })
+    for (let s = MAIN_ACCESSORY_ROWS; s < acc.length; s += CONT_ACCESSORY_ROWS) {
+      const isLast = s + CONT_ACCESSORY_ROWS >= acc.length
+      out.push({ page, rows: acc.slice(s, s + CONT_ACCESSORY_ROWS), cont: true, colorSpecRows: isLast ? acc : null })
     }
   }
   return out
@@ -438,9 +472,25 @@ export function SewingSpecDocument({ data }: { data: SewingSpecPdfData }) {
     <Document>
       {physical.map((p, i) =>
         p.cont ? (
-          <ContinuationPage key={i} data={data} page={p.page} rows={p.rows} pageNo={i + 1} pageTotal={physical.length} />
+          <ContinuationPage
+            key={i}
+            data={data}
+            page={p.page}
+            rows={p.rows}
+            colorSpecRows={p.colorSpecRows}
+            pageNo={i + 1}
+            pageTotal={physical.length}
+          />
         ) : (
-          <MainPage key={i} data={data} page={p.page} rows={p.rows} pageNo={i + 1} pageTotal={physical.length} />
+          <MainPage
+            key={i}
+            data={data}
+            page={p.page}
+            rows={p.rows}
+            colorSpecRows={p.colorSpecRows}
+            pageNo={i + 1}
+            pageTotal={physical.length}
+          />
         ),
       )}
     </Document>
