@@ -261,3 +261,29 @@ export async function getSignedReadUrl(gcsPath: string): Promise<string | null> 
     return null
   }
 }
+
+/**
+ * B-054 PR-3: gs://bucket/object の原本を Buffer で読む（PDF に画像を埋め込むため）。
+ * 署名URL を react-pdf に渡す方式は、原本が WebP のことがあり描画できないため使わない。
+ * 失敗時は null（呼び出し側で「読めなかった」と表示する）。
+ */
+export async function downloadToBuffer(gcsPath: string): Promise<Buffer | null> {
+  const ctx = getStorageContext()
+  if (!ctx) return null
+  const m = gcsPath.match(/^gs:\/\/([^/]+)\/(.+)$/)
+  if (!m) {
+    console.error("[gcs] gcsPath の形式が不正です")
+    return null
+  }
+  const [, bucket, object] = m
+  try {
+    const [buf] = await ctx.storage.bucket(bucket).file(object).download()
+    return buf
+  } catch (e) {
+    console.error(
+      "[gcs] 原本の読み出しに失敗しました:",
+      e instanceof Error ? e.message : "unknown error",
+    )
+    return null
+  }
+}

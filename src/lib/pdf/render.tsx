@@ -5,6 +5,7 @@ import { QuotationDocument } from "./quotation-document"
 import type { QuotationPdfData } from "./quotation-data"
 import { PeQuotationDocument } from "./pe-quotation-document"
 import type { PeQuotationPdfData } from "./pe-quotation-data"
+import { SketchProbeDocument, type SketchProbeData } from "./sketch-probe-document"
 
 /**
  * S-4c-2(H2): 「組み立て(OrderDocument)」と「出力先」を分離するための生成層。
@@ -35,4 +36,14 @@ export async function renderPeQuotationPdfBuffer(
   data: PeQuotationPdfData,
 ): Promise<Buffer> {
   return renderToBuffer(<PeQuotationDocument data={data} />)
+}
+
+/**
+ * B-054 PR-3: 絵型を react-pdf に載せる技術検証。
+ * ★PR-4（縫製仕様書 PDF 本体）で本体ルートに置き換えて削除する。
+ */
+export async function renderSketchProbePdfBuffer(
+  data: SketchProbeData,
+): Promise<Buffer> {
+  return renderToBuffer(<SketchProbeDocument data={data} />)
 }
