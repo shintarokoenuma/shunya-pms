@@ -61,17 +61,31 @@ const styles = StyleSheet.create({
   bandCode: { fontSize: 15, fontWeight: "bold", marginRight: 16 },
   bandItem: { marginRight: 14 },
   // 4. 絵型
+  // 残りの高さを埋めるが、画像の高さで伸びない（flexBasis 0・minHeight 0・overflow hidden）。
+  // ★これが無いと Image の固有サイズで枠が伸び、Page が B4 より長くなる（pdfinfo 実測 1840pt）
   sketchBox: {
     flexGrow: 1,
     flexShrink: 1,
-    minHeight: 160,
+    flexBasis: 0,
+    minHeight: 0,
+    overflow: "hidden",
     border: "0.5pt solid #bbb",
     padding: 4,
     marginBottom: 8,
     justifyContent: "center",
     alignItems: "center",
   },
-  sketchImg: { width: "100%", height: "100%", objectFit: "contain" },
+  sketchImgWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, width: "100%", overflow: "hidden" },
+  // ★react-pdf の Image は固有サイズ（長辺 1600px）で測られ、height:"100%" / maxHeight / flexBasis では縮まない
+  //   （2026-09-21 に6通りを実測。1ページに収まるのは height: 0 ＋ flexGrow 1 ＋ flexShrink 1 だけ）。
+  //   height 0 を起点に flexGrow で残りの高さまで伸ばし、objectFit contain で比率を保つ
+  sketchImg: {
+    width: "100%",
+    height: 0,
+    flexGrow: 1,
+    flexShrink: 1,
+    objectFit: "contain",
+  },
   caption: { fontSize: 8, color: "#444", marginTop: 2 },
   // 5. 数量・仕様
   twoCol: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
@@ -197,8 +211,9 @@ function AccessoryTable({ data }: { data: SewingSpecPdfData }) {
           ))
         )}
       </View>
+      {/* 「※」（U+203B）は同梱の NotoSansJP サブセットにグリフが無いため「注：」にする */}
       {data.accessoriesOverflow > 0 ? (
-        <Text style={styles.note}>{`※ほか ${data.accessoriesOverflow} 行（BOM を参照）`}</Text>
+        <Text style={styles.note}>{`注：ほか ${data.accessoriesOverflow} 行（BOM を参照）`}</Text>
       ) : null}
     </View>
   )
@@ -214,7 +229,9 @@ function SewingPage({
   index: number
 }) {
   return (
-    <Page size={B4_JIS} style={styles.page} wrap={false}>
+    // ★Page に wrap={false} を付けると react-pdf は Page の高さを内容に合わせて伸ばす（pdfinfo 実測 1840pt）。
+    //   用紙を B4 に固定するため wrap は既定のままにし、絵型の枠（flexBasis 0）で残りの高さを吸収する。
+    <Page size={B4_JIS} style={styles.page}>
       {/* 1. 表題＋区分の札＋発行日・ページ */}
       <View style={styles.titleRow}>
         <View style={styles.titleLeft}>
@@ -273,8 +290,10 @@ function SewingPage({
       {/* 4. 絵型（残りの高さいっぱい） */}
       <View style={styles.sketchBox}>
         {page.sketch?.image ? (
-          // eslint-disable-next-line jsx-a11y/alt-text -- react-pdf の Image は HTML の img ではなく alt を持たない
-          <Image src={page.sketch.image} style={styles.sketchImg} />
+          <View style={styles.sketchImgWrap}>
+            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf の Image は HTML の img ではなく alt を持たない */}
+            <Image src={page.sketch.image} style={styles.sketchImg} />
+          </View>
         ) : (
           <Text style={styles.small}>
             {page.sketch ? "絵型を読み込めませんでした" : "絵型が未登録です"}

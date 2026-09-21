@@ -91,6 +91,7 @@ export type SewingSpecDataResult =
   | { ok: true; data: SewingSpecPdfData }
   | { ok: false; reason: "product-not-found" }
   | { ok: false; reason: "wo-invalid"; woId: string }
+  | { ok: false; reason: "sketch-not-found"; woId: string; sortOrder: number }
 
 function fmtDate(d: Date | null | undefined): string {
   if (!d) return DASH
@@ -100,6 +101,16 @@ function fmtDate(d: Date | null | undefined): string {
 /** JST の今日（YYYY-MM-DD）。コンテナ TZ 非依存（gcs.ts の timestampJst と同じ考え方）。 */
 function todayJst(): string {
   return new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10)
+}
+
+/**
+ * 同梱の NotoSansJP サブセットに無い文字を、同じ意味でフォントにある文字へ置き換える（PDF 表示専用・DB は触らない）。
+ * ★2026-09-21 fontTools 実測: U+FF5E（～ 全角チルダ）・U+203B（※）は cmap に無く、U+301C（〜）はある。
+ *   縫製指示の既定候補（sewing-instruction.ts）と dev の値は U+FF5E を使っている。
+ *   フォントの差し替えは発注書・見積書にも影響するため別番号で扱う。
+ */
+function pdfText(s: string): string {
+  return s.replace(/～/g, "〜")
 }
 
 function personName(p: {
@@ -130,11 +141,11 @@ function readInstructions(raw: unknown): SewingSpecInstruction[] {
   const out: SewingSpecInstruction[] = []
   for (const k of SEWING_FIXED_ORDER) {
     const v = si.fixed?.[k]
-    if (typeof v === "string" && v.trim()) out.push({ label: SEWING_INSTRUCTION_LABELS[k], value: v })
+    if (typeof v === "string" && v.trim()) out.push({ label: SEWING_INSTRUCTION_LABELS[k], value: pdfText(v) })
   }
   for (const k of SEWING_DETAIL_ORDER) {
     const v = si.sewing?.[k]
-    if (typeof v === "string" && v.trim()) out.push({ label: SEWING_INSTRUCTION_LABELS[k], value: v })
+    if (typeof v === "string" && v.trim()) out.push({ label: SEWING_INSTRUCTION_LABELS[k], value: pdfText(v) })
   }
   return out
 }
@@ -290,10 +301,19 @@ export async function getSewingSpecPdfData(
       row.cells[sizes.indexOf(s.size)] += s.productionQuantity
       rowMap.set(key, row)
     }
-    const rows = [...rowMap.values()].map((r) => ({
-      ...r,
-      total: r.cells.reduce((a, b) => a + b, 0),
-    }))
+    // 色の行はカラーウェイの順（sortOrder → colorwayCode）＝付属の列と同じ並び。
+    // ★SKU の orderBy（colorway.sortOrder）だけでは sortOrder が同値のとき並びが揃わない（dev 実測 A, C, B）
+    const cwIndex = new Map(colorways.map((c, i) => [c.id, i]))
+    const rows = [...rowMap.entries()]
+      .sort(
+        (a, b) =>
+          (cwIndex.get(a[0]) ?? Number.MAX_SAFE_INTEGER) -
+          (cwIndex.get(b[0]) ?? Number.MAX_SAFE_INTEGER),
+      )
+      .map(([, r]) => ({
+        ...r,
+        total: r.cells.reduce((a, b) => a + b, 0),
+      }))
     const colTotals = sizes.map((_, j) => rows.reduce((a, r) => a + r.cells[j], 0))
     skuMatrix = {
       sizes,
@@ -340,20 +360,26 @@ export async function getSewingSpecPdfData(
     })
     if (!wo) return { ok: false, reason: "wo-invalid", woId: spec.woId }
 
-    // 絵型: 指定の sortOrder（省略時は最小の1枚）。指定が無ければ wo-invalid
+    // 絵型: 指定の sortOrder（省略時は最小の1枚）。指定の絵型が無ければ sketch-not-found
     let sketch: SewingSpecSketch | null = null
-    if (sketches.length > 0) {
-      const wanted = spec.sortOrders?.[0]
-      const target =
-        wanted === undefined ? sketches[0] : sketches.find((s) => s.sortOrder === wanted)
-      if (!target) return { ok: false, reason: "wo-invalid", woId: spec.woId }
+    const wanted = spec.sortOrders?.[0]
+    if (wanted !== undefined) {
+      const target = sketches.find((s) => s.sortOrder === wanted)
+      if (!target) {
+        return { ok: false, reason: "sketch-not-found", woId: spec.woId, sortOrder: wanted }
+      }
       sketch = {
         image: await loadSketch(target.gcsPath),
-        caption: target.caption ?? null,
+        caption: target.caption ? pdfText(target.caption) : null,
         sortOrder: target.sortOrder,
       }
-    } else if (spec.sortOrders && spec.sortOrders.length > 0) {
-      return { ok: false, reason: "wo-invalid", woId: spec.woId }
+    } else if (sketches.length > 0) {
+      const target = sketches[0]
+      sketch = {
+        image: await loadSketch(target.gcsPath),
+        caption: target.caption ? pdfText(target.caption) : null,
+        sortOrder: target.sortOrder,
+      }
     }
 
     const [factory, contractor] = await Promise.all([

@@ -30,6 +30,12 @@ export async function GET(
     if (result.reason === "product-not-found") {
       return new Response("品番が見つかりません", { status: 404 })
     }
+    if (result.reason === "sketch-not-found") {
+      return new Response(
+        `指定の絵型が見つかりません（sortOrder=${result.sortOrder}・woId=${result.woId}）`,
+        { status: 400 },
+      )
+    }
     return new Response(`宛先の作業発注が条件を満たしません: ${result.woId}`, { status: 400 })
   }
 
