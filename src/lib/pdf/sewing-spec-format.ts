@@ -16,7 +16,7 @@ export const SEWING_SPEC_MAX_PAGES = 10
  * 載せる画像（絵型）の上限。
  * - sewing: 4a のまま（上限なし・先頭の1枚を使う）
  * - measure: 2 まで（1つ目＝採寸位置の絵型・2つ目＝サイズ表の画像）
- * - process: 4 まで（2列に並べる）
+ * - process: 4 まで（2列に並べる）。宛先は加工5種＋SEWING（詳細図・D-71）
  */
 export const SEWING_SPEC_MAX_IMAGES: Record<SewingSpecPageKind, number | null> = {
   sewing: null,

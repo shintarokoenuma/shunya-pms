@@ -32,11 +32,14 @@ import type { ProductSketch } from "@/lib/types/product-sketch"
 const SKETCH_MAX_EDGE = 1600 // addendum v0.1 D-25
 const SKETCH_QUALITY = 85
 
-/** ページ種別ごとに受け付ける宛先 WO の workType（addendum v0.2 D-34） */
+/**
+ * ページ種別ごとに受け付ける宛先 WO の workType（addendum v0.2 D-34）。
+ * ★process は加工5種＋SEWING（D-71: 3枚目を縫製工場あての「詳細図」にも使う。SEWING のとき紙面は加工指示を出さない）
+ */
 const WO_TYPES_BY_KIND: Record<SewingSpecPageKind, WorkOrderType[]> = {
   sewing: ["SEWING"],
   measure: ["SEWING", "INSPECTION"],
-  process: ["PRINTING", "EMBROIDERY", "WASHING", "DYEING", "FINISHING"],
+  process: ["PRINTING", "EMBROIDERY", "WASHING", "DYEING", "FINISHING", "SEWING"],
 }
 /** 付属は全行を返す（上限 60）。1枚目に 15 行、16 行目以降は「付属のつづき」のページ（addendum v0.3 D-37 / D-38） */
 export const SEWING_SPEC_MAX_ACCESSORY_ROWS = 60
@@ -83,6 +86,8 @@ export type SewingSpecPage = {
   plannedStartDate: string
   expectedDeliveryDate: string
   kindLabel: string | null
+  /** 宛先 WO の workType（3枚目: SEWING なら「詳細図」の紙面・D-71） */
+  workType: WorkOrderType
   /** WO の workType の表示名（3枚目の「加工」） */
   workTypeLabel: string
   orderQuantity: number
@@ -456,6 +461,7 @@ export async function getSewingSpecPdfData(
       plannedStartDate: fmtDate(wo.plannedStartDate),
       expectedDeliveryDate: fmtDate(wo.expectedDeliveryDate),
       kindLabel: kindLabel(wo.workCategory, wo.sampleRound),
+      workType: wo.workType,
       workTypeLabel: WORK_ORDER_TYPE_LABELS[wo.workType],
       orderQuantity: wo.items.reduce((a, it) => a + it.quantity, 0),
       orderUnit: wo.items[0]?.unit ?? "枚",

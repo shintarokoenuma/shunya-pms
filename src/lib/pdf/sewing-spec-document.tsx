@@ -18,7 +18,7 @@ registerPdfFonts()
  * - 1ページ1宛先（D-8）。約束納期は載せない（D-3）。工場には希望納期のみ（値は太字・D-39）
  * - 1枚目（縫製工場用）: 絵型・数量・仕様・付属（案B・D-37）。付属が15行を超えたら「付属のつづき」（D-38・D-44）
  * - 2枚目（採寸用）: 数量・仕様3項目・採寸位置の絵型・サイズ表の画像
- * - 3枚目（加工工場用）: 加工指示・画像（最大4・2列）
+ * - 3枚目（加工工場用）: 加工指示・画像（最大4・2列）。宛先が SEWING の WO なら「詳細図」（表題を変え・加工指示なし・D-71）
  * - 絵型は残りの高さを埋める（height:0 ＋ flexGrow。D-6「その分、絵型を大きくする」）
  * - ページ番号は出力した全ページ（付属のつづきを含む）の通し番号（D-33）
  */
@@ -43,6 +43,8 @@ const PAGE_TITLES: Record<SewingSpecPageKind, string> = {
   measure: "縫製仕様書（採寸用）",
   process: "縫製仕様書（加工工場用）",
 }
+/** 3枚目の宛先が縫製 WO のとき（D-71）: 縫製工場あての詳細図 */
+const DETAIL_PAGE_TITLE = "縫製仕様書（詳細図）"
 
 const styles = StyleSheet.create({
   page: {
@@ -616,6 +618,7 @@ function ImageGrid({ sketches }: { sketches: SewingSpecSketch[] }) {
 /**
  * 3枚目（加工工場用・4b）。宛先は加工の WO（PRINTING / EMBROIDERY / WASHING / DYEING / FINISHING）。
  * 加工指示（加工・数量・位置・版・色）→ 画像を2列で（残りの高さいっぱい）。
+ * ★宛先が SEWING の WO なら「縫製仕様書（詳細図）」（D-71）: 加工指示は出さず、帯のすぐ下から画像を2列で。
  */
 function ProcessPage({
   data,
@@ -628,6 +631,7 @@ function ProcessPage({
   pageNo: number
   pageTotal: number
 }) {
+  const isDetail = page.workType === "SEWING"
   const rows: [string, string][] = [
     ["加工", page.workTypeLabel],
     ["数量", `この発注 ${page.orderQuantity.toLocaleString("ja-JP")} ${page.orderUnit}`],
@@ -635,16 +639,26 @@ function ProcessPage({
   ]
   return (
     <Page size={B4_JIS} style={styles.page}>
-      <HeaderBlock data={data} page={page} title={PAGE_TITLES.process} pageNo={pageNo} pageTotal={pageTotal} />
-      <Text style={styles.sectionTitle}>加工指示</Text>
-      <View style={styles.table}>
-        {rows.map(([label, value], i) => (
-          <View key={i} style={styles.tr} wrap={false}>
-            <Cell style={styles.procLabel}>{label}</Cell>
-            <Cell style={styles.procValue}>{value}</Cell>
+      <HeaderBlock
+        data={data}
+        page={page}
+        title={isDetail ? DETAIL_PAGE_TITLE : PAGE_TITLES.process}
+        pageNo={pageNo}
+        pageTotal={pageTotal}
+      />
+      {isDetail ? null : (
+        <>
+          <Text style={styles.sectionTitle}>加工指示</Text>
+          <View style={styles.table}>
+            {rows.map(([label, value], i) => (
+              <View key={i} style={styles.tr} wrap={false}>
+                <Cell style={styles.procLabel}>{label}</Cell>
+                <Cell style={styles.procValue}>{value}</Cell>
+              </View>
+            ))}
           </View>
-        ))}
-      </View>
+        </>
+      )}
       <ImageGrid sketches={page.sketches} />
     </Page>
   )

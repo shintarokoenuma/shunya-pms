@@ -44,6 +44,8 @@ import { getProductOrders } from "@/lib/actions/product-orders"
 import { SewingSpecDialogButton, type SewingSpecWoOption } from "../_components/sewing-spec-dialog"
 import { WORK_ORDER_TYPE_LABELS } from "@/lib/constants/work-order-types"
 import { kindLabel as sewingSpecKindLabel } from "@/lib/pdf/sewing-spec-format"
+import { WORK_ORDER_STATUS_LABELS } from "../../work-orders/_components/labels"
+import type { WorkOrderStatus } from "@prisma/client"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
 import { SewingInstructionSection } from "../_components/sewing-instruction-section"
 import { parseSewingInstruction } from "@/lib/validators/sewing-instruction"
@@ -299,6 +301,19 @@ export default async function ProductDetailPage({
       workTypeLabel: WORK_ORDER_TYPE_LABELS[r.workType!],
       kindLabel: sewingSpecKindLabel(r.workCategory ?? "", r.sampleRound),
       workCategory: r.workCategory,
+      // 区分の見出し（D-73・プルダウンの SelectGroup）
+      categoryLabel:
+        r.workCategory === "PRODUCTION"
+          ? "量産"
+          : r.workCategory === "ADDITIONAL"
+            ? "量産（追加）"
+            : r.workCategory === "REWORK"
+              ? "量産（やり直し）"
+              : r.workCategory === "SAMPLE"
+                ? "サンプル"
+                : "その他",
+      status: r.status as string,
+      statusLabel: WORK_ORDER_STATUS_LABELS[r.status as WorkOrderStatus],
       createdAt: r.createdAt,
     }))
   const sewingSpecSketches = sketches.map((s) => ({

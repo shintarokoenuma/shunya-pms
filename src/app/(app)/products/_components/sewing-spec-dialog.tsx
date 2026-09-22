@@ -16,7 +16,9 @@ import {
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
@@ -24,13 +26,16 @@ import { usePdfPreview, PdfPreviewDialog } from "@/components/pdf/pdf-preview-di
 
 /**
  * B-054 PR-4c: 品番カルテから縫製仕様書 PDF を出す出力ダイアログ。
- * - ページは3種（1枚目＝縫製工場用 sewing／2枚目＝採寸用 measure／3枚目＝加工工場用 process）。
- *   宛先の候補は addendum v0.2 D-34 のとおり（sewing＝SEWING／measure＝SEWING か INSPECTION／process＝加工5種）。
+ * - ページは3種（1枚目＝縫製工場用 sewing／2枚目＝採寸用 measure／3枚目＝加工工場用・詳細図 process）。
+ *   宛先の候補は addendum v0.2 D-34 のとおり（sewing＝SEWING／measure＝SEWING か INSPECTION／
+ *   process＝加工5種＋SEWING（D-71: 縫製 WO あては「詳細図」））。
  * - 画像はサムネを押した順に番号が付く（sewing 1・measure 2・process 4 まで）。既定は sortOrder 最小の1枚。
+ * - 取消（CANCELLED）の WO は既定で候補から外す（D-73）。上部の切り替えで表示できる。完了は出す。
+ * - プルダウンは区分（量産／量産（追加）／量産（やり直し）／サンプル／その他）ごとに見出しを付け、区分の中は新しい順。
  * - 選んだ内容は保存しない（開くたびに既定から選び直す）。
  * - 「プレビュー」は GET /api/products/[id]/sewing-spec?page=… を組み立てて既存の PdfPreviewDialog で開く。
- *   GCS 控え（/api/order-pdf-archive）は呼ばない。
- * ★候補の絞り込みと表示名（作業の種類・区分の札）はサーバ側（page.tsx）で作って渡す。ここでは prisma の enum を import しない。
+ *   GCS 控え（/api/order-pdf-archive）は呼ばない。取消の WO を PDF のルート側で拒否することはしない。
+ * ★候補の表示名（作業の種類・区分の札・状態・区分の見出し）はサーバ側（page.tsx）で作って渡す。ここでは prisma の enum を import しない。
  */
 
 export type SewingSpecWoOption = {
@@ -44,6 +49,12 @@ export type SewingSpecWoOption = {
   /** 区分の札（sewing-spec-format.ts の kindLabel と同じ規則）。無ければ null */
   kindLabel: string | null
   workCategory: string | null
+  /** 区分の見出し（量産／量産（追加）／量産（やり直し）／サンプル／その他） */
+  categoryLabel: string
+  /** WorkOrderStatus の文字列（CANCELLED を既定で隠す） */
+  status: string
+  /** WORK_ORDER_STATUS_LABELS[status] */
+  statusLabel: string
   /** ISO。新しい順の判定に使う */
   createdAt: string
 }
@@ -57,22 +68,32 @@ export type SewingSpecSketchOption = {
 const SEWING_TYPES = ["SEWING"]
 const MEASURE_TYPES = ["SEWING", "INSPECTION"]
 const PROCESS_TYPES = ["PRINTING", "EMBROIDERY", "WASHING", "DYEING", "FINISHING"]
+const CANCELLED = "CANCELLED"
+
+/** 区分の見出しの並び（プルダウンのグループ順） */
+const CATEGORY_ORDER = ["量産", "量産（追加）", "量産（やり直し）", "サンプル", "その他"]
 
 const MAX_IMAGES = { sewing: 1, measure: 2, process: 4 } as const
 
 type ProcessRow = { woId: string; on: boolean; images: number[] }
 
 type DialogState = {
+  showCancelled: boolean
   sewingOn: boolean
   sewingWoId: string | null
   sewingImages: number[]
   measureOn: boolean
   measureWoId: string | null
   measureImages: number[]
+  /** 3枚目の全候補（加工→縫製の順）。表示は showCancelled で絞る */
   process: ProcessRow[]
 }
 
-/** 宛先の既定: 量産（PRODUCTION）を先に、その中で新しい順の先頭 */
+function isVisible(w: SewingSpecWoOption, showCancelled: boolean): boolean {
+  return showCancelled || w.status !== CANCELLED
+}
+
+/** 宛先の既定: 量産（PRODUCTION）を先に、その中で新しい順の先頭（表示中の候補から） */
 function pickDefaultWo(rows: SewingSpecWoOption[]): string | null {
   if (rows.length === 0) return null
   const sorted = [...rows].sort((a, b) => {
@@ -84,12 +105,22 @@ function pickDefaultWo(rows: SewingSpecWoOption[]): string | null {
   return sorted[0].id
 }
 
+/** 3枚目の候補: 加工の WO が先、縫製の WO（詳細図）が後。それぞれ新しい順（入力の並びを保つ） */
+function processCandidates(wos: SewingSpecWoOption[]): SewingSpecWoOption[] {
+  return [
+    ...wos.filter((w) => PROCESS_TYPES.includes(w.workType)),
+    ...wos.filter((w) => SEWING_TYPES.includes(w.workType)),
+  ]
+}
+
 function buildDefaults(
-  sewingWos: SewingSpecWoOption[],
-  measureWos: SewingSpecWoOption[],
-  processWos: SewingSpecWoOption[],
+  wos: SewingSpecWoOption[],
   sketches: SewingSpecSketchOption[],
+  showCancelled: boolean,
 ): DialogState {
+  const visible = wos.filter((w) => isVisible(w, showCancelled))
+  const sewingWos = visible.filter((w) => SEWING_TYPES.includes(w.workType))
+  const measureWos = visible.filter((w) => MEASURE_TYPES.includes(w.workType))
   const first = sketches[0]?.sortOrder
   const defaultImages = first === undefined ? [] : [first]
   // 2枚目だけ: キャプションに「サイズ」を含む画像（1つ目と別のもの）があれば2つ目に自動で選ぶ
@@ -99,13 +130,19 @@ function buildDefaults(
   const measureImages =
     first === undefined ? [] : sizeImage ? [first, sizeImage.sortOrder] : [first]
   return {
+    showCancelled,
     sewingOn: sewingWos.length > 0,
     sewingWoId: pickDefaultWo(sewingWos),
     sewingImages: defaultImages,
     measureOn: measureWos.length > 0,
     measureWoId: pickDefaultWo(measureWos),
     measureImages,
-    process: processWos.map((w) => ({ woId: w.id, on: true, images: defaultImages })),
+    // 既定のチェック: 加工 WO はチェック済み、縫製 WO（詳細図）はチェックなし
+    process: processCandidates(wos).map((w) => ({
+      woId: w.id,
+      on: PROCESS_TYPES.includes(w.workType) && isVisible(w, showCancelled),
+      images: defaultImages,
+    })),
   }
 }
 
@@ -117,8 +154,21 @@ function toggleImage(current: number[], sortOrder: number, max: number): number[
   return [...current, sortOrder]
 }
 
-function woLabel(w: SewingSpecWoOption): string {
-  return `${w.number}　${w.counterpartyName}　${w.workTypeLabel}${w.kindLabel ? `　${w.kindLabel}` : ""}`
+function woLabel(w: SewingSpecWoOption, detail = false): string {
+  return (
+    `${w.number}　${w.counterpartyName}　${w.workTypeLabel}` +
+    (w.kindLabel ? `　${w.kindLabel}` : "") +
+    (w.status === CANCELLED ? `　${w.statusLabel}` : "") +
+    (detail ? "（詳細図）" : "")
+  )
+}
+
+/** 区分ごとに分ける（CATEGORY_ORDER の順・区分の中は入力の並び＝新しい順） */
+function groupByCategory(rows: SewingSpecWoOption[]): { label: string; rows: SewingSpecWoOption[] }[] {
+  const labels = [...CATEGORY_ORDER, ...rows.map((r) => r.categoryLabel).filter((l) => !CATEGORY_ORDER.includes(l))]
+  return [...new Set(labels)]
+    .map((label) => ({ label, rows: rows.filter((r) => r.categoryLabel === label) }))
+    .filter((g) => g.rows.length > 0)
 }
 
 function SketchPicker({
@@ -186,10 +236,15 @@ function WoSelect({
         <SelectValue placeholder="宛先の作業発注" />
       </SelectTrigger>
       <SelectContent>
-        {rows.map((w) => (
-          <SelectItem key={w.id} value={w.id}>
-            {woLabel(w)}
-          </SelectItem>
+        {groupByCategory(rows).map((g) => (
+          <SelectGroup key={g.label}>
+            <SelectLabel>{g.label}</SelectLabel>
+            {g.rows.map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {woLabel(w)}
+              </SelectItem>
+            ))}
+          </SelectGroup>
         ))}
       </SelectContent>
     </Select>
@@ -209,27 +264,46 @@ export function SewingSpecDialogButton({
   /** 絵型（sortOrder 順・サムネの署名URL付き） */
   sketches: SewingSpecSketchOption[]
 }) {
-  const sewingWos = wos.filter((w) => SEWING_TYPES.includes(w.workType))
-  const measureWos = wos.filter((w) => MEASURE_TYPES.includes(w.workType))
-  const processWos = wos.filter((w) => PROCESS_TYPES.includes(w.workType))
-
   const [open, setOpen] = useState(false)
-  const [state, setState] = useState<DialogState>(() =>
-    buildDefaults(sewingWos, measureWos, processWos, sketches),
-  )
+  const [state, setState] = useState<DialogState>(() => buildDefaults(wos, sketches, false))
   const [pending, startTransition] = useTransition()
   const preview = usePdfPreview()
 
+  // 表示中の候補（取消は既定で隠す・D-73）
+  const visible = wos.filter((w) => isVisible(w, state.showCancelled))
+  const sewingWos = visible.filter((w) => SEWING_TYPES.includes(w.workType))
+  const measureWos = visible.filter((w) => MEASURE_TYPES.includes(w.workType))
+  const processWos = processCandidates(visible)
+  const woById = new Map(wos.map((w) => [w.id, w]))
+
   function handleOpen() {
     // 選んだ内容は保存しない: 開くたびに既定から選び直す（setState はハンドラの中で）
-    setState(buildDefaults(sewingWos, measureWos, processWos, sketches))
+    setState(buildDefaults(wos, sketches, false))
     setOpen(true)
   }
 
+  /** 切り替えを変えたとき: 選択中の宛先が候補から消えるなら、表示中の候補の既定に戻す（ハンドラの中で行う） */
+  function handleToggleCancelled(show: boolean) {
+    setState((s) => {
+      const nextVisible = wos.filter((w) => isVisible(w, show))
+      const nextSewing = nextVisible.filter((w) => SEWING_TYPES.includes(w.workType))
+      const nextMeasure = nextVisible.filter((w) => MEASURE_TYPES.includes(w.workType))
+      const keep = (id: string | null, rows: SewingSpecWoOption[]) =>
+        id && rows.some((w) => w.id === id) ? id : pickDefaultWo(rows)
+      return {
+        ...s,
+        showCancelled: show,
+        sewingWoId: keep(s.sewingWoId, nextSewing),
+        measureWoId: keep(s.measureWoId, nextMeasure),
+      }
+    })
+  }
+
+  const processOn = state.process.filter((p) => p.on && processWos.some((w) => w.id === p.woId))
   const selectedCount =
     (state.sewingOn && state.sewingWoId ? 1 : 0) +
     (state.measureOn && state.measureWoId ? 1 : 0) +
-    state.process.filter((p) => p.on).length
+    processOn.length
 
   function buildQuery(): string {
     const q = new URLSearchParams()
@@ -237,7 +311,11 @@ export function SewingSpecDialogButton({
       q.append("page", images.length > 0 ? `${kind}:${woId}:${images.join(",")}` : `${kind}:${woId}`)
     if (state.sewingOn && state.sewingWoId) page("sewing", state.sewingWoId, state.sewingImages)
     if (state.measureOn && state.measureWoId) page("measure", state.measureWoId, state.measureImages)
-    for (const p of state.process) if (p.on) page("process", p.woId, p.images)
+    // 3枚目は表示中の候補の並び（加工 → 縫製）で
+    for (const w of processWos) {
+      const p = state.process.find((r) => r.woId === w.id)
+      if (p?.on) page("process", w.id, p.images)
+    }
     return q.toString()
   }
 
@@ -259,6 +337,8 @@ export function SewingSpecDialogButton({
     }))
   }
 
+  const hasCancelled = wos.some((w) => w.status === CANCELLED)
+
   return (
     <>
       <Button type="button" variant="outline" size="sm" onClick={handleOpen}>
@@ -274,6 +354,14 @@ export function SewingSpecDialogButton({
               出すページと宛先・絵型を選びます。サムネは押した順に紙面に載ります。
             </DialogDescription>
           </DialogHeader>
+
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Checkbox
+              checked={state.showCancelled}
+              onCheckedChange={(c) => handleToggleCancelled(c === true)}
+            />
+            {`取消の作業発注も表示${hasCancelled ? "" : "（取消の作業発注はありません）"}`}
+          </label>
 
           <div className="space-y-5">
             {/* 1枚目 */}
@@ -350,17 +438,18 @@ export function SewingSpecDialogButton({
               )}
             </section>
 
-            {/* 3枚目 */}
+            {/* 3枚目（加工工場用・詳細図） */}
             <section className={`space-y-2 rounded border p-3 ${processWos.length === 0 ? "opacity-60" : ""}`}>
-              <p className="text-sm font-medium">3枚目（加工工場用）</p>
+              <p className="text-sm font-medium">3枚目（加工工場用・詳細図）</p>
               {processWos.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  この品番に加工の作業発注がありません。作業発注を作ると選べます
+                  この品番に加工か縫製の作業発注がありません。作業発注を作ると選べます
                 </p>
               ) : (
                 <div className="space-y-3">
                   {processWos.map((w) => {
                     const row = state.process.find((p) => p.woId === w.id) ?? { woId: w.id, on: false, images: [] }
+                    const detail = SEWING_TYPES.includes((woById.get(w.id) ?? w).workType)
                     return (
                       <div key={w.id} className="space-y-2 rounded border p-2">
                         <label className="flex items-center gap-2 text-sm">
@@ -368,7 +457,7 @@ export function SewingSpecDialogButton({
                             checked={row.on}
                             onCheckedChange={(c) => updateProcess(w.id, { on: c === true })}
                           />
-                          {woLabel(w)}
+                          {woLabel(w, detail)}
                         </label>
                         <p className="text-xs text-muted-foreground">画像（4つまで）</p>
                         <SketchPicker
