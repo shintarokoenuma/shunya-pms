@@ -102,6 +102,9 @@ export default async function EditDeliveryNotePage({
         <p className="font-mono text-sm text-muted-foreground">
           {dn.deliveryNumber}
         </p>
+        <p className="text-sm text-muted-foreground">
+          サンプル・発注・受注（量産）から引き当てるか、手入力で明細を作ります。
+        </p>
       </div>
       <DeliveryNoteForm
         mode="edit"

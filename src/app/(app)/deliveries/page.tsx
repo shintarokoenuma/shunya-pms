@@ -48,7 +48,7 @@ export default async function DeliveriesPage({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">納品書</h1>
           <p className="text-sm text-muted-foreground">
-            サンプル・見本類の納品書（DLV）。複数品番・見本類を1枚に混在できます。
+            納品書（DLV）。サンプル・見本類・量産を、複数品番まとめて1枚にできます。
           </p>
         </div>
         <Button asChild size="sm">
