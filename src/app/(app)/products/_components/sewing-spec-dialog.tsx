@@ -1,0 +1,545 @@
+"use client"
+
+import { useState, useTransition } from "react"
+import { FileText, Loader2, X } from "lucide-react"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import { usePdfPreview, PdfPreviewDialog } from "@/components/pdf/pdf-preview-dialog"
+
+/**
+ * B-054 PR-4c: 品番カルテから縫製仕様書 PDF を出す出力ダイアログ。
+ * - ページは3種（1枚目＝縫製工場用 sewing／2枚目＝採寸用 measure／3枚目＝加工工場用・詳細図 process）。
+ *   宛先の候補は addendum v0.2 D-34 のとおり（sewing＝SEWING／measure＝SEWING か INSPECTION／
+ *   process＝加工5種＋SEWING（D-71: 縫製 WO あては「詳細図」））。
+ * - 画像はサムネを押した順に番号が付く（sewing 1・measure 2・process 4 まで）。既定は sortOrder 最小の1枚。
+ * - 取消（CANCELLED）の WO は既定で候補から外す（D-73）。上部の切り替えで表示できる。完了は出す。
+ * - 3枚目（D-75・D-74 を置き換え）: 「足したカード＝1ページ」。既定は表示中の加工 WO から1件（pickDefaultWo の規則）。
+ *   「＋ ページを追加」の Select で加工 WO も縫製 WO（詳細図）も足せる（[×] で外す）。加工が2箇所以上に分かれる場合も同じ形。
+ * - プルダウンは区分（量産／量産（追加）／量産（やり直し）／サンプル／その他）ごとに見出しを付け、区分の中は新しい順。
+ * - 選んだ内容は保存しない（開くたびに既定から選び直す）。
+ * - 「プレビュー」は GET /api/products/[id]/sewing-spec?page=… を組み立てて既存の PdfPreviewDialog で開く。
+ *   GCS 控え（/api/order-pdf-archive）は呼ばない。取消の WO を PDF のルート側で拒否することはしない。
+ * ★候補の表示名（作業の種類・区分の札・状態・区分の見出し）はサーバ側（page.tsx）で作って渡す。ここでは prisma の enum を import しない。
+ */
+
+export type SewingSpecWoOption = {
+  id: string
+  number: string
+  counterpartyName: string
+  /** WorkOrderType の文字列（SEWING / INSPECTION / PRINTING …） */
+  workType: string
+  /** WORK_ORDER_TYPE_LABELS[workType] */
+  workTypeLabel: string
+  /** 区分の札（sewing-spec-format.ts の kindLabel と同じ規則）。無ければ null */
+  kindLabel: string | null
+  workCategory: string | null
+  /** 区分の見出し（量産／量産（追加）／量産（やり直し）／サンプル／その他） */
+  categoryLabel: string
+  /** WorkOrderStatus の文字列（CANCELLED を既定で隠す） */
+  status: string
+  /** WORK_ORDER_STATUS_LABELS[status] */
+  statusLabel: string
+  /** ISO。新しい順の判定に使う */
+  createdAt: string
+}
+
+export type SewingSpecSketchOption = {
+  sortOrder: number
+  caption: string | null
+  thumbUrl: string
+}
+
+const SEWING_TYPES = ["SEWING"]
+const MEASURE_TYPES = ["SEWING", "INSPECTION"]
+const PROCESS_TYPES = ["PRINTING", "EMBROIDERY", "WASHING", "DYEING", "FINISHING"]
+const CANCELLED = "CANCELLED"
+
+/** 区分の見出しの並び（プルダウンのグループ順） */
+const CATEGORY_ORDER = ["量産", "量産（追加）", "量産（やり直し）", "サンプル", "その他"]
+
+const MAX_IMAGES = { sewing: 1, measure: 2, process: 4 } as const
+
+/** 3枚目のカード（＝1ページ）。足した順 */
+type Page3 = { woId: string; images: number[] }
+
+type DialogState = {
+  showCancelled: boolean
+  sewingOn: boolean
+  sewingWoId: string | null
+  sewingImages: number[]
+  measureOn: boolean
+  measureWoId: string | null
+  measureImages: number[]
+  /** 3枚目: 足したカード（＝1ページ・足した順・D-75）。加工 WO と縫製 WO（詳細図）を同じ形で持つ */
+  pages3: Page3[]
+}
+
+function isVisible(w: SewingSpecWoOption, showCancelled: boolean): boolean {
+  return showCancelled || w.status !== CANCELLED
+}
+
+/** 宛先の既定: 量産（PRODUCTION）を先に、その中で新しい順の先頭（表示中の候補から） */
+function pickDefaultWo(rows: SewingSpecWoOption[]): string | null {
+  if (rows.length === 0) return null
+  const sorted = [...rows].sort((a, b) => {
+    const pa = a.workCategory === "PRODUCTION" ? 0 : 1
+    const pb = b.workCategory === "PRODUCTION" ? 0 : 1
+    if (pa !== pb) return pa - pb
+    return a.createdAt < b.createdAt ? 1 : -1
+  })
+  return sorted[0].id
+}
+
+/** 3枚目の候補: 加工の WO → 縫製の WO（詳細図）。それぞれ入力の並び（新しい順） */
+function page3Candidates(wos: SewingSpecWoOption[]): SewingSpecWoOption[] {
+  return [
+    ...wos.filter((w) => PROCESS_TYPES.includes(w.workType)),
+    ...wos.filter((w) => SEWING_TYPES.includes(w.workType)),
+  ]
+}
+
+/** sortOrder 最小の絵型1枚（無ければ空） */
+function defaultImagesOf(sketches: SewingSpecSketchOption[]): number[] {
+  const first = sketches[0]?.sortOrder
+  return first === undefined ? [] : [first]
+}
+
+function buildDefaults(
+  wos: SewingSpecWoOption[],
+  sketches: SewingSpecSketchOption[],
+  showCancelled: boolean,
+): DialogState {
+  const visible = wos.filter((w) => isVisible(w, showCancelled))
+  const sewingWos = visible.filter((w) => SEWING_TYPES.includes(w.workType))
+  const measureWos = visible.filter((w) => MEASURE_TYPES.includes(w.workType))
+  const first = sketches[0]?.sortOrder
+  const defaultImages = first === undefined ? [] : [first]
+  // 2枚目だけ: キャプションに「サイズ」を含む画像（1つ目と別のもの）があれば2つ目に自動で選ぶ
+  const sizeImage = sketches.find(
+    (s) => s.sortOrder !== first && (s.caption ?? "").includes("サイズ"),
+  )
+  const measureImages =
+    first === undefined ? [] : sizeImage ? [first, sizeImage.sortOrder] : [first]
+  return {
+    showCancelled,
+    sewingOn: sewingWos.length > 0,
+    sewingWoId: pickDefaultWo(sewingWos),
+    sewingImages: defaultImages,
+    measureOn: measureWos.length > 0,
+    measureWoId: pickDefaultWo(measureWos),
+    measureImages,
+    // 3枚目の既定（D-75）: 表示中の加工 WO から pickDefaultWo の規則で1件だけ。加工 WO が無ければ空
+    pages3: (() => {
+      const id = pickDefaultWo(visible.filter((w) => PROCESS_TYPES.includes(w.workType)))
+      return id ? [{ woId: id, images: defaultImages }] : []
+    })(),
+  }
+}
+
+/** サムネを押した順に番号を付ける。もう一度押すと外れる。max=1 は入れ替え、上限を超える選択はできない */
+function toggleImage(current: number[], sortOrder: number, max: number): number[] {
+  if (current.includes(sortOrder)) return current.filter((v) => v !== sortOrder)
+  if (max === 1) return [sortOrder]
+  if (current.length >= max) return current
+  return [...current, sortOrder]
+}
+
+function woLabel(w: SewingSpecWoOption, detail = false): string {
+  return (
+    `${w.number}　${w.counterpartyName}　${w.workTypeLabel}` +
+    (w.kindLabel ? `　${w.kindLabel}` : "") +
+    (w.status === CANCELLED ? `　${w.statusLabel}` : "") +
+    (detail ? "（詳細図）" : "")
+  )
+}
+
+/** 区分ごとに分ける（CATEGORY_ORDER の順・区分の中は入力の並び＝新しい順） */
+function groupByCategory(rows: SewingSpecWoOption[]): { label: string; rows: SewingSpecWoOption[] }[] {
+  const labels = [...CATEGORY_ORDER, ...rows.map((r) => r.categoryLabel).filter((l) => !CATEGORY_ORDER.includes(l))]
+  return [...new Set(labels)]
+    .map((label) => ({ label, rows: rows.filter((r) => r.categoryLabel === label) }))
+    .filter((g) => g.rows.length > 0)
+}
+
+function SketchPicker({
+  sketches,
+  selected,
+  max,
+  disabled,
+  onToggle,
+}: {
+  sketches: SewingSpecSketchOption[]
+  selected: number[]
+  max: number
+  disabled: boolean
+  onToggle: (sortOrder: number) => void
+}) {
+  if (sketches.length === 0) {
+    return <p className="text-xs text-muted-foreground">絵型が未登録です</p>
+  }
+  return (
+    <div className="flex flex-wrap gap-2">
+      {sketches.map((s) => {
+        const idx = selected.indexOf(s.sortOrder)
+        const picked = idx >= 0
+        const full = !picked && max > 1 && selected.length >= max
+        return (
+          <button
+            key={s.sortOrder}
+            type="button"
+            disabled={disabled || full}
+            onClick={() => onToggle(s.sortOrder)}
+            aria-pressed={picked}
+            title={s.caption ?? undefined}
+            className={`relative h-20 w-20 overflow-hidden rounded border bg-muted ${
+              picked ? "ring-2 ring-primary" : ""
+            } ${disabled || full ? "opacity-40" : "hover:opacity-90"}`}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- 署名URL（15分）のサムネ。next/image の最適化対象にしない */}
+            <img src={s.thumbUrl} alt={s.caption ?? `絵型 ${s.sortOrder}`} className="h-full w-full object-contain" />
+            {picked && (
+              <span className="absolute left-1 top-1 rounded bg-primary px-1.5 text-xs font-bold text-primary-foreground">
+                {idx + 1}
+              </span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function WoSelect({
+  rows,
+  value,
+  disabled,
+  onChange,
+}: {
+  rows: SewingSpecWoOption[]
+  value: string | null
+  disabled: boolean
+  onChange: (id: string) => void
+}) {
+  return (
+    <Select value={value ?? ""} onValueChange={onChange} disabled={disabled}>
+      <SelectTrigger className="w-full">
+        <SelectValue placeholder="宛先の作業発注" />
+      </SelectTrigger>
+      <SelectContent>
+        {groupByCategory(rows).map((g) => (
+          <SelectGroup key={g.label}>
+            <SelectLabel>{g.label}</SelectLabel>
+            {g.rows.map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {woLabel(w)}
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+}
+
+export function SewingSpecDialogButton({
+  productId,
+  productCode,
+  wos,
+  sketches,
+}: {
+  productId: string
+  productCode: string
+  /** この品番の作業発注（WO のみ・新しい順） */
+  wos: SewingSpecWoOption[]
+  /** 絵型（sortOrder 順・サムネの署名URL付き） */
+  sketches: SewingSpecSketchOption[]
+}) {
+  const [open, setOpen] = useState(false)
+  const [state, setState] = useState<DialogState>(() => buildDefaults(wos, sketches, false))
+  const [pending, startTransition] = useTransition()
+  const preview = usePdfPreview()
+
+  // 表示中の候補（取消は既定で隠す・D-73）
+  const visible = wos.filter((w) => isVisible(w, state.showCancelled))
+  const sewingWos = visible.filter((w) => SEWING_TYPES.includes(w.workType))
+  const measureWos = visible.filter((w) => MEASURE_TYPES.includes(w.workType))
+  const woById = new Map(wos.map((w) => [w.id, w]))
+  // 3枚目の候補（D-75）: 表示中の加工 WO と縫製 WO から、追加済みを除く
+  const page3Candidates_ = page3Candidates(visible).filter((w) => !state.pages3.some((p) => p.woId === w.id))
+  // 追加済みのカード（表示中の WO だけ。切り替えで消えたものはハンドラで外している）
+  const page3Cards = state.pages3
+    .map((p) => ({ ...p, wo: woById.get(p.woId) }))
+    .filter((p): p is Page3 & { wo: SewingSpecWoOption } => !!p.wo)
+
+  function handleOpen() {
+    // 選んだ内容は保存しない: 開くたびに既定から選び直す（setState はハンドラの中で）
+    setState(buildDefaults(wos, sketches, false))
+    setOpen(true)
+  }
+
+  /** 切り替えを変えたとき: 選択中の宛先が候補から消えるなら、表示中の候補の既定に戻す（ハンドラの中で行う） */
+  function handleToggleCancelled(show: boolean) {
+    setState((s) => {
+      const nextVisible = wos.filter((w) => isVisible(w, show))
+      const nextSewing = nextVisible.filter((w) => SEWING_TYPES.includes(w.workType))
+      const nextMeasure = nextVisible.filter((w) => MEASURE_TYPES.includes(w.workType))
+      const keep = (id: string | null, rows: SewingSpecWoOption[]) =>
+        id && rows.some((w) => w.id === id) ? id : pickDefaultWo(rows)
+      return {
+        ...s,
+        showCancelled: show,
+        sewingWoId: keep(s.sewingWoId, nextSewing),
+        measureWoId: keep(s.measureWoId, nextMeasure),
+        // OFF にして見えなくなる WO のカードは外す（D-75）
+        pages3: s.pages3.filter((p) => nextVisible.some((w) => w.id === p.woId)),
+      }
+    })
+  }
+
+  const selectedCount =
+    (state.sewingOn && state.sewingWoId ? 1 : 0) +
+    (state.measureOn && state.measureWoId ? 1 : 0) +
+    state.pages3.length
+
+  function buildQuery(): string {
+    const q = new URLSearchParams()
+    const page = (kind: string, woId: string, images: number[]) =>
+      q.append("page", images.length > 0 ? `${kind}:${woId}:${images.join(",")}` : `${kind}:${woId}`)
+    if (state.sewingOn && state.sewingWoId) page("sewing", state.sewingWoId, state.sewingImages)
+    if (state.measureOn && state.measureWoId) page("measure", state.measureWoId, state.measureImages)
+    // 3枚目は足した順（D-75）
+    for (const p of state.pages3) page("process", p.woId, p.images)
+    return q.toString()
+  }
+
+  function handlePreview() {
+    const query = buildQuery()
+    startTransition(async () => {
+      const r = await preview.openUrl(
+        `/api/products/${productId}/sewing-spec?${query}`,
+        `${productCode}_sewing-spec.pdf`,
+      )
+      if (!r.ok) toast.error(r.message)
+    })
+  }
+
+  function addPage3(woId: string) {
+    if (!woId) return
+    setState((s) =>
+      s.pages3.some((p) => p.woId === woId)
+        ? s
+        : { ...s, pages3: [...s.pages3, { woId, images: defaultImagesOf(sketches) }] },
+    )
+  }
+
+  function updatePage3(woId: string, images: number[]) {
+    setState((s) => ({ ...s, pages3: s.pages3.map((p) => (p.woId === woId ? { ...p, images } : p)) }))
+  }
+
+  function removePage3(woId: string) {
+    setState((s) => ({ ...s, pages3: s.pages3.filter((p) => p.woId !== woId) }))
+  }
+
+  const hasCancelled = wos.some((w) => w.status === CANCELLED)
+
+  return (
+    <>
+      <Button type="button" variant="outline" size="sm" onClick={handleOpen}>
+        <FileText className="mr-1 h-4 w-4" />
+        縫製仕様書
+      </Button>
+
+      <Dialog open={open} onOpenChange={(o) => !o && setOpen(false)}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>縫製仕様書 PDF を出力</DialogTitle>
+            <DialogDescription>
+              出すページと宛先・絵型を選びます。サムネは押した順に紙面に載ります。
+            </DialogDescription>
+          </DialogHeader>
+
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Checkbox
+              checked={state.showCancelled}
+              onCheckedChange={(c) => handleToggleCancelled(c === true)}
+            />
+            {`取消の作業発注も表示${hasCancelled ? "" : "（取消の作業発注はありません）"}`}
+          </label>
+
+          <div className="space-y-5">
+            {/* 1枚目 */}
+            <section className={`space-y-2 rounded border p-3 ${sewingWos.length === 0 ? "opacity-60" : ""}`}>
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Checkbox
+                  checked={state.sewingOn}
+                  disabled={sewingWos.length === 0}
+                  onCheckedChange={(c) => setState((s) => ({ ...s, sewingOn: c === true }))}
+                />
+                1枚目（縫製工場用）
+              </label>
+              {sewingWos.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  この品番に縫製の作業発注がありません。作業発注を作ると選べます
+                </p>
+              ) : (
+                <>
+                  <WoSelect
+                    rows={sewingWos}
+                    value={state.sewingWoId}
+                    disabled={!state.sewingOn}
+                    onChange={(id) => setState((s) => ({ ...s, sewingWoId: id }))}
+                  />
+                  <p className="text-xs text-muted-foreground">絵型（1つ）</p>
+                  <SketchPicker
+                    sketches={sketches}
+                    selected={state.sewingImages}
+                    max={MAX_IMAGES.sewing}
+                    disabled={!state.sewingOn}
+                    onToggle={(so) =>
+                      setState((s) => ({ ...s, sewingImages: toggleImage(s.sewingImages, so, MAX_IMAGES.sewing) }))
+                    }
+                  />
+                </>
+              )}
+            </section>
+
+            {/* 2枚目 */}
+            <section className={`space-y-2 rounded border p-3 ${measureWos.length === 0 ? "opacity-60" : ""}`}>
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <Checkbox
+                  checked={state.measureOn}
+                  disabled={measureWos.length === 0}
+                  onCheckedChange={(c) => setState((s) => ({ ...s, measureOn: c === true }))}
+                />
+                2枚目（採寸用）
+              </label>
+              {measureWos.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  この品番に縫製か検品の作業発注がありません。作業発注を作ると選べます
+                </p>
+              ) : (
+                <>
+                  <WoSelect
+                    rows={measureWos}
+                    value={state.measureWoId}
+                    disabled={!state.measureOn}
+                    onChange={(id) => setState((s) => ({ ...s, measureWoId: id }))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    画像（2つまで・1つ目＝採寸位置の絵型・2つ目＝サイズ表の画像）
+                  </p>
+                  <SketchPicker
+                    sketches={sketches}
+                    selected={state.measureImages}
+                    max={MAX_IMAGES.measure}
+                    disabled={!state.measureOn}
+                    onToggle={(so) =>
+                      setState((s) => ({ ...s, measureImages: toggleImage(s.measureImages, so, MAX_IMAGES.measure) }))
+                    }
+                  />
+                </>
+              )}
+            </section>
+
+            {/* 3枚目（加工工場用・詳細図・D-75: 足したカード＝1ページ） */}
+            <section
+              className={`space-y-2 rounded border p-3 ${
+                page3Cards.length === 0 && page3Candidates_.length === 0 ? "opacity-60" : ""
+              }`}
+            >
+              <p className="text-sm font-medium">3枚目（加工工場用・詳細図）</p>
+              {page3Cards.length === 0 && page3Candidates_.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                  この品番に加工か縫製の作業発注がありません。作業発注を作ると選べます
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {page3Cards.map((p) => (
+                    <div key={p.woId} className="space-y-2 rounded border p-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="flex-1">{woLabel(p.wo, SEWING_TYPES.includes(p.wo.workType))}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          aria-label="このページを外す"
+                          onClick={() => removePage3(p.woId)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">画像（4つまで）</p>
+                      <SketchPicker
+                        sketches={sketches}
+                        selected={p.images}
+                        max={MAX_IMAGES.process}
+                        disabled={false}
+                        onToggle={(so) => updatePage3(p.woId, toggleImage(p.images, so, MAX_IMAGES.process))}
+                      />
+                    </div>
+                  ))}
+
+                  {/* ＋ ページを追加（候補が無ければ出さない・選ぶたびに空欄に戻す） */}
+                  {page3Candidates_.length > 0 && (
+                    <Select value="" onValueChange={addPage3}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="＋ ページを追加（加工工場あて・詳細図）" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {groupByCategory(page3Candidates_).map((g) => (
+                          <SelectGroup key={g.label}>
+                            <SelectLabel>{g.label}</SelectLabel>
+                            {g.rows.map((w) => (
+                              <SelectItem key={w.id} value={w.id}>
+                                {woLabel(w, SEWING_TYPES.includes(w.workType))}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+              )}
+            </section>
+          </div>
+
+          <DialogFooter className="flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-muted-foreground">
+              {`選んだ枚数: ${selectedCount}（付属が16行以上なら1枚目のあとに「付属のつづき」が自動で付きます）`}
+            </p>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={pending}>
+                閉じる
+              </Button>
+              <Button type="button" onClick={handlePreview} disabled={pending || selectedCount === 0}>
+                {pending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <FileText className="mr-1 h-4 w-4" />}
+                プレビュー
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <PdfPreviewDialog url={preview.url} filename={preview.filename} onClose={preview.close} />
+    </>
+  )
+}

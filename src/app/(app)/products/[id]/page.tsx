@@ -41,6 +41,11 @@ import { SalesOrderSection } from "../_components/sales-order-section"
 import { getSalesOrderSectionForProduct } from "@/lib/actions/sales-orders"
 import { ProductOrdersSection } from "../_components/product-orders-section"
 import { getProductOrders } from "@/lib/actions/product-orders"
+import { SewingSpecDialogButton, type SewingSpecWoOption } from "../_components/sewing-spec-dialog"
+import { WORK_ORDER_TYPE_LABELS } from "@/lib/constants/work-order-types"
+import { kindLabel as sewingSpecKindLabel } from "@/lib/pdf/sewing-spec-format"
+import { WORK_ORDER_STATUS_LABELS } from "../../work-orders/_components/labels"
+import type { WorkOrderStatus } from "@prisma/client"
 import { MarkingSection, type MarkingView } from "../_components/marking-section"
 import { SewingInstructionSection } from "../_components/sewing-instruction-section"
 import { parseSewingInstruction } from "@/lib/validators/sewing-instruction"
@@ -284,6 +289,39 @@ export default async function ProductDetailPage({
   //   名前解決は getProduct 側（ProductDetail.assignedTo・manual join）に寄せた。
   const assigneeName = item.assignedTo?.name ?? null
 
+  // B-054 PR-4c: 縫製仕様書の出力ダイアログに渡す宛先候補（WO のみ・取得済みの productOrders から。新規クエリは足さない）。
+  //   作業の種類の表示名と区分の札はここ（サーバ側）で作る。絞り込み（D-34）はダイアログ側。
+  const sewingSpecWos: SewingSpecWoOption[] = productOrders
+    .filter((r) => r.kind === "WO" && r.workType !== null)
+    .map((r) => ({
+      id: r.id,
+      number: r.number,
+      counterpartyName: r.counterpartyName,
+      workType: r.workType as string,
+      workTypeLabel: WORK_ORDER_TYPE_LABELS[r.workType!],
+      kindLabel: sewingSpecKindLabel(r.workCategory ?? "", r.sampleRound),
+      workCategory: r.workCategory,
+      // 区分の見出し（D-73・プルダウンの SelectGroup）
+      categoryLabel:
+        r.workCategory === "PRODUCTION"
+          ? "量産"
+          : r.workCategory === "ADDITIONAL"
+            ? "量産（追加）"
+            : r.workCategory === "REWORK"
+              ? "量産（やり直し）"
+              : r.workCategory === "SAMPLE"
+                ? "サンプル"
+                : "その他",
+      status: r.status as string,
+      statusLabel: WORK_ORDER_STATUS_LABELS[r.status as WorkOrderStatus],
+      createdAt: r.createdAt,
+    }))
+  const sewingSpecSketches = sketches.map((s) => ({
+    sortOrder: s.sortOrder,
+    caption: s.caption ?? null,
+    thumbUrl: s.thumbUrl,
+  }))
+
   return (
     <div className="space-y-4 p-6">
       <EntityBreadcrumb
@@ -351,6 +389,13 @@ export default async function ProductDetailPage({
             </dl>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* B-054 PR-4c: 縫製仕様書 PDF の出力ダイアログ（「編集」の左） */}
+            <SewingSpecDialogButton
+              productId={item.id}
+              productCode={item.productCode}
+              wos={sewingSpecWos}
+              sketches={sewingSpecSketches}
+            />
             <Button asChild variant="outline" size="sm">
               <Link href={`/products/${id}/edit`}>
                 <Pencil className="mr-1 h-4 w-4" />

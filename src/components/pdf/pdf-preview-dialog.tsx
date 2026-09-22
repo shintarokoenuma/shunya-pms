@@ -65,6 +65,33 @@ export function usePdfPreview() {
     [],
   )
 
+  /**
+   * B-054 PR-4c: GET の URL で開く（縫製仕様書 PDF はクエリで内容を指定するため POST ではない）。
+   * 中身は open と同じ（blob → objectURL・Content-Disposition のファイル名）。既存の open は変えない。
+   */
+  const openUrl = useCallback(
+    async (
+      url: string,
+      fallbackName: string,
+    ): Promise<{ ok: true } | { ok: false; message: string }> => {
+      const res = await fetch(url, { method: "GET" })
+      if (!res.ok) {
+        return { ok: false, message: await res.text() }
+      }
+      const blob = await res.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      setFilename(
+        filenameFromDisposition(
+          res.headers.get("Content-Disposition"),
+          fallbackName,
+        ),
+      )
+      setUrl(objectUrl)
+      return { ok: true }
+    },
+    [],
+  )
+
   const close = useCallback(() => {
     setUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev)
@@ -72,7 +99,7 @@ export function usePdfPreview() {
     })
   }, [])
 
-  return { url, filename, open, close }
+  return { url, filename, open, openUrl, close }
 }
 
 export function PdfPreviewDialog({

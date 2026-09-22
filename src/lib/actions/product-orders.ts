@@ -4,6 +4,7 @@ import {
   PurchaseOrderStatus,
   WorkOrderStatus,
   WorkOrderCategory,
+  WorkOrderType,
   Currency,
   Prisma,
 } from "@prisma/client"
@@ -35,6 +36,10 @@ export type ProductOrderRow = {
   subtotalJpy: number | null
   currency: Currency
   workCategory: WorkOrderCategory | null
+  /** B-054 PR-4c: 縫製仕様書の宛先の絞り込みに使う（PO の行は null） */
+  workType: WorkOrderType | null
+  /** B-054 PR-4c: 区分の札「サンプル 2nd」用（PO の行は null） */
+  sampleRound: string | null
   createdAt: string
 }
 
@@ -76,6 +81,8 @@ export async function getProductOrders(
         factoryId: true,
         contractorId: true,
         workCategory: true,
+        workType: true,
+        sampleRound: true,
         subtotal: true,
         currency: true,
         createdAt: true,
@@ -128,6 +135,8 @@ export async function getProductOrders(
       subtotalJpy: dnum(p.subtotal),
       currency: p.currency,
       workCategory: null,
+      workType: null,
+      sampleRound: null,
       createdAt: p.createdAt.toISOString(),
     })),
     ...wos.map((w) => ({
@@ -144,6 +153,8 @@ export async function getProductOrders(
       subtotalJpy: dnum(w.subtotal),
       currency: w.currency,
       workCategory: w.workCategory,
+      workType: w.workType,
+      sampleRound: w.sampleRound,
       createdAt: w.createdAt.toISOString(),
     })),
   ].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)) // 新しい順
