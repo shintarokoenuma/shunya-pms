@@ -37,21 +37,29 @@ export type AllocationPickedRow = {
   sourceWorkOrderId: string | null
   sourcePoItemId: string | null
   sourcePurchaseOrderId: string | null
+  // B-114 PR-1 §2-2: 量産行（受注の SKU）。手入力・サンプル・発注行は null / ""。
+  skuId: string | null
+  soId: string | null
+  soItemId: string | null
+  /** 受注の単価（画面の差分表示専用・送信しない）。null なら "" */
+  orderUnitPrice: string
 }
 
 type Props = {
   clientId: string
   onAdd: (rows: AllocationPickedRow[]) => void
+  /** B-114: この納品書に既にある量産行の soItemId（「追加済み」表示・重複防止） */
+  existingSoItemIds?: string[]
 }
 
-type TabKey = "SAMPLE" | "ORDER"
+type TabKey = "SAMPLE" | "ORDER" | "SO"
 
 function fmtYen(n: number | null): string {
   if (n == null) return "単価未定"
   return `¥${n.toLocaleString("ja-JP")}`
 }
 
-export function AllocationDialog({ clientId, onAdd }: Props) {
+export function AllocationDialog({ clientId, onAdd, existingSoItemIds = [] }: Props) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<TabKey>("SAMPLE")
   const [candidates, setCandidates] = useState<AllocationCandidates | null>(null)
@@ -113,6 +121,10 @@ export function AllocationDialog({ clientId, onAdd }: Props) {
         sourceWorkOrderId: null,
         sourcePoItemId: null,
         sourcePurchaseOrderId: null,
+        skuId: null,
+        soId: null,
+        soItemId: null,
+        orderUnitPrice: "",
       })
     }
 
@@ -132,6 +144,36 @@ export function AllocationDialog({ clientId, onAdd }: Props) {
         sourceWorkOrderId: o.kind === "WO" ? o.orderId : null,
         sourcePoItemId: o.kind === "PO" ? o.itemId : null,
         sourcePurchaseOrderId: o.kind === "PO" ? o.orderId : null,
+        skuId: null,
+        soId: null,
+        soItemId: null,
+        orderUnitPrice: "",
+      })
+    }
+
+    // B-114 §2-2: 受注（量産）。1 SoItem ＝ 1 行。数量は残り > 0 なら残り、それ以外は空欄（人が入れる）。
+    const groupById = new Map(candidates.groups.map((g) => [g.productId, g]))
+    for (const si of candidates.soItems) {
+      if (!selected.has(`SO:${si.soItemId}`)) continue
+      const g = groupById.get(si.productId)
+      rows.push({
+        productId: si.productId,
+        productName: g?.productName ?? "",
+        clientProductCode: g?.clientProductCode ?? "",
+        colorName: si.colorName,
+        size: si.size,
+        quantity: si.remainingQuantity > 0 ? String(si.remainingQuantity) : "",
+        unit: "枚",
+        unitPrice: si.unitPrice != null ? String(si.unitPrice) : "",
+        sourceSampleProductionId: null,
+        sourceWoItemId: null,
+        sourceWorkOrderId: null,
+        sourcePoItemId: null,
+        sourcePurchaseOrderId: null,
+        skuId: si.skuId,
+        soId: si.soId,
+        soItemId: si.soItemId,
+        orderUnitPrice: si.unitPrice != null ? String(si.unitPrice) : "",
       })
     }
 
@@ -147,12 +189,12 @@ export function AllocationDialog({ clientId, onAdd }: Props) {
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" disabled={!clientId}>
           <Plus className="mr-1 h-4 w-4" />
-          発注・サンプルから引き当て
+          発注・サンプル・受注から引き当て
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>発注・サンプルから引き当て</DialogTitle>
+          <DialogTitle>発注・サンプル・受注から引き当て</DialogTitle>
           <DialogDescription>
             このクライアント配下の候補から選んで明細に一括追加します（複数可）。
           </DialogDescription>
@@ -179,6 +221,11 @@ export function AllocationDialog({ clientId, onAdd }: Props) {
                 onClick={() => setTab("ORDER")}
                 label={`発注（${candidates.orders.length}）`}
               />
+              <TabButton
+                active={tab === "SO"}
+                onClick={() => setTab("SO")}
+                label={`受注（量産）（${candidates.soItems.length}）`}
+              />
             </div>
 
             <div className="max-h-[420px] space-y-4 overflow-y-auto py-1">
@@ -188,11 +235,18 @@ export function AllocationDialog({ clientId, onAdd }: Props) {
                   selected={selected}
                   toggle={toggle}
                 />
-              ) : (
+              ) : tab === "ORDER" ? (
                 <OrderTab
                   candidates={candidates}
                   selected={selected}
                   toggle={toggle}
+                />
+              ) : (
+                <SoTab
+                  candidates={candidates}
+                  selected={selected}
+                  toggle={toggle}
+                  existingSoItemIds={existingSoItemIds}
                 />
               )}
             </div>
@@ -427,6 +481,99 @@ function OrderTab({
           </p>
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * B-114 PR-1 §2-2: 受注（量産）タブ。受注番号の見出し → 品番の見出し（GroupHeading）→ SKU 行。
+ * 残り 0 の行も出してチェックできる（追加納品があり得る）。この納品書に追加済みの soItemId はチェック不可。
+ */
+function SoTab({
+  candidates,
+  selected,
+  toggle,
+  existingSoItemIds,
+}: {
+  candidates: AllocationCandidates
+  selected: Set<string>
+  toggle: (key: string) => void
+  existingSoItemIds: string[]
+}) {
+  const { groups, soItems } = candidates
+  if (soItems.length === 0) {
+    return (
+      <p className="py-8 text-center text-sm text-muted-foreground">
+        引き当て可能な受注（確定・量産中・納品中）がありません。
+      </p>
+    )
+  }
+  const existing = new Set(existingSoItemIds)
+  const soNumbers = [...new Set(soItems.map((s) => s.soNumber))]
+  return (
+    <div className="space-y-3">
+      {soNumbers.map((soNumber) => {
+        const inSo = soItems.filter((s) => s.soNumber === soNumber)
+        return (
+          <div key={soNumber} className="space-y-1">
+            <div className="font-mono text-xs font-medium text-muted-foreground">{soNumber}</div>
+            {groups.map((g) => {
+              const rows = inSo.filter((s) => s.productId === g.productId)
+              if (rows.length === 0) return null
+              return (
+                <div key={g.productId}>
+                  <GroupHeading group={g} />
+                  <div className="grid grid-cols-[auto_1fr_60px_60px_60px_60px_60px_90px] items-center gap-x-2 px-2 pt-1 text-[11px] text-muted-foreground">
+                    <span />
+                    <span>色</span>
+                    <span>サイズ</span>
+                    <span className="text-right">受注</span>
+                    <span className="text-right">納品済</span>
+                    <span className="text-right">引当中</span>
+                    <span className="text-right">残り</span>
+                    <span className="text-right">単価</span>
+                  </div>
+                  {rows.map((r) => {
+                    const key = `SO:${r.soItemId}`
+                    const added = existing.has(r.soItemId)
+                    return (
+                      <label
+                        key={key}
+                        className={
+                          "grid grid-cols-[auto_1fr_60px_60px_60px_60px_60px_90px] items-center gap-x-2 rounded-md px-2 py-2 text-sm " +
+                          (added ? "opacity-60" : "cursor-pointer hover:bg-accent/50")
+                        }
+                      >
+                        <Checkbox
+                          checked={selected.has(key)}
+                          disabled={added}
+                          onCheckedChange={() => toggle(key)}
+                        />
+                        <span className="truncate">
+                          {r.colorName}
+                          {added && (
+                            <Badge variant="secondary" className="ml-2">
+                              この納品書に追加済み
+                            </Badge>
+                          )}
+                        </span>
+                        <span>{r.size}</span>
+                        <span className="text-right">{r.orderedQuantity}</span>
+                        <span className="text-right">{r.deliveredQuantity}</span>
+                        <span className="text-right">{r.allocatedQuantity}</span>
+                        <span className={"text-right " + (r.remainingQuantity === 0 ? "text-muted-foreground" : "font-medium")}>
+                          {r.remainingQuantity}
+                        </span>
+                        <span className="text-right text-muted-foreground">{fmtYen(r.unitPrice)}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
     </div>
   )
 }

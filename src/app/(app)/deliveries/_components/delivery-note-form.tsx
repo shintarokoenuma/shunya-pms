@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Loader2, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -44,6 +45,12 @@ export type ItemRow = {
   sourceWorkOrderId: string | null
   sourcePoItemId: string | null
   sourcePurchaseOrderId: string | null
+  // B-114 PR-1 §2-3: 量産行（受注の SKU）。skuId があれば色・サイズ・品番は読み取り専用。
+  skuId: string | null
+  soId: string | null
+  soItemId: string | null
+  /** 受注の単価（差分表示専用・送信しない）。無ければ "" */
+  orderUnitPrice: string
 }
 
 /** 編集フォームの初期値（編集ページが getDeliveryNote から組み立てる）。 */
@@ -79,7 +86,21 @@ function emptyRow(): ItemRow {
     sourceWorkOrderId: null,
     sourcePoItemId: null,
     sourcePurchaseOrderId: null,
+    skuId: null,
+    soId: null,
+    soItemId: null,
+    orderUnitPrice: "",
   }
+}
+
+/** B-114 §2-3: 量産行の単価が受注の単価と違うか（違うこと自体は正常・D-2） */
+function priceDiffers(row: ItemRow): boolean {
+  if (!row.skuId || row.orderUnitPrice === "" || row.unitPrice === "") return false
+  return Number(row.unitPrice) !== Number(row.orderUnitPrice)
+}
+function fmtYen(v: string): string {
+  const n = Number(v)
+  return Number.isFinite(n) ? `¥${n.toLocaleString("ja-JP")}` : v
 }
 
 export function DeliveryNoteForm({
@@ -207,6 +228,10 @@ export function DeliveryNoteForm({
         sourceWorkOrderId: r.sourceWorkOrderId,
         sourcePoItemId: r.sourcePoItemId,
         sourcePurchaseOrderId: r.sourcePurchaseOrderId,
+        // B-114 §2-3: 量産行の受注紐付け（orderUnitPrice は送らない）。
+        skuId: r.skuId,
+        soId: r.soId,
+        soItemId: r.soItemId,
       })),
     }
     startTransition(async () => {
@@ -390,18 +415,35 @@ export function DeliveryNoteForm({
               <Plus className="mr-1 h-4 w-4" />
               行を追加
             </Button>
-            <AllocationDialog clientId={clientId} onAdd={handleAllocationAdd} />
+            <AllocationDialog
+              clientId={clientId}
+              onAdd={handleAllocationAdd}
+              existingSoItemIds={items.map((r) => r.soItemId).filter((v): v is string => !!v)}
+            />
           </div>
         </div>
         <div className="space-y-3">
-          {items.map((row, idx) => (
-            <div key={idx} className="space-y-2 rounded-md border p-3">
+          {items.map((row, idx) => {
+            const isMass = !!row.skuId
+            const differs = priceDiffers(row)
+            return (
+            <div
+              key={idx}
+              className={"space-y-2 rounded-md border p-3" + (differs ? " bg-amber-50" : "")}
+            >
+              {isMass && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="secondary">量産</Badge>
+                  受注の SKU（品番・色・サイズは変更できません）
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 <div className="space-y-1">
                   <Label className="text-xs">品番（必須）</Label>
                   <Select
                     value={row.productId || ""}
                     onValueChange={(v) => onPickProduct(idx, v)}
+                    disabled={isMass}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="品番を選択" />
@@ -442,6 +484,8 @@ export function DeliveryNoteForm({
                   <Input
                     value={row.colorName}
                     onChange={(e) => setItem(idx, { colorName: e.target.value })}
+                    readOnly={isMass}
+                    className={isMass ? "bg-muted" : undefined}
                   />
                 </div>
                 <div className="space-y-1">
@@ -449,6 +493,8 @@ export function DeliveryNoteForm({
                   <Input
                     value={row.size}
                     onChange={(e) => setItem(idx, { size: e.target.value })}
+                    readOnly={isMass}
+                    className={isMass ? "bg-muted" : undefined}
                   />
                 </div>
                 <div className="space-y-1">
@@ -477,6 +523,9 @@ export function DeliveryNoteForm({
                       onChange={(e) => setItem(idx, { unitPrice: e.target.value })}
                       placeholder="未定なら空欄"
                     />
+                    {differs && (
+                      <p className="text-xs text-amber-700">受注 {fmtYen(row.orderUnitPrice)}</p>
+                    )}
                   </div>
                 </div>
               )}
@@ -493,7 +542,8 @@ export function DeliveryNoteForm({
                 </Button>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 

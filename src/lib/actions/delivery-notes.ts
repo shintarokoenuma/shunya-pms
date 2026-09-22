@@ -9,6 +9,8 @@ import {
   deliveryNoteInputSchema,
   deliveryNoteListParamsSchema,
   DELIVERY_NOTE_STATUS_UI_VALUES,
+  DELIVERY_NOTE_DELIVERED_STATUSES,
+  SO_ALLOCATABLE_STATUSES,
   type DeliveryNoteListParams,
   type DeliveryNoteInput,
 } from "@/lib/validators/delivery-note"
@@ -20,6 +22,9 @@ import {
  * - 物理削除は作らない。deletedAt 論理削除のみ・DRAFT 以外は不可（§9）。
  * - 宛先はマスターから解決して shipTo* に値コピー（§4-3・発行後にマスターを直しても不変）。
  * - DeliveryNote.productId は入れない（明細側 productId で引く・§3-1）。
+ * - B-114 PR-1: 量産行（受注の SKU・skuId / soId / soItemId）をサーバで検証して保存し、
+ *   納品完了（DELIVERED / RECEIVED）のとき SoItem / Sku の納品済み数を算出し直す（D-17）。
+ *   ブリーフ: docs/specs/b-114-pr1-implementation-brief-2026-09-22.md §2-5 / §2-6
  */
 
 export type ActionResult<T = void> =
@@ -306,9 +311,30 @@ export async function getDeliveryNote(id: string) {
       where: { id: row.clientId, companyId: sess.companyId },
       select: { companyName: true },
     })
+    // B-114 §2-3 / §2-7: 量産行の受注番号と受注の単価（編集画面の差分表示・詳細のバッジ用）。
+    const soIds = [...new Set(row.items.map((it) => it.soId).filter((v): v is string => !!v))]
+    const soItemIds = [...new Set(row.items.map((it) => it.soItemId).filter((v): v is string => !!v))]
+    const [sos, soItems] = await Promise.all([
+      soIds.length
+        ? prisma.salesOrder.findMany({
+            where: { id: { in: soIds }, companyId: sess.companyId },
+            select: { id: true, soNumber: true },
+          })
+        : Promise.resolve([]),
+      soItemIds.length
+        ? prisma.soItem.findMany({
+            where: { id: { in: soItemIds }, so: { companyId: sess.companyId } },
+            select: { id: true, unitPrice: true },
+          })
+        : Promise.resolve([]),
+    ])
+    const soNumberById: Record<string, string> = {}
+    for (const so of sos) soNumberById[so.id] = so.soNumber
+    const orderUnitPriceBySoItemId: Record<string, number | null> = {}
+    for (const it of soItems) orderUnitPriceBySoItemId[it.id] = it.unitPrice != null ? it.unitPrice.toNumber() : null
     return {
       ok: true as const,
-      data: { ...row, clientName: client?.companyName ?? null },
+      data: { ...row, clientName: client?.companyName ?? null, soNumberById, orderUnitPriceBySoItemId },
     }
   } catch (e) {
     return {
@@ -403,6 +429,51 @@ async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
     return { ok: false as const, error: "明細に無効な品番が含まれています" }
   }
 
+  // B-114 §2-5: 量産行（soItemId あり）をサーバで検証（UI 任せにしない）。
+  //   受注: companyId 一致・deletedAt null・clientId が納品書の clientId と一致・status が引き当て対象
+  //   SKU: SoItem.skuId === 行の skuId・Sku.productId === 行の productId・Sku.companyId 一致
+  const massRows = data.items.filter((i) => !!i.soItemId)
+  if (massRows.length > 0) {
+    const soItemIds = [...new Set(massRows.map((i) => i.soItemId as string))]
+    const soItems = await prisma.soItem.findMany({
+      where: { id: { in: soItemIds } },
+      select: {
+        id: true,
+        skuId: true,
+        so: { select: { id: true, companyId: true, clientId: true, deletedAt: true, status: true } },
+      },
+    })
+    const soItemById = new Map(soItems.map((x) => [x.id, x]))
+    const skuIds = [...new Set(soItems.map((x) => x.skuId))]
+    const skus = skuIds.length
+      ? await prisma.sku.findMany({
+          where: { id: { in: skuIds }, companyId, deletedAt: null },
+          select: { id: true, productId: true },
+        })
+      : []
+    const skuById = new Map(skus.map((x) => [x.id, x]))
+    const MASS_ERROR = "受注の明細と一致しない行があります（品番・SKU・クライアントを確認してください）"
+    for (const row of massRows) {
+      const si = soItemById.get(row.soItemId as string)
+      if (!si) return { ok: false as const, error: MASS_ERROR }
+      const so = si.so
+      if (
+        so.companyId !== companyId ||
+        so.deletedAt !== null ||
+        so.clientId !== data.clientId ||
+        !SO_ALLOCATABLE_STATUSES.includes(so.status) ||
+        so.id !== row.soId ||
+        si.skuId !== row.skuId
+      ) {
+        return { ok: false as const, error: MASS_ERROR }
+      }
+      const sku = skuById.get(si.skuId)
+      if (!sku || sku.productId !== row.productId) {
+        return { ok: false as const, error: MASS_ERROR }
+      }
+    }
+  }
+
   // §4-2 / §4-3: 宛先を解決して値コピー。フォームで上書きがあればそれを優先。
   let resolvedAddress = ""
   let resolvedContact: string | null = null
@@ -462,7 +533,10 @@ async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
       it.unitPrice != null ? Math.round(it.quantity * it.unitPrice) : null
     return {
       itemOrder: i,
-      skuId: null,
+      // B-114 §2-5: 量産行は受注の SKU を持つ（skuId: null 固定をやめる）。他の行は null のまま。
+      skuId: it.skuId ?? null,
+      soId: it.soId ?? null,
+      soItemId: it.soItemId ?? null,
       productId: it.productId,
       clientProductCode: it.clientProductCode,
       productName: it.productName,
@@ -488,6 +562,10 @@ async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
   })
 
   const totalQuantity = data.items.reduce((a, it) => a + it.quantity, 0)
+
+  // B-114 §2-5: ヘッダの受注紐付け。量産行があれば primarySoId＝最初の soId、relatedSoIds＝重複なし配列。無ければ両方 null。
+  const relatedSoIds = [...new Set(massRows.map((i) => i.soId as string))]
+  const primarySoId = relatedSoIds[0] ?? null
 
   let subtotalAmount: Prisma.Decimal | null = null
   let taxAmount: Prisma.Decimal | null = null
@@ -524,9 +602,64 @@ async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
       currency: data.currency,
       internalNotes: data.internalNotes,
       clientNotes: data.clientNotes,
+      primarySoId,
+      relatedSoIds,
       itemRows,
       warnings,
     },
+  }
+}
+
+// =============================================================================
+// B-114 PR-1 §2-6（D-17）: 納品済み数の算出し直し
+// - 各 soItemId: 納品書明細の数量合計（納品書 companyId・deletedAt null・DELIVERED / RECEIVED）
+//   → SoItem.deliveredQuantity、remainingQuantity = max(ordered − delivered, 0)
+// - 各 skuId: 同じ条件で数量合計 → Sku.deliveredQuantity
+// - 加減算ではなく毎回算出し直す（戻した・取消した時も同じ関数で正しくなる）
+// =============================================================================
+/** 拡張クライアント（src/lib/prisma.ts）の $transaction が渡す tx の型。Prisma.TransactionClient とは合わない */
+type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
+
+async function recomputeDeliveredQuantities(
+  tx: TxClient,
+  companyId: string,
+  target: { soItemIds: string[]; skuIds: string[] },
+): Promise<void> {
+  const dnWhere = {
+    companyId,
+    deletedAt: null,
+    status: { in: DELIVERY_NOTE_DELIVERED_STATUSES },
+  }
+  for (const soItemId of [...new Set(target.soItemIds)]) {
+    const agg = await tx.deliveryNoteItem.aggregate({
+      _sum: { quantity: true },
+      where: { soItemId, deliveryNote: dnWhere },
+    })
+    const delivered = agg._sum.quantity ?? 0
+    const si = await tx.soItem.findFirst({
+      where: { id: soItemId, so: { companyId } },
+      select: { id: true, orderedQuantity: true },
+    })
+    if (!si) continue
+    await tx.soItem.update({
+      where: { id: si.id },
+      data: {
+        deliveredQuantity: delivered,
+        remainingQuantity: Math.max(si.orderedQuantity - delivered, 0),
+      },
+    })
+  }
+  for (const skuId of [...new Set(target.skuIds)]) {
+    const agg = await tx.deliveryNoteItem.aggregate({
+      _sum: { quantity: true },
+      where: { skuId, deliveryNote: dnWhere },
+    })
+    const sku = await tx.sku.findFirst({ where: { id: skuId, companyId }, select: { id: true } })
+    if (!sku) continue
+    await tx.sku.update({
+      where: { id: sku.id },
+      data: { deliveredQuantity: agg._sum.quantity ?? 0 },
+    })
   }
 }
 
@@ -590,6 +723,9 @@ export async function createDeliveryNote(
                 createdByUserId: sess.userId,
                 internalNotes: p.internalNotes,
                 clientNotes: p.clientNotes,
+                // B-114 §2-5: 受注の紐付け（量産行が無ければ null）
+                primarySoId: p.primarySoId,
+                relatedSoIds: p.relatedSoIds.length > 0 ? p.relatedSoIds : Prisma.DbNull,
               },
               select: { id: true, deliveryNumber: true },
             })
@@ -711,6 +847,9 @@ export async function updateDeliveryNote(
             currency: p.currency,
             internalNotes: p.internalNotes,
             clientNotes: p.clientNotes,
+            // B-114 §2-5: 受注の紐付け（量産行が無ければ null）
+            primarySoId: p.primarySoId,
+            relatedSoIds: p.relatedSoIds.length > 0 ? p.relatedSoIds : Prisma.DbNull,
           },
         })
         // 明細は全削除→再作成（DeliveryNoteItem は deletedAt を持たず DeliveryNote 従属）。
@@ -771,23 +910,38 @@ export async function updateDeliveryNoteStatus(
 
     const existing = await prisma.deliveryNote.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
-      select: { id: true, status: true },
+      select: {
+        id: true,
+        status: true,
+        items: { select: { soItemId: true, skuId: true } },
+      },
     })
     if (!existing) return { ok: false, error: "納品書が見つかりません" }
     if (existing.status === status) return { ok: true, data: { id } }
 
-    await prisma.deliveryNote.update({ where: { id }, data: { status } })
-    await prisma.auditLog.create({
-      data: {
-        companyId: sess.companyId,
-        userId: sess.userId,
-        action: "STATUS_CHANGE",
-        entityType: "DeliveryNote",
-        entityId: id,
-        beforeData: { status: existing.status },
-        afterData: { status },
+    // B-114 §2-6: 状態更新・AuditLog・納品済み数の算出し直しを1つのトランザクションで行う。
+    const soItemIds = existing.items.map((it) => it.soItemId).filter((v): v is string => !!v)
+    const skuIds = existing.items.map((it) => it.skuId).filter((v): v is string => !!v)
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.deliveryNote.update({ where: { id }, data: { status } })
+        await tx.auditLog.create({
+          data: {
+            companyId: sess.companyId,
+            userId: sess.userId,
+            action: "STATUS_CHANGE",
+            entityType: "DeliveryNote",
+            entityId: id,
+            beforeData: { status: existing.status },
+            afterData: { status },
+          },
+        })
+        if (soItemIds.length > 0 || skuIds.length > 0) {
+          await recomputeDeliveredQuantities(tx, sess.companyId, { soItemIds, skuIds })
+        }
       },
-    })
+      { timeout: 15000 },
+    )
 
     revalidatePath("/deliveries")
     revalidatePath(`/deliveries/${id}`)
