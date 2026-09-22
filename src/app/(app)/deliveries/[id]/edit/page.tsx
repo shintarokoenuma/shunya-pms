@@ -78,6 +78,14 @@ export default async function EditDeliveryNotePage({
       sourceWorkOrderId: it.sourceWorkOrderId,
       sourcePoItemId: it.sourcePoItemId,
       sourcePurchaseOrderId: it.sourcePurchaseOrderId,
+      // B-114 §2-3: 量産行が手入力行に化けないように受注紐付けと受注の単価を持ち回る。
+      skuId: it.skuId,
+      soId: it.soId,
+      soItemId: it.soItemId,
+      orderUnitPrice:
+        it.soItemId && dn.orderUnitPriceBySoItemId[it.soItemId] != null
+          ? String(dn.orderUnitPriceBySoItemId[it.soItemId])
+          : "",
     })),
   }
 

@@ -152,7 +152,20 @@ export default async function DeliveryNoteDetailPage({
               <TableBody>
                 {dn.items.map((it) => (
                   <TableRow key={it.id}>
-                    <TableCell className="text-sm">{it.productName}</TableCell>
+                    <TableCell className="text-sm">
+                      {it.productName}
+                      {/* B-114 §2-7: 量産行は「量産」バッジと受注番号 */}
+                      {it.skuId && (
+                        <span className="ml-2 inline-flex items-center gap-1">
+                          <Badge variant="secondary">量産</Badge>
+                          {it.soId && dn.soNumberById[it.soId] && (
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {dn.soNumberById[it.soId]}
+                            </span>
+                          )}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="font-mono text-xs">
                       {it.clientProductCode ?? "—"}
                     </TableCell>

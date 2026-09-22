@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { Currency, DeliveryNoteStatus } from "@prisma/client"
+import { Currency, DeliveryNoteStatus, type SalesOrderStatus } from "@prisma/client"
 
 /**
  * B-108: サンプル納品書（DeliveryNote / DeliveryNoteItem）バリデータ。
@@ -48,7 +48,8 @@ const unitPriceField = z
 // =============================================================================
 // 明細
 // =============================================================================
-export const deliveryNoteItemInputSchema = z.object({
+export const deliveryNoteItemInputSchema = z
+  .object({
   // §3-1: DeliveryNoteItem.productId は NOT NULL（skuId のみ nullable 化）。手入力でも品番必須。
   productId: z.string().min(1, "品番を選択してください"),
   productName: z
@@ -72,7 +73,20 @@ export const deliveryNoteItemInputSchema = z.object({
   sourceWorkOrderId: optionalRelationId,
   sourcePoItemId: optionalRelationId,
   sourcePurchaseOrderId: optionalRelationId,
-})
+  // B-114 PR-1 §2-4: 量産行（受注の SKU から引き当て）。手入力・サンプル・発注行は null。
+  skuId: optionalRelationId,
+  soId: optionalRelationId,
+  soItemId: optionalRelationId,
+  })
+  .superRefine((v, ctx) => {
+    if (v.soItemId && (!v.skuId || !v.soId)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "量産の明細は受注の SKU が必要です",
+        path: ["soItemId"],
+      })
+    }
+  })
 
 // =============================================================================
 // ヘッダ
@@ -123,4 +137,19 @@ export const DELIVERY_NOTE_STATUS_UI_VALUES: DeliveryNoteStatus[] = [
   DeliveryNoteStatus.SHIPPED,
   DeliveryNoteStatus.DELIVERED,
   DeliveryNoteStatus.CANCELLED,
+]
+
+/** B-114 PR-1 §2-1: 引き当て対象の受注の状態（TENTATIVE / ON_HOLD / CANCELLED / COMPLETED は出さない）。
+ *  ★"use server" のファイルは async 関数しか export できないため、定数はここ（中立モジュール）に置く。 */
+export const SO_ALLOCATABLE_STATUSES: SalesOrderStatus[] = [
+  "CONFIRMED",
+  "IN_PRODUCTION",
+  "PARTIAL_DELIVERED",
+  "DELIVERED",
+]
+
+/** B-114 PR-1 §2-6（D-17）: 納品済みと数える納品書の状態 */
+export const DELIVERY_NOTE_DELIVERED_STATUSES: DeliveryNoteStatus[] = [
+  DeliveryNoteStatus.DELIVERED,
+  DeliveryNoteStatus.RECEIVED,
 ]

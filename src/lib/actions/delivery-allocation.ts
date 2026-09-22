@@ -1,7 +1,9 @@
 "use server"
 
+import type { DeliveryNoteStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { SO_ALLOCATABLE_STATUSES } from "@/lib/validators/delivery-note"
 
 /**
  * B-108 PR2b 第2段: 引き当て候補の取得（read-only）。
@@ -16,7 +18,21 @@ import { auth } from "@/lib/auth"
  *   ★ sourceWoItemId / sourcePoItemId は判定に一切使わない（不安定・§⑫）。
  * - Product に brand relation は無い（house style: scalar FK のみ）。
  *   ブランド名は Brand を別クエリで引き Map で解決する。
+ * - B-114 PR-1（§2-1）: 受注（量産）の候補 soItems を追加。1候補＝1 SoItem（＝1 SKU）。
+ *   対象の受注は isLatest・status が SO_ALLOCATABLE_STATUSES。納品済／引当中は納品書明細の soItemId から算出。
+ *   SoItem → Sku → ProductColorway は scalar FK なので別クエリ＋Map で解決する。
  */
+
+/** 納品済みと数える納品書の状態（D-17） */
+const DN_DELIVERED_STATUSES: DeliveryNoteStatus[] = ["DELIVERED", "RECEIVED"]
+/** 他の納品書に引き当て中と数える納品書の状態 */
+const DN_ALLOCATED_STATUSES: DeliveryNoteStatus[] = [
+  "DRAFT",
+  "PENDING_APPROVAL",
+  "APPROVED",
+  "SHIPPED",
+  "IN_TRANSIT",
+]
 
 export type ActionResult<T = void> =
   | { ok: true; data: T extends void ? undefined : T }
@@ -44,6 +60,8 @@ export type AllocationProductGroup = {
   brandId: string
   /** Brand が引けなかった場合のみ null */
   brandName: string | null
+  /** B-114: 量産行の先方品番の初期値 */
+  clientProductCode: string | null
 }
 
 export type AllocationCandidateSample = {
@@ -89,11 +107,35 @@ export type AllocationCandidateBlocked = {
   reason: "NO_PRODUCT" | "PRODUCT_MISSING"
 }
 
+/** B-114 §2-1: 受注（量産）の候補。1候補＝1 SoItem（＝1 SKU） */
+export type AllocationCandidateSoItem = {
+  kind: "SO"
+  soId: string
+  soNumber: string
+  soItemId: string
+  skuId: string
+  productId: string
+  /** ProductColorway.clientColorName があればそれ、無ければ Sku.colorName */
+  colorName: string
+  size: string
+  sizeOrder: number
+  orderedQuantity: number
+  /** SoItem.unitPrice（null 可） */
+  unitPrice: number | null
+  /** 納品書が DELIVERED / RECEIVED の明細の数量合計 */
+  deliveredQuantity: number
+  /** 納品書が DRAFT〜IN_TRANSIT の明細の数量合計（他の納品書に引き当て中） */
+  allocatedQuantity: number
+  /** ordered − delivered − allocated（マイナスは 0） */
+  remainingQuantity: number
+}
+
 export type AllocationCandidates = {
   groups: AllocationProductGroup[]
   samples: AllocationCandidateSample[]
   orders: AllocationCandidateOrder[]
   blocked: AllocationCandidateBlocked[]
+  soItems: AllocationCandidateSoItem[]
 }
 
 const EMPTY: AllocationCandidates = {
@@ -101,6 +143,7 @@ const EMPTY: AllocationCandidates = {
   samples: [],
   orders: [],
   blocked: [],
+  soItems: [],
 }
 
 export async function listAllocationCandidates(
@@ -118,7 +161,7 @@ export async function listAllocationCandidates(
     // (b) 品番グループ（§⑥・クライアント配下の全品番）。brand relation が無いため2クエリ。
     const products = await prisma.product.findMany({
       where: { companyId, clientId, deletedAt: null },
-      select: { id: true, productCode: true, productName: true, brandId: true },
+      select: { id: true, productCode: true, productName: true, brandId: true, clientProductCode: true },
     })
     if (products.length === 0) return { ok: true, data: EMPTY }
 
@@ -138,6 +181,7 @@ export async function listAllocationCandidates(
         productName: p.productName,
         brandId: p.brandId,
         brandName: brandNameById.get(p.brandId) ?? null,
+        clientProductCode: p.clientProductCode,
       }))
       // ソート: brandName（null は末尾）→ productCode 昇順。
       .sort((a, b) => {
@@ -359,11 +403,125 @@ export async function listAllocationCandidates(
       })
     }
 
-    return { ok: true, data: { groups, samples, orders, blocked } }
+    // (g) B-114 §2-1: 受注（量産）の候補。
+    const soItems = await listSoItemCandidates(companyId, clientId, products)
+
+    return { ok: true, data: { groups, samples, orders, blocked, soItems } }
   } catch (e) {
     return {
       ok: false,
       error: e instanceof Error ? e.message : "候補の取得に失敗しました",
     }
   }
+}
+
+// =============================================================================
+// B-114 PR-1 §2-1: 受注（量産）の候補（1 SoItem ＝ 1 SKU）
+// =============================================================================
+async function listSoItemCandidates(
+  companyId: string,
+  clientId: string,
+  products: { id: string; productCode: string }[],
+): Promise<AllocationCandidateSoItem[]> {
+  const sos = await prisma.salesOrder.findMany({
+    where: {
+      companyId,
+      clientId,
+      deletedAt: null,
+      isLatest: true,
+      status: { in: SO_ALLOCATABLE_STATUSES },
+    },
+    select: {
+      id: true,
+      soNumber: true,
+      items: {
+        select: { id: true, skuId: true, orderedQuantity: true, unitPrice: true },
+      },
+    },
+  })
+  if (sos.length === 0) return []
+
+  const skuIds = [...new Set(sos.flatMap((so) => so.items.map((it) => it.skuId)))]
+  if (skuIds.length === 0) return []
+
+  // Sku（companyId スコープ・生存）。SoItem.skuId は scalar FK なので別クエリ。
+  const skus = await prisma.sku.findMany({
+    where: { id: { in: skuIds }, companyId, deletedAt: null },
+    select: {
+      id: true,
+      productId: true,
+      colorwayId: true,
+      colorName: true,
+      size: true,
+      sizeOrder: true,
+    },
+  })
+  const skuById = new Map(skus.map((s) => [s.id, s]))
+
+  // 先方色名（ProductColorway.clientColorName・B-170）。
+  const colorwayIds = [...new Set(skus.map((s) => s.colorwayId))]
+  const colorways = colorwayIds.length
+    ? await prisma.productColorway.findMany({
+        where: { id: { in: colorwayIds }, companyId },
+        select: { id: true, clientColorName: true },
+      })
+    : []
+  const clientColorById = new Map(colorways.map((c) => [c.id, c.clientColorName]))
+
+  // 納品済み／引当中（納品書明細の soItemId で集計・納品書は companyId・deletedAt null）。
+  const soItemIds = sos.flatMap((so) => so.items.map((it) => it.id))
+  const dnRows = await prisma.deliveryNoteItem.findMany({
+    where: {
+      soItemId: { in: soItemIds },
+      deliveryNote: { companyId, deletedAt: null },
+    },
+    select: { soItemId: true, quantity: true, deliveryNote: { select: { status: true } } },
+  })
+  const delivered = new Map<string, number>()
+  const allocated = new Map<string, number>()
+  for (const r of dnRows) {
+    if (!r.soItemId) continue
+    if (DN_DELIVERED_STATUSES.includes(r.deliveryNote.status)) {
+      delivered.set(r.soItemId, (delivered.get(r.soItemId) ?? 0) + r.quantity)
+    } else if (DN_ALLOCATED_STATUSES.includes(r.deliveryNote.status)) {
+      allocated.set(r.soItemId, (allocated.get(r.soItemId) ?? 0) + r.quantity)
+    }
+  }
+
+  const productCodeById = new Map(products.map((p) => [p.id, p.productCode]))
+  const out: AllocationCandidateSoItem[] = []
+  for (const so of sos) {
+    for (const it of so.items) {
+      const sku = skuById.get(it.skuId)
+      // Sku が引けない（削除済み）／このクライアント配下の品番でない SoItem は候補から外す。
+      if (!sku || !productCodeById.has(sku.productId)) continue
+      const d = delivered.get(it.id) ?? 0
+      const a = allocated.get(it.id) ?? 0
+      out.push({
+        kind: "SO",
+        soId: so.id,
+        soNumber: so.soNumber,
+        soItemId: it.id,
+        skuId: it.skuId,
+        productId: sku.productId,
+        colorName: clientColorById.get(sku.colorwayId) || sku.colorName,
+        size: sku.size,
+        sizeOrder: sku.sizeOrder,
+        orderedQuantity: it.orderedQuantity,
+        unitPrice: it.unitPrice != null ? it.unitPrice.toNumber() : null,
+        deliveredQuantity: d,
+        allocatedQuantity: a,
+        remainingQuantity: Math.max(it.orderedQuantity - d - a, 0),
+      })
+    }
+  }
+  // 並び: 受注番号 → 品番 → 色 → sizeOrder
+  out.sort(
+    (x, y) =>
+      x.soNumber.localeCompare(y.soNumber) ||
+      (productCodeById.get(x.productId) ?? "").localeCompare(productCodeById.get(y.productId) ?? "") ||
+      x.colorName.localeCompare(y.colorName) ||
+      x.sizeOrder - y.sizeOrder,
+  )
+  return out
 }
