@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useTransition } from "react"
-import { FileText, Loader2 } from "lucide-react"
+import { FileText, Loader2, X } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -31,6 +31,8 @@ import { usePdfPreview, PdfPreviewDialog } from "@/components/pdf/pdf-preview-di
  *   process＝加工5種＋SEWING（D-71: 縫製 WO あては「詳細図」））。
  * - 画像はサムネを押した順に番号が付く（sewing 1・measure 2・process 4 まで）。既定は sortOrder 最小の1枚。
  * - 取消（CANCELLED）の WO は既定で候補から外す（D-73）。上部の切り替えで表示できる。完了は出す。
+ * - 3枚目（D-74）: 加工 WO は全件並べて既定チェック（外すと1行に畳みサムネを隠す・画像は保持）。
+ *   縫製 WO（詳細図）は最初は並べず、「＋ 詳細図を追加」の Select で選んだものだけカードを足す（[×] で外せる）。
  * - プルダウンは区分（量産／量産（追加）／量産（やり直し）／サンプル／その他）ごとに見出しを付け、区分の中は新しい順。
  * - 選んだ内容は保存しない（開くたびに既定から選び直す）。
  * - 「プレビュー」は GET /api/products/[id]/sewing-spec?page=… を組み立てて既存の PdfPreviewDialog で開く。
@@ -85,8 +87,10 @@ type DialogState = {
   measureOn: boolean
   measureWoId: string | null
   measureImages: number[]
-  /** 3枚目の全候補（加工→縫製の順）。表示は showCancelled で絞る */
+  /** 3枚目: 加工 WO の行（全件・既定チェック）。表示は showCancelled で絞る */
   process: ProcessRow[]
+  /** 3枚目: 追加した詳細図（縫製 WO）のカード（追加した順・D-74） */
+  details: ProcessRow[]
 }
 
 function isVisible(w: SewingSpecWoOption, showCancelled: boolean): boolean {
@@ -105,12 +109,15 @@ function pickDefaultWo(rows: SewingSpecWoOption[]): string | null {
   return sorted[0].id
 }
 
-/** 3枚目の候補: 加工の WO が先、縫製の WO（詳細図）が後。それぞれ新しい順（入力の並びを保つ） */
+/** 3枚目の一覧: 加工の WO（入力の並び＝新しい順） */
 function processCandidates(wos: SewingSpecWoOption[]): SewingSpecWoOption[] {
-  return [
-    ...wos.filter((w) => PROCESS_TYPES.includes(w.workType)),
-    ...wos.filter((w) => SEWING_TYPES.includes(w.workType)),
-  ]
+  return wos.filter((w) => PROCESS_TYPES.includes(w.workType))
+}
+
+/** sortOrder 最小の絵型1枚（無ければ空） */
+function defaultImagesOf(sketches: SewingSpecSketchOption[]): number[] {
+  const first = sketches[0]?.sortOrder
+  return first === undefined ? [] : [first]
 }
 
 function buildDefaults(
@@ -137,12 +144,13 @@ function buildDefaults(
     measureOn: measureWos.length > 0,
     measureWoId: pickDefaultWo(measureWos),
     measureImages,
-    // 既定のチェック: 加工 WO はチェック済み、縫製 WO（詳細図）はチェックなし
+    // 既定のチェック: 加工 WO はチェック済み。詳細図（縫製 WO）は最初は並べない（D-74）
     process: processCandidates(wos).map((w) => ({
       woId: w.id,
-      on: PROCESS_TYPES.includes(w.workType) && isVisible(w, showCancelled),
+      on: isVisible(w, showCancelled),
       images: defaultImages,
     })),
+    details: [],
   }
 }
 
@@ -295,15 +303,21 @@ export function SewingSpecDialogButton({
         showCancelled: show,
         sewingWoId: keep(s.sewingWoId, nextSewing),
         measureWoId: keep(s.measureWoId, nextMeasure),
+        // 追加済みの詳細図が見えなくなるなら外す（選択も消える）
+        details: s.details.filter((d) => nextVisible.some((w) => w.id === d.woId)),
       }
     })
   }
 
   const processOn = state.process.filter((p) => p.on && processWos.some((w) => w.id === p.woId))
+  // 詳細図の候補: 表示中の縫製 WO のうち、追加済みを除く（D-74）
+  const detailCandidates = sewingWos.filter((w) => !state.details.some((d) => d.woId === w.id))
+  const detailsOn = state.details.filter((d) => d.on && woById.has(d.woId))
   const selectedCount =
     (state.sewingOn && state.sewingWoId ? 1 : 0) +
     (state.measureOn && state.measureWoId ? 1 : 0) +
-    processOn.length
+    processOn.length +
+    detailsOn.length
 
   function buildQuery(): string {
     const q = new URLSearchParams()
@@ -311,11 +325,12 @@ export function SewingSpecDialogButton({
       q.append("page", images.length > 0 ? `${kind}:${woId}:${images.join(",")}` : `${kind}:${woId}`)
     if (state.sewingOn && state.sewingWoId) page("sewing", state.sewingWoId, state.sewingImages)
     if (state.measureOn && state.measureWoId) page("measure", state.measureWoId, state.measureImages)
-    // 3枚目は表示中の候補の並び（加工 → 縫製）で
+    // 3枚目は 加工 WO（一覧の順）→ 詳細図（追加した順）
     for (const w of processWos) {
       const p = state.process.find((r) => r.woId === w.id)
       if (p?.on) page("process", w.id, p.images)
     }
+    for (const d of state.details) if (d.on) page("process", d.woId, d.images)
     return q.toString()
   }
 
@@ -335,6 +350,25 @@ export function SewingSpecDialogButton({
       ...s,
       process: s.process.map((p) => (p.woId === woId ? { ...p, ...patch } : p)),
     }))
+  }
+
+  function addDetail(woId: string) {
+    setState((s) =>
+      s.details.some((d) => d.woId === woId)
+        ? s
+        : { ...s, details: [...s.details, { woId, on: true, images: defaultImagesOf(sketches) }] },
+    )
+  }
+
+  function updateDetail(woId: string, patch: Partial<ProcessRow>) {
+    setState((s) => ({
+      ...s,
+      details: s.details.map((d) => (d.woId === woId ? { ...d, ...patch } : d)),
+    }))
+  }
+
+  function removeDetail(woId: string) {
+    setState((s) => ({ ...s, details: s.details.filter((d) => d.woId !== woId) }))
   }
 
   const hasCancelled = wos.some((w) => w.status === CANCELLED)
@@ -438,18 +472,22 @@ export function SewingSpecDialogButton({
               )}
             </section>
 
-            {/* 3枚目（加工工場用・詳細図） */}
-            <section className={`space-y-2 rounded border p-3 ${processWos.length === 0 ? "opacity-60" : ""}`}>
+            {/* 3枚目（加工工場用・詳細図・D-74） */}
+            <section
+              className={`space-y-2 rounded border p-3 ${
+                processWos.length === 0 && detailCandidates.length === 0 && state.details.length === 0 ? "opacity-60" : ""
+              }`}
+            >
               <p className="text-sm font-medium">3枚目（加工工場用・詳細図）</p>
-              {processWos.length === 0 ? (
+              {processWos.length === 0 && detailCandidates.length === 0 && state.details.length === 0 ? (
                 <p className="text-xs text-muted-foreground">
                   この品番に加工か縫製の作業発注がありません。作業発注を作ると選べます
                 </p>
               ) : (
                 <div className="space-y-3">
+                  {/* 加工 WO: 全件・既定チェック。外した行は1行に畳む（画像は保持） */}
                   {processWos.map((w) => {
                     const row = state.process.find((p) => p.woId === w.id) ?? { woId: w.id, on: false, images: [] }
-                    const detail = SEWING_TYPES.includes((woById.get(w.id) ?? w).workType)
                     return (
                       <div key={w.id} className="space-y-2 rounded border p-2">
                         <label className="flex items-center gap-2 text-sm">
@@ -457,19 +495,86 @@ export function SewingSpecDialogButton({
                             checked={row.on}
                             onCheckedChange={(c) => updateProcess(w.id, { on: c === true })}
                           />
-                          {woLabel(w, detail)}
+                          {woLabel(w)}
                         </label>
-                        <p className="text-xs text-muted-foreground">画像（4つまで）</p>
-                        <SketchPicker
-                          sketches={sketches}
-                          selected={row.images}
-                          max={MAX_IMAGES.process}
-                          disabled={!row.on}
-                          onToggle={(so) => updateProcess(w.id, { images: toggleImage(row.images, so, MAX_IMAGES.process) })}
-                        />
+                        {row.on && (
+                          <>
+                            <p className="text-xs text-muted-foreground">画像（4つまで）</p>
+                            <SketchPicker
+                              sketches={sketches}
+                              selected={row.images}
+                              max={MAX_IMAGES.process}
+                              disabled={false}
+                              onToggle={(so) =>
+                                updateProcess(w.id, { images: toggleImage(row.images, so, MAX_IMAGES.process) })
+                              }
+                            />
+                          </>
+                        )}
                       </div>
                     )
                   })}
+
+                  {/* 詳細図（縫製 WO）: 追加したカードだけ。[×] で外す */}
+                  {state.details.map((d) => {
+                    const w = woById.get(d.woId)
+                    if (!w) return null
+                    return (
+                      <div key={d.woId} className="space-y-2 rounded border p-2">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Checkbox
+                            checked={d.on}
+                            onCheckedChange={(c) => updateDetail(d.woId, { on: c === true })}
+                          />
+                          <span className="flex-1">{woLabel(w, true)}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            aria-label="詳細図を外す"
+                            onClick={() => removeDetail(d.woId)}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        {d.on && (
+                          <>
+                            <p className="text-xs text-muted-foreground">画像（4つまで）</p>
+                            <SketchPicker
+                              sketches={sketches}
+                              selected={d.images}
+                              max={MAX_IMAGES.process}
+                              disabled={false}
+                              onToggle={(so) =>
+                                updateDetail(d.woId, { images: toggleImage(d.images, so, MAX_IMAGES.process) })
+                              }
+                            />
+                          </>
+                        )}
+                      </div>
+                    )
+                  })}
+
+                  {/* ＋ 詳細図を追加（候補が無ければ出さない） */}
+                  {detailCandidates.length > 0 && (
+                    <Select value="" onValueChange={addDetail}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="＋ 詳細図を追加（縫製工場あて）" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {groupByCategory(detailCandidates).map((g) => (
+                          <SelectGroup key={g.label}>
+                            <SelectLabel>{g.label}</SelectLabel>
+                            {g.rows.map((w) => (
+                              <SelectItem key={w.id} value={w.id}>
+                                {woLabel(w, true)}
+                              </SelectItem>
+                            ))}
+                          </SelectGroup>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               )}
             </section>
