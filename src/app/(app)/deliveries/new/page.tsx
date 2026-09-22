@@ -38,7 +38,7 @@ export default async function NewDeliveryNotePage() {
         </Button>
         <h1 className="text-2xl font-semibold tracking-tight">納品書 新規作成</h1>
         <p className="text-sm text-muted-foreground">
-          手入力で明細を作成します（サンプル・WO/PO からの引き当ては後続）。
+          サンプル・発注・受注（量産）から引き当てるか、手入力で明細を作ります。
         </p>
       </div>
       <DeliveryNoteForm
