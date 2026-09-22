@@ -5,9 +5,10 @@ import { getSewingSpecPdfData } from "@/lib/pdf/sewing-spec-data"
 import { renderSewingSpecPdfBuffer } from "@/lib/pdf/render"
 
 /**
- * B-054 PR-4a: 縫製仕様書 PDF（GET・読み取りのみ）。
- * - クエリ: page=<kind>:<woId>[:<sortOrder>(,<sortOrder>…)] を出現順に。kind は sewing | measure | process
- *   （4a は sewing のみ。measure / process は 400「未実装」）
+ * B-054 PR-4a/4b: 縫製仕様書 PDF（GET・読み取りのみ）。
+ * - クエリ: page=<kind>:<woId>[:<sortOrder>(,<sortOrder>…)] を出現順に（最大10）。kind は sewing | measure | process
+ *   sewing＝1枚目（縫製工場用・WO は SEWING）／measure＝2枚目（採寸用・WO は SEWING か INSPECTION・画像は2つまで）／
+ *   process＝3枚目（加工工場用・WO は PRINTING/EMBROIDERY/WASHING/DYEING/FINISHING・画像は4つまで）
  * - 認証必須・companyId で絞る。未ログインは src/proxy.ts が /login へ 307 で転送する（ここでは 401）
  * - ★4c（品番カルテからの出力ダイアログ）までは画面に入口が無い
  */

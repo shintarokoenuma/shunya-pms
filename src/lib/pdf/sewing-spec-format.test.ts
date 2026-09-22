@@ -1,9 +1,9 @@
 /**
- * B-054 PR-4a 縫製仕様書 PDF の純関数部の検証（テストランナー非依存）。
+ * B-054 PR-4a/4b 縫製仕様書 PDF の純関数部の検証（テストランナー非依存）。
  * vitest/jest が無いため assert（throw）で書く。手動実行:
  *   npx tsx src/lib/pdf/sewing-spec-format.test.ts
  *
- * 対象: parseSewingSpecPages（クエリの解釈）・kindLabel（区分の札）・quantityMode（数量の出し方）
+ * 対象: parseSewingSpecPages（クエリの解釈・画像の上限・重複）・kindLabel（区分の札）・quantityMode（数量の出し方）
  */
 
 import { parseSewingSpecPages, kindLabel, quantityMode } from "./sewing-spec-format"
@@ -14,7 +14,7 @@ function assert(cond: boolean, msg: string): void {
 
 let passed = 0
 
-// ① parseSewingSpecPages 正常系
+// ① parseSewingSpecPages 正常系（sewing）
 ;(() => {
   const r = parseSewingSpecPages(new URLSearchParams("page=sewing:wo-1"))
   assert(r.ok, "①-1 sewing:wo-1 は ok")
@@ -31,7 +31,7 @@ let passed = 0
   const r3 = parseSewingSpecPages(new URLSearchParams("page=sewing:wo-1:0,3,-1"))
   assert(
     r3.ok && JSON.stringify(r3.pages[0].sortOrders) === "[0,3,-1]",
-    "①-3 sortOrder 複数（0 と負数も整数として受ける）",
+    "①-3 sortOrder 複数（0 と負数も整数として受ける・sewing は上限なし＝4a のまま）",
   )
 
   const r4 = parseSewingSpecPages(new URLSearchParams("page=sewing:wo-1&page=sewing:wo-2:1"))
@@ -52,6 +52,8 @@ let passed = 0
     ["page=sewing:wo-1:1,,2", "sortOrder の空要素"],
     ["page=sewing:wo-1:1:2", "区切りが多い"],
     ["page=unknown:wo-1", "kind が不正"],
+    ["page=sewing:wo-1:1,1", "sortOrder の重複"],
+    ["page=sewing:wo-1:0,2,0", "sortOrder の重複（離れた位置）"],
   ]
   for (const [q, label] of cases) {
     const r = parseSewingSpecPages(new URLSearchParams(q))
@@ -65,15 +67,31 @@ let passed = 0
   passed++
 })()
 
-// ③ parseSewingSpecPages 未実装の種別（measure / process は 4b）
+// ③ measure / process（4b）: 正常系・画像の上限・重複
 ;(() => {
-  for (const k of ["measure", "process"]) {
-    const r = parseSewingSpecPages(new URLSearchParams(`page=${k}:wo-1`))
-    assert(!r.ok && r.code === "unsupported", `③ ${k} は unsupported`)
-  }
-  // sewing が先にあっても、後ろに measure があれば全体が unsupported
-  const r = parseSewingSpecPages(new URLSearchParams("page=sewing:wo-1&page=measure:wo-1"))
-  assert(!r.ok && r.code === "unsupported", "③ 混在も unsupported")
+  const m1 = parseSewingSpecPages(new URLSearchParams("page=measure:wo-1"))
+  assert(m1.ok && m1.pages[0].kind === "measure" && m1.pages[0].sortOrders === null, "③ measure 省略は ok（最小の1枚）")
+  const m2 = parseSewingSpecPages(new URLSearchParams("page=measure:wo-1:3,4"))
+  assert(m2.ok && JSON.stringify(m2.pages[0].sortOrders) === "[3,4]", "③ measure 2つは ok（絵型・サイズ表）")
+  const m3 = parseSewingSpecPages(new URLSearchParams("page=measure:wo-1:3,4,5"))
+  assert(!m3.ok && m3.code === "invalid", "③ measure 3つは invalid（上限2）")
+  const m4 = parseSewingSpecPages(new URLSearchParams("page=measure:wo-1:3,3"))
+  assert(!m4.ok && m4.code === "invalid", "③ measure 重複は invalid")
+
+  const p1 = parseSewingSpecPages(new URLSearchParams("page=process:wo-2"))
+  assert(p1.ok && p1.pages[0].kind === "process" && p1.pages[0].sortOrders === null, "③ process 省略は ok")
+  const p4 = parseSewingSpecPages(new URLSearchParams("page=process:wo-2:0,1,2,3"))
+  assert(p4.ok && p4.pages[0].sortOrders?.length === 4, "③ process 4つは ok")
+  const p5 = parseSewingSpecPages(new URLSearchParams("page=process:wo-2:0,1,2,3,4"))
+  assert(!p5.ok && p5.code === "invalid", "③ process 5つは invalid（上限4）")
+  const p6 = parseSewingSpecPages(new URLSearchParams("page=process:wo-2:1,2,1"))
+  assert(!p6.ok && p6.code === "invalid", "③ process 重複は invalid")
+
+  // 3種の混在（出現順）
+  const mix = parseSewingSpecPages(
+    new URLSearchParams("page=sewing:wo-1&page=measure:wo-1:2,5&page=process:wo-3:0,1"),
+  )
+  assert(mix.ok && mix.pages.map((p) => p.kind).join(",") === "sewing,measure,process", "③ 3種の混在は出現順")
   passed++
 })()
 

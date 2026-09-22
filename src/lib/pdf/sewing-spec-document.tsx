@@ -1,18 +1,26 @@
 import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import { COMPANY_PROFILE } from "@/lib/constants/company-profile"
-import type { SewingSpecAccessoryRow, SewingSpecPage, SewingSpecPdfData } from "./sewing-spec-data"
+import type {
+  SewingSpecAccessoryRow,
+  SewingSpecPage,
+  SewingSpecPdfData,
+  SewingSpecSketch,
+} from "./sewing-spec-data"
+import type { SewingSpecPageKind } from "./sewing-spec-format"
 
 registerPdfFonts()
 
 /**
- * B-054 PR-4a: 縫製仕様書 PDF ― 1枚目（縫製工場用）。
- * 紙面は仕様確認書 v1.0 D-1〜D-21・addendum v0.1 D-22〜D-26・addendum v0.3 D-36〜D-43 のとおり。
+ * B-054 PR-4a/4b: 縫製仕様書 PDF。
+ * 紙面は仕様確認書 v1.0 D-1〜D-21・addendum v0.1 D-22〜D-26・v0.2 D-27〜D-35・v0.3 D-36〜D-44 のとおり。
  * - 用紙は JIS B4 縦（257 × 364mm）を寸法で指定（D-24）。size="B4" は ISO B4 なので使わない
  * - 1ページ1宛先（D-8）。約束納期は載せない（D-3）。工場には希望納期のみ（値は太字・D-39）
- * - 付属は案B（D-37）: 本表に「色別（下表）／全色共通」を書き、色が変わる行だけ「色ごとの指定」の表に出す
- * - 付属が 15 行を超えたら「付属のつづき」のページを足す（D-38）。ページ番号は通し
- * - 絵型が残りの高さを埋める（height:0 ＋ flexGrow。D-6「その分、絵型を大きくする」）
+ * - 1枚目（縫製工場用）: 絵型・数量・仕様・付属（案B・D-37）。付属が15行を超えたら「付属のつづき」（D-38・D-44）
+ * - 2枚目（採寸用）: 数量・仕様3項目・採寸位置の絵型・サイズ表の画像
+ * - 3枚目（加工工場用）: 加工指示・画像（最大4・2列）
+ * - 絵型は残りの高さを埋める（height:0 ＋ flexGrow。D-6「その分、絵型を大きくする」）
+ * - ページ番号は出力した全ページ（付属のつづきを含む）の通し番号（D-33）
  */
 const B4_JIS: [number, number] = [728.5, 1031.8]
 
@@ -25,6 +33,16 @@ const MAIN_ACCESSORY_ROWS = 15
 const CONT_ACCESSORY_ROWS = 50
 /** 「色別（下表）」の色（D-37） */
 const COLOR_REF = "#23507A"
+/** 2枚目で画像が2つのときの、採寸位置の絵型の高さ（目安 230pt） */
+const MEASURE_SKETCH_HEIGHT = 230
+/** 2枚目の「仕様」に出す縫製指示の項目 */
+const MEASURE_INSTRUCTION_KEYS = ["finishingMethod", "postProcessing", "fabricDirection"] as const
+
+const PAGE_TITLES: Record<SewingSpecPageKind, string> = {
+  sewing: "縫製仕様書（縫製工場用）",
+  measure: "縫製仕様書（採寸用）",
+  process: "縫製仕様書（加工工場用）",
+}
 
 const styles = StyleSheet.create({
   page: {
@@ -64,16 +82,17 @@ const styles = StyleSheet.create({
   ourRow1: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" },
   ourName: { fontSize: 9, fontWeight: "bold" },
   ourStaff: { fontSize: 9 },
-  // 3. 品番の帯
+  // 3. 品番の帯（2段・4b）
   band: {
-    flexDirection: "row",
-    alignItems: "baseline",
     borderTop: "1pt solid #1a1a1a",
     borderBottom: "1pt solid #1a1a1a",
     paddingVertical: 3,
     marginBottom: BLOCK_GAP,
   },
-  bandCode: { fontSize: 15, fontWeight: "bold", marginRight: 16 },
+  bandRow1: { flexDirection: "row", alignItems: "baseline" },
+  bandCode: { fontSize: 14, fontWeight: "bold", marginRight: 12 },
+  bandName: { fontSize: 11, fontWeight: "bold", flexShrink: 1 },
+  bandRow2: { flexDirection: "row", alignItems: "baseline", marginTop: 2 },
   bandItem: { marginRight: 14 },
   // 4. 絵型（残りの高さを埋める・画像の高さで伸びない）
   sketchBox: {
@@ -88,11 +107,53 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  /** 2枚目で画像が2つのとき: 採寸位置の絵型は固定の高さ */
+  sketchBoxFixed: {
+    height: MEASURE_SKETCH_HEIGHT,
+    overflow: "hidden",
+    border: "0.5pt solid #bbb",
+    padding: 4,
+    marginBottom: BLOCK_GAP,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   sketchImgWrap: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, width: "100%", overflow: "hidden" },
   // ★react-pdf の Image は固有サイズで測られ、height:"100%" / maxHeight / flexBasis では縮まない
   //   （2026-09-21 に6通りを実測。1ページに収まるのは height: 0 ＋ flexGrow 1 ＋ flexShrink 1 だけ）
   sketchImg: { width: "100%", height: 0, flexGrow: 1, flexShrink: 1, objectFit: "contain" },
   caption: { fontSize: 8, color: "#444", marginTop: 2 },
+  // 3枚目: 画像を2列に並べる（残りの高さいっぱい）
+  gridBox: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minHeight: 0, overflow: "hidden", flexDirection: "column" },
+  gridRow: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 0,
+    minHeight: 0,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: BLOCK_GAP,
+  },
+  gridCell: {
+    width: "49.5%",
+    minHeight: 0,
+    overflow: "hidden",
+    border: "0.5pt solid #bbb",
+    padding: 4,
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  gridCellFull: {
+    width: "100%",
+    minHeight: 0,
+    overflow: "hidden",
+    border: "0.5pt solid #bbb",
+    padding: 4,
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  gridCellEmpty: { width: "49.5%" },
   // 5. 数量・仕様
   twoCol: { flexDirection: "row", justifyContent: "space-between", marginBottom: BLOCK_GAP },
   col: { width: "49%" },
@@ -119,6 +180,9 @@ const styles = StyleSheet.create({
   specLabel: { width: "36%", paddingHorizontal: 3, fontSize: TABLE_FONT_SIZE, color: "#444" },
   specValue: { width: "64%", paddingHorizontal: 3, fontSize: TABLE_FONT_SIZE },
   orderQty: { marginTop: 3, fontSize: 10 },
+  // 3枚目: 加工指示（3行）
+  procLabel: { width: "18%", paddingHorizontal: 3, fontSize: 10, color: "#444" },
+  procValue: { width: "82%", paddingHorizontal: 3, fontSize: 10 },
   // 6. 付属（D-37: 部位 22 / 品番 12 / 仕様 22 / 色 14 / 用尺 8 / 手配 22 ＝ 100%）
   accPart: { width: "22%" },
   accCode: { width: "12%" },
@@ -143,6 +207,24 @@ const TWO_LINES = { maxLines: 2, textOverflow: "ellipsis" } as const
 function ColorCell({ style, children }: { style: object | object[]; children: string }) {
   const s = Array.isArray(style) ? [...style, TWO_LINES] : [style, TWO_LINES]
   return <Text style={s as never}>{children}</Text>
+}
+
+/** 絵型1枚（枠の残りの高さに収める）。画像が読めなければ文言、キャプションがあれば下に */
+function SketchImage({ sketch, emptyText }: { sketch: SewingSpecSketch | null; emptyText: string }) {
+  if (!sketch) return <Text style={styles.small}>{emptyText}</Text>
+  return (
+    <>
+      {sketch.image ? (
+        <View style={styles.sketchImgWrap}>
+          {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf の Image は HTML の img ではなく alt を持たない */}
+          <Image src={sketch.image} style={styles.sketchImg} />
+        </View>
+      ) : (
+        <Text style={styles.small}>絵型を読み込めませんでした</Text>
+      )}
+      {sketch.caption ? <Text style={styles.caption}>{sketch.caption}</Text> : null}
+    </>
+  )
 }
 
 function SkuMatrix({ data }: { data: SewingSpecPdfData }) {
@@ -181,6 +263,47 @@ function SkuMatrix({ data }: { data: SewingSpecPdfData }) {
           </Cell>
         ))}
         <Cell style={[styles.cellRight, { width: totalW }]}>{m.grandTotal.toLocaleString("ja-JP")}</Cell>
+      </View>
+    </View>
+  )
+}
+
+/** 数量（出し分け D-27）と仕様（縫製指示）の2列。keys を渡すとその項目だけ */
+function QuantityAndSpec({
+  data,
+  page,
+  instructionKeys,
+}: {
+  data: SewingSpecPdfData
+  page: SewingSpecPage
+  instructionKeys?: readonly string[]
+}) {
+  const instructions = instructionKeys
+    ? data.instructions.filter((it) => instructionKeys.includes(it.key))
+    : data.instructions
+  return (
+    <View style={styles.twoCol}>
+      <View style={styles.col}>
+        <Text style={styles.sectionTitle}>数量</Text>
+        {page.quantityMode === "sku-matrix" ? <SkuMatrix data={data} /> : null}
+        <Text style={styles.orderQty}>
+          {`この発注 ${page.orderQuantity.toLocaleString("ja-JP")} ${page.orderUnit}`}
+        </Text>
+      </View>
+      <View style={styles.col}>
+        <Text style={styles.sectionTitle}>仕様（縫製指示）</Text>
+        {instructions.length === 0 ? (
+          <Text style={styles.cell}>—</Text>
+        ) : (
+          <View style={styles.table}>
+            {instructions.map((it, i) => (
+              <View key={i} style={styles.tr} wrap={false}>
+                <Cell style={styles.specLabel}>{it.label}</Cell>
+                <Cell style={styles.specValue}>{it.value}</Cell>
+              </View>
+            ))}
+          </View>
+        )}
       </View>
     </View>
   )
@@ -270,15 +393,17 @@ function ColorSpecTable({ rows, colorwayNames }: { rows: SewingSpecAccessoryRow[
   )
 }
 
-/** 表題・宛先枠・弊社枠・品番の帯（1枚目とつづきのページで共通・D-40） */
+/** 表題・宛先枠・弊社枠・品番の帯（全ページ共通・D-40・帯は2段） */
 function HeaderBlock({
   data,
   page,
+  title,
   pageNo,
   pageTotal,
 }: {
   data: SewingSpecPdfData
   page: SewingSpecPage
+  title: string
   pageNo: number
   pageTotal: number
 }) {
@@ -287,7 +412,7 @@ function HeaderBlock({
       {/* 1. 表題＋区分の札＋発行日・ページ（1行） */}
       <View style={styles.titleRow}>
         <View style={styles.titleLeft}>
-          <Text style={styles.title}>縫製仕様書（縫製工場用）</Text>
+          <Text style={styles.title}>{title}</Text>
           {page.kindLabel ? <Text style={styles.kindBadge}>{page.kindLabel}</Text> : null}
         </View>
         <Text style={styles.docMeta}>{`発行日 ${data.issuedDate}　${pageNo} / ${pageTotal}`}</Text>
@@ -318,28 +443,37 @@ function HeaderBlock({
         </View>
       </View>
 
-      {/* 3. 品番の帯（約束納期は載せない） */}
+      {/* 3. 品番の帯（2段。約束納期は載せない） */}
       <View style={styles.band}>
-        <Text style={styles.bandCode}>{data.productCode}</Text>
-        <Text style={styles.bandItem}>
-          <Text style={styles.label}>先方品番 </Text>
-          {data.clientProductCode}
-        </Text>
-        <Text style={styles.bandItem}>
-          <Text style={styles.label}>パターンNO </Text>
-          {data.patternNumber}
-        </Text>
-        <Text style={styles.bandItem}>
-          <Text style={styles.label}>型紙 </Text>
-          {page.patternLabel}
-        </Text>
+        <View style={styles.bandRow1}>
+          <Text style={styles.bandCode}>{data.productCode}</Text>
+          <Cell style={styles.bandName}>{data.productName}</Cell>
+        </View>
+        <View style={styles.bandRow2}>
+          <Text style={styles.bandItem}>
+            <Text style={styles.label}>ブランド </Text>
+            {data.brandName}
+          </Text>
+          <Text style={styles.bandItem}>
+            <Text style={styles.label}>先方品番 </Text>
+            {data.clientProductCode}
+          </Text>
+          <Text style={styles.bandItem}>
+            <Text style={styles.label}>パターンNO </Text>
+            {data.patternNumber}
+          </Text>
+          <Text style={styles.bandItem}>
+            <Text style={styles.label}>型紙 </Text>
+            {page.patternLabel}
+          </Text>
+        </View>
       </View>
     </View>
   )
 }
 
-/** 1枚目（宛先ごと）。付属は 1〜15 行目。色ごとの指定は付属が15行以下のときだけ（16行以上は最後のつづきページに） */
-function MainPage({
+/** 1枚目（縫製工場用）。付属は 1〜15 行目。色ごとの指定は付属が15行以下のときだけ（16行以上は最後のつづきページに） */
+function SewingMainPage({
   data,
   page,
   rows,
@@ -359,48 +493,15 @@ function MainPage({
     // ★Page に wrap={false} を付けると react-pdf は Page の高さを内容に合わせて伸ばす（実測 1840pt）。
     //   wrap は既定のままにし、絵型の枠（flexBasis 0）で残りの高さを吸収する。
     <Page size={B4_JIS} style={styles.page}>
-      <HeaderBlock data={data} page={page} pageNo={pageNo} pageTotal={pageTotal} />
+      <HeaderBlock data={data} page={page} title={PAGE_TITLES.sewing} pageNo={pageNo} pageTotal={pageTotal} />
 
       {/* 4. 絵型（残りの高さいっぱい） */}
       <View style={styles.sketchBox}>
-        {page.sketch?.image ? (
-          <View style={styles.sketchImgWrap}>
-            {/* eslint-disable-next-line jsx-a11y/alt-text -- react-pdf の Image は HTML の img ではなく alt を持たない */}
-            <Image src={page.sketch.image} style={styles.sketchImg} />
-          </View>
-        ) : (
-          <Text style={styles.small}>
-            {page.sketch ? "絵型を読み込めませんでした" : "絵型が未登録です"}
-          </Text>
-        )}
-        {page.sketch?.caption ? <Text style={styles.caption}>{page.sketch.caption}</Text> : null}
+        <SketchImage sketch={page.sketches[0] ?? null} emptyText="絵型が未登録です" />
       </View>
 
       {/* 5. 数量／仕様 */}
-      <View style={styles.twoCol}>
-        <View style={styles.col}>
-          <Text style={styles.sectionTitle}>数量</Text>
-          {page.quantityMode === "sku-matrix" ? <SkuMatrix data={data} /> : null}
-          <Text style={styles.orderQty}>
-            {`この発注 ${page.orderQuantity.toLocaleString("ja-JP")} ${page.orderUnit}`}
-          </Text>
-        </View>
-        <View style={styles.col}>
-          <Text style={styles.sectionTitle}>仕様（縫製指示）</Text>
-          {data.instructions.length === 0 ? (
-            <Text style={styles.cell}>—</Text>
-          ) : (
-            <View style={styles.table}>
-              {data.instructions.map((it, i) => (
-                <View key={i} style={styles.tr} wrap={false}>
-                  <Cell style={styles.specLabel}>{it.label}</Cell>
-                  <Cell style={styles.specValue}>{it.value}</Cell>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      </View>
+      <QuantityAndSpec data={data} page={page} />
 
       {/* 6. 付属（案B）＋ 7. 色ごとの指定（15行以下のときだけ。16行以上は最後のつづきページにまとめる） */}
       <AccessoryTable rows={rows} title="付属" colorRefLabel={colorSpecRows ? "色別（下表）" : "色別（別紙）"} />
@@ -410,7 +511,7 @@ function MainPage({
 }
 
 /** 付属のつづき（D-38）。ヘッダーは1枚目と同じ。絵型・数量・仕様は出さない。色ごとの指定は最後のつづきページに1回だけ */
-function ContinuationPage({
+function SewingContinuationPage({
   data,
   page,
   rows,
@@ -428,39 +529,165 @@ function ContinuationPage({
 }) {
   return (
     <Page size={B4_JIS} style={styles.page}>
-      <HeaderBlock data={data} page={page} pageNo={pageNo} pageTotal={pageTotal} />
+      <HeaderBlock data={data} page={page} title={PAGE_TITLES.sewing} pageNo={pageNo} pageTotal={pageTotal} />
       <AccessoryTable rows={rows} title="付属（つづき）" colorRefLabel={colorSpecRows ? "色別（下表）" : "色別（別紙）"} />
       {colorSpecRows ? <ColorSpecTable rows={colorSpecRows} colorwayNames={data.colorwayNames} /> : null}
     </Page>
   )
 }
 
-type PhysicalPage = {
+/**
+ * 2枚目（採寸用・4b）。宛先は SEWING か INSPECTION の WO。
+ * 数量と仕様（3項目）→ 採寸位置の絵型（1つ目）→ サイズ表の画像（2つ目・残りの高さいっぱい）。
+ * 画像が1つだけなら、その絵型が残りの高さいっぱいを使う。付属と色ごとの指定は出さない。
+ */
+function MeasurePage({
+  data,
+  page,
+  pageNo,
+  pageTotal,
+}: {
+  data: SewingSpecPdfData
   page: SewingSpecPage
-  rows: SewingSpecAccessoryRow[]
-  cont: boolean
-  /** 色ごとの指定を出すページだけ対象行を持つ（15行以下＝1枚目・16行以上＝最後のつづきページ） */
-  colorSpecRows: SewingSpecAccessoryRow[] | null
+  pageNo: number
+  pageTotal: number
+}) {
+  const [first, second] = page.sketches
+  return (
+    <Page size={B4_JIS} style={styles.page}>
+      <HeaderBlock data={data} page={page} title={PAGE_TITLES.measure} pageNo={pageNo} pageTotal={pageTotal} />
+      <QuantityAndSpec data={data} page={page} instructionKeys={MEASURE_INSTRUCTION_KEYS} />
+      {second ? (
+        <>
+          <View style={styles.sketchBoxFixed}>
+            <SketchImage sketch={first} emptyText="絵型が未登録です" />
+          </View>
+          <View style={styles.sketchBox}>
+            <SketchImage sketch={second} emptyText="サイズ表の画像がありません" />
+          </View>
+        </>
+      ) : (
+        <View style={styles.sketchBox}>
+          <SketchImage sketch={first ?? null} emptyText="絵型が未登録です" />
+        </View>
+      )}
+    </Page>
+  )
+}
+
+/** 3枚目の画像（最大4）。1枚＝全面／2枚＝左右／3〜4枚＝2×2（3枚は右下が空く）。クエリの順に左上から */
+function ImageGrid({ sketches }: { sketches: SewingSpecSketch[] }) {
+  const n = sketches.length
+  if (n === 0) {
+    return (
+      <View style={[styles.gridBox, { justifyContent: "center", alignItems: "center" }]}>
+        <Text style={styles.small}>絵型が未登録です</Text>
+      </View>
+    )
+  }
+  if (n === 1) {
+    return (
+      <View style={styles.gridBox}>
+        <View style={styles.gridRow}>
+          <View style={styles.gridCellFull}>
+            <SketchImage sketch={sketches[0]} emptyText="" />
+          </View>
+        </View>
+      </View>
+    )
+  }
+  const rows = n === 2 ? [sketches] : [sketches.slice(0, 2), sketches.slice(2, 4)]
+  return (
+    <View style={styles.gridBox}>
+      {rows.map((row, i) => (
+        <View key={i} style={styles.gridRow}>
+          {row.map((s, j) => (
+            <View key={j} style={styles.gridCell}>
+              <SketchImage sketch={s} emptyText="" />
+            </View>
+          ))}
+          {row.length === 1 ? <View style={styles.gridCellEmpty} /> : null}
+        </View>
+      ))}
+    </View>
+  )
 }
 
 /**
- * 宛先ごとのページを、付属の行数に応じて「1枚目＋つづき」の物理ページに展開する（ページ番号は通し）。
- * 色ごとの指定は、付属が15行以下なら1枚目に、16行以上なら最後のつづきページに全行分を1回だけ出す。
+ * 3枚目（加工工場用・4b）。宛先は加工の WO（PRINTING / EMBROIDERY / WASHING / DYEING / FINISHING）。
+ * 加工指示（加工・数量・位置・版・色）→ 画像を2列で（残りの高さいっぱい）。
+ */
+function ProcessPage({
+  data,
+  page,
+  pageNo,
+  pageTotal,
+}: {
+  data: SewingSpecPdfData
+  page: SewingSpecPage
+  pageNo: number
+  pageTotal: number
+}) {
+  const rows: [string, string][] = [
+    ["加工", page.workTypeLabel],
+    ["数量", `この発注 ${page.orderQuantity.toLocaleString("ja-JP")} ${page.orderUnit}`],
+    ["位置・版・色", "絵型と追加画像のとおり"],
+  ]
+  return (
+    <Page size={B4_JIS} style={styles.page}>
+      <HeaderBlock data={data} page={page} title={PAGE_TITLES.process} pageNo={pageNo} pageTotal={pageTotal} />
+      <Text style={styles.sectionTitle}>加工指示</Text>
+      <View style={styles.table}>
+        {rows.map(([label, value], i) => (
+          <View key={i} style={styles.tr} wrap={false}>
+            <Cell style={styles.procLabel}>{label}</Cell>
+            <Cell style={styles.procValue}>{value}</Cell>
+          </View>
+        ))}
+      </View>
+      <ImageGrid sketches={page.sketches} />
+    </Page>
+  )
+}
+
+type PhysicalPage =
+  | {
+      kind: "sewing-main" | "sewing-cont"
+      page: SewingSpecPage
+      rows: SewingSpecAccessoryRow[]
+      /** 色ごとの指定を出すページだけ対象行を持つ（15行以下＝1枚目・16行以上＝最後のつづきページ） */
+      colorSpecRows: SewingSpecAccessoryRow[] | null
+    }
+  | { kind: "measure" | "process"; page: SewingSpecPage }
+
+/**
+ * 宛先ごとのページを物理ページに展開する（ページ番号は全ページの通し・D-33）。
+ * - sewing: 付属の行数に応じて「1枚目＋つづき」。色ごとの指定は 15行以下なら1枚目、16行以上なら最後のつづきページに1回
+ * - measure / process: 1ページずつ
  */
 function buildPhysicalPages(data: SewingSpecPdfData): PhysicalPage[] {
   const out: PhysicalPage[] = []
   const acc = data.accessories
   const hasCont = acc.length > MAIN_ACCESSORY_ROWS
   for (const page of data.pages) {
+    if (page.kind === "measure" || page.kind === "process") {
+      out.push({ kind: page.kind, page })
+      continue
+    }
     out.push({
+      kind: "sewing-main",
       page,
       rows: acc.slice(0, MAIN_ACCESSORY_ROWS),
-      cont: false,
       colorSpecRows: hasCont ? null : acc,
     })
     for (let s = MAIN_ACCESSORY_ROWS; s < acc.length; s += CONT_ACCESSORY_ROWS) {
       const isLast = s + CONT_ACCESSORY_ROWS >= acc.length
-      out.push({ page, rows: acc.slice(s, s + CONT_ACCESSORY_ROWS), cont: true, colorSpecRows: isLast ? acc : null })
+      out.push({
+        kind: "sewing-cont",
+        page,
+        rows: acc.slice(s, s + CONT_ACCESSORY_ROWS),
+        colorSpecRows: isLast ? acc : null,
+      })
     }
   }
   return out
@@ -468,31 +695,26 @@ function buildPhysicalPages(data: SewingSpecPdfData): PhysicalPage[] {
 
 export function SewingSpecDocument({ data }: { data: SewingSpecPdfData }) {
   const physical = buildPhysicalPages(data)
+  const total = physical.length
   return (
     <Document>
-      {physical.map((p, i) =>
-        p.cont ? (
-          <ContinuationPage
-            key={i}
-            data={data}
-            page={p.page}
-            rows={p.rows}
-            colorSpecRows={p.colorSpecRows}
-            pageNo={i + 1}
-            pageTotal={physical.length}
-          />
-        ) : (
-          <MainPage
-            key={i}
-            data={data}
-            page={p.page}
-            rows={p.rows}
-            colorSpecRows={p.colorSpecRows}
-            pageNo={i + 1}
-            pageTotal={physical.length}
-          />
-        ),
-      )}
+      {physical.map((p, i) => {
+        const pageNo = i + 1
+        switch (p.kind) {
+          case "sewing-main":
+            return (
+              <SewingMainPage key={i} data={data} page={p.page} rows={p.rows} colorSpecRows={p.colorSpecRows} pageNo={pageNo} pageTotal={total} />
+            )
+          case "sewing-cont":
+            return (
+              <SewingContinuationPage key={i} data={data} page={p.page} rows={p.rows} colorSpecRows={p.colorSpecRows} pageNo={pageNo} pageTotal={total} />
+            )
+          case "measure":
+            return <MeasurePage key={i} data={data} page={p.page} pageNo={pageNo} pageTotal={total} />
+          case "process":
+            return <ProcessPage key={i} data={data} page={p.page} pageNo={pageNo} pageTotal={total} />
+        }
+      })}
     </Document>
   )
 }
