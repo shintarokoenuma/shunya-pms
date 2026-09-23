@@ -70,6 +70,9 @@ export default async function EditClientPage({
     depositPercentage: client.depositPercentage
       ? Number(client.depositPercentage)
       : undefined,
+    taxRoundingMode: client.taxRoundingMode,
+    isQualifiedInvoiceIssuer: client.isQualifiedInvoiceIssuer,
+    taxId: client.taxId ?? "",
     assignedToUserId: client.assignedToUserId ?? "",
     primaryContact: {
       firstName: contact?.firstName ?? "",

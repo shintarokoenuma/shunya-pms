@@ -342,6 +342,9 @@ model Client {
   paymentMonthOffset Int?            @map("payment_month_offset") // 1=翌月、2=翌々月
   paymentDay         Int?            @map("payment_day") // 支払日（1-31、31=月末）
 
+  // 消費税の端数処理（B-109 D-23・取引先ごとに違う。既定は切り捨て）
+  taxRoundingMode TaxRoundingMode @default(TRUNCATE) @map("tax_rounding_mode")
+
   // デポジット設定
   depositRequired   Boolean  @default(false) @map("deposit_required")
   depositPercentage Decimal? @map("deposit_percentage") @db.Decimal(5, 2) // 例：30.00
@@ -438,6 +441,12 @@ enum PaymentTermType {
   CASH_ON_DELIVERY // 代引き
   LETTER_OF_CREDIT // L/C
   CUSTOM // カスタム条件
+}
+
+enum TaxRoundingMode {
+  TRUNCATE      // 切り捨て（既定）
+  ROUND_HALF_UP // 四捨五入
+  CEILING       // 切り上げ
 }
 
 enum OwnershipType {
