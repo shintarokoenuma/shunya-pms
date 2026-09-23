@@ -16,6 +16,17 @@ import { getClient } from "@/lib/actions/clients"
 import { listBrandsByClient } from "@/lib/actions/brands"
 import { listBuyers } from "@/lib/actions/buyers"
 import { ClientActions } from "../_components/client-delete-button"
+import { PaymentRecordDialog } from "../_components/payment-record-dialog"
+import { listClientPayments } from "@/lib/actions/payments"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { PAYMENT_METHOD_LABELS, fmtYen, fmtYmd } from "../../invoices/_components/labels"
 import { auth } from "@/lib/auth"
 import { Plus } from "lucide-react"
 import {
@@ -98,6 +109,9 @@ export default async function ClientDetailPage({
   // 関連バイヤー（Phase 1A-11 追加）
   const buyersResult = await listBuyers({ clientId: id, pageSize: 100 })
   const buyers = buyersResult.ok ? buyersResult.data.items : []
+
+  // B-109 PR-2c（D-25）: クライアント単位の入金（新しい順）
+  const payments = await listClientPayments(id)
 
   // shunya 側担当者の名前を取得
   const assignedUser = client.assignedToUserId
@@ -497,6 +511,49 @@ export default async function ClientDetailPage({
                   </div>
                 </Link>
               ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* B-109 PR-2c（addendum v0.9 §2-4）: 入金はクライアント単位で記録する（請求書には充当しない・D-25） */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-3">
+          <CardTitle className="text-base">入金</CardTitle>
+          <PaymentRecordDialog clientId={id} />
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            入金はクライアントごとに記録します。次の合計請求書の「御入金額」と「繰越金額」に自動で入ります。
+          </p>
+          {payments.length === 0 ? (
+            <div className="text-sm text-muted-foreground py-4 text-center">
+              入金の記録はまだありません。
+            </div>
+          ) : (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[140px]">入金番号</TableHead>
+                    <TableHead className="w-[110px]">入金日</TableHead>
+                    <TableHead className="w-[130px]">方法</TableHead>
+                    <TableHead>摘要</TableHead>
+                    <TableHead className="w-[130px] text-right">金額</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {payments.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-mono text-sm">{p.paymentNumber}</TableCell>
+                      <TableCell className="text-sm tabular-nums">{fmtYmd(p.paymentDate)}</TableCell>
+                      <TableCell className="text-sm">{PAYMENT_METHOD_LABELS[p.paymentMethod]}</TableCell>
+                      <TableCell className="text-sm">{p.description ?? "—"}</TableCell>
+                      <TableCell className="text-right text-sm tabular-nums">{fmtYen(p.amount)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
