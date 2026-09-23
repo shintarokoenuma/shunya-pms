@@ -28,6 +28,8 @@ export type ClientPaymentRow = {
   /** 入金時のクライアント（スナップショット。改名しても過去の入金の表示は変わらない） */
   counterpartId: string
   counterpartName: string
+  /** 記録した日時（ISO 8601）。B-223（D-50）: 請求書の createdAt との前後比較に使う */
+  createdAt: string
 }
 
 export type PaymentFilter = {
@@ -62,6 +64,7 @@ const ROW_SELECT = {
   amount: true,
   counterpartId: true,
   counterpartName: true,
+  createdAt: true,
 } satisfies Prisma.PaymentSelect
 
 type RowPayload = Prisma.PaymentGetPayload<{ select: typeof ROW_SELECT }>
@@ -76,6 +79,7 @@ function toRow(r: RowPayload): ClientPaymentRow {
     amount: r.amount.toNumber(),
     counterpartId: r.counterpartId,
     counterpartName: r.counterpartName,
+    createdAt: r.createdAt.toISOString(),
   }
 }
 

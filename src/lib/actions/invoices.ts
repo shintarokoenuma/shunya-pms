@@ -31,6 +31,7 @@ import {
   sumPayments,
   type ClientPaymentRow,
 } from "@/lib/billing/client-payments"
+import { findUncoveredPayments, type UncoveredPayment } from "@/lib/calc/uncovered-payments"
 
 /**
  * B-109 PR-2c: 合計請求書（繰越型）Server Actions（delivery-notes の作法を写経）。
@@ -185,6 +186,8 @@ export type InvoiceCandidatesResult = {
   paymentWindow: { start: string; end: string }
   paymentReceivedAmount: number
   taxRoundingMode: TaxRoundingMode
+  /** B-223（D-39・D-50）: 発行済みの請求書より後に記録され、どの請求書にも載っていない入金（警告用・保存は止めない） */
+  uncoveredPayments: UncoveredPayment[]
 }
 
 async function loadCandidateContext(
@@ -305,6 +308,27 @@ async function loadCandidateContext(
   }
   const payments = await listClientPayments(companyId, client.id, { window: paymentWindow })
 
+  // B-223（D-39・D-50 v1.1）: 取りこぼした入金を拾う（列は足さない・集計条件は paymentWhere のまま・保存は止めない）
+  const [allPayments, invoicesNotCancelled] = await Promise.all([
+    listClientPayments(companyId, client.id, { order: "asc" }),
+    prisma.invoice.findMany({
+      where: {
+        companyId,
+        clientId: client.id,
+        deletedAt: null,
+        status: { not: InvoiceStatus.CANCELLED },
+      },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        periodStartDate: true,
+        periodEndDate: true,
+        createdAt: true,
+      },
+    }),
+  ])
+  const uncoveredPayments = findUncoveredPayments(allPayments, invoicesNotCancelled, paymentWindow.start)
+
   return {
     ok: true,
     client,
@@ -321,6 +345,7 @@ async function loadCandidateContext(
       paymentWindow,
       paymentReceivedAmount: sumPayments(payments),
       taxRoundingMode: client.taxRoundingMode,
+      uncoveredPayments,
     },
   }
 }
@@ -552,6 +577,8 @@ export async function createInvoice(
                   itemCount: rows.length,
                   totalAmount: amounts.totalAmount,
                   replacesInvoiceId: data.replacesInvoiceId,
+                  // B-223（D-52）: 警告が出ていたのに作ったかを後から辿れるように件数だけ残す
+                  uncoveredPaymentCount: ctx.uncoveredPayments.length,
                 },
                 description: `請求書新規作成: ${inv.invoiceNumber}`,
               },

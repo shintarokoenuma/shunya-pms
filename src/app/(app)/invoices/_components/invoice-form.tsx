@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Loader2 } from "lucide-react"
+import { AlertTriangle, Loader2 } from "lucide-react"
 import type { TaxClassification } from "@prisma/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -395,6 +395,28 @@ export function InvoiceForm({
                 直前の請求書（{ctx.previousInvoice?.invoiceNumber}）の締め日が今回の締め日以降のため、この期間に入る入金はありません
               </p>
             ))}
+          {/* B-223（D-39・D-50・D-51）: 止めない警告。見出しは D-39 の指定の文言。保存ボタンは disabled にしない */}
+          {ctx && ctx.uncoveredPayments.length > 0 && (
+            <div className="flex items-start gap-2 rounded bg-amber-100 p-2 text-amber-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="space-y-1 text-xs">
+                <p className="font-medium">
+                  この期間より前の日付で、まだどの請求書にも載っていない入金があります
+                </p>
+                <ul className="space-y-0.5 tabular-nums">
+                  {ctx.uncoveredPayments.map((p) => (
+                    <li key={p.id}>
+                      {p.paymentNumber}　{fmtYmd(p.paymentDate)}　{fmtYen(p.amount)}
+                      <span className="ml-1 text-amber-700/80">（{p.invoiceNumber} の期間・その後に記録）</span>
+                    </li>
+                  ))}
+                </ul>
+                <p>
+                  発行済みの請求書は再計算しません。その請求書を取消して再発行するか、次回の請求で調整してください。
+                </p>
+              </div>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             消費税は請求書1枚につき税率ごとに1回だけ計算します
           </p>
