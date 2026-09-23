@@ -13,12 +13,13 @@ import { clientPaymentCreateSchema } from "@/lib/validators/payment"
 import { fromYmd } from "@/lib/calc/invoice-period"
 import {
   listClientPayments as listClientPaymentsRows,
+  listPaymentsPaged,
   type ClientPaymentRow,
 } from "@/lib/billing/client-payments"
 
 /**
  * B-109 PR-2c: クライアント単位の入金（D-25）Server Actions。
- * 設計: ブリーフ §4-5 / addendum v0.9 §2-4
+ * 設計: ブリーフ §4-5 / addendum v0.9 §2-4 / B-222 PR-2d ブリーフ §4-2（/payments の一覧）
  * - Payment を INCOMING・counterpartType=CLIENT で単体保存する。請求書には充当しない。
  * - 採番 PAY-{年}-{4桁}（delivery-notes の computeNextDeliveryNumber と同型・deletedAt で絞らない）。
  * - 予定日＝入金日・状態＝CONFIRMED（実績の記録なので予定と実績が同じ）。
@@ -72,11 +73,62 @@ async function computeNextPaymentNumber(
   return `${prefix}${String(nextNum).padStart(4, "0")}`
 }
 
-/** クライアント詳細の「入金」の節（新しい順） */
+/** クライアント詳細の「入金」の節（新しい順・全件。件数を絞るのは呼び出し側） */
 export async function listClientPayments(clientId: string): Promise<ClientPaymentRow[]> {
   const sess = await requireSession()
   if (!sess.ok) return []
   return listClientPaymentsRows(sess.companyId, clientId, { order: "desc" })
+}
+
+const LIST_PAGE_SIZE = 20
+
+export type PaymentListParams = {
+  clientId?: string
+  /** yyyy-MM-dd（片方だけでも効く） */
+  start?: string
+  end?: string
+  page?: number
+}
+
+/** B-222 PR-2d: /payments の一覧（クライアント横断・期間・ページング・絞り込み結果の全件合計 D-43） */
+export async function listPayments(
+  params: PaymentListParams = {},
+): Promise<
+  ActionResult<{
+    items: ClientPaymentRow[]
+    total: number
+    count: number
+    page: number
+    pageSize: number
+    totalPages: number
+  }>
+> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+    const page = Math.max(1, Math.floor(params.page ?? 1))
+    const r = await listPaymentsPaged(
+      sess.companyId,
+      {
+        clientId: params.clientId || undefined,
+        window: { start: params.start || undefined, end: params.end || undefined },
+      },
+      { page, pageSize: LIST_PAGE_SIZE },
+    )
+    return {
+      ok: true,
+      data: {
+        items: r.rows,
+        total: r.total,
+        count: r.count,
+        page,
+        pageSize: LIST_PAGE_SIZE,
+        totalPages: Math.max(1, Math.ceil(r.count / LIST_PAGE_SIZE)),
+      },
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "一覧取得に失敗しました" }
+  }
 }
 
 const CREATE_MAX_RETRIES = 3
@@ -173,6 +225,7 @@ export async function createClientPayment(
 
     revalidatePath(`/clients/${client.id}`)
     revalidatePath("/invoices")
+    revalidatePath("/payments")
     return { ok: true, data: created }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "入金の記録に失敗しました" }
