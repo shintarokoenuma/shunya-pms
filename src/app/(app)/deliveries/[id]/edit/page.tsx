@@ -50,15 +50,12 @@ export default async function EditDeliveryNotePage({
     redirect(`/deliveries/${id}`)
   }
 
-  // 消費税率はヘッダに列が無い（金額は税込/税抜の確定値のみ保持）。v1 は 10% 固定なので
-  // 編集初期値も 10 を既定にする（作成時と同じ扱い・手入力上書き可）。
   const initial: DeliveryNoteFormInitial = {
     clientId: dn.clientId,
     buyerId: dn.buyerId,
     deliveryDestinationId: dn.deliveryDestinationId,
     deliveryDate: toDateInput(dn.deliveryDate),
     showAmounts: dn.showAmounts,
-    taxRatePercent: "10",
     shipToAddress: dn.shipToAddress ?? "",
     shipToContact: dn.shipToContact ?? "",
     shipToPhone: dn.shipToPhone ?? "",

@@ -60,7 +60,6 @@ export type DeliveryNoteFormInitial = {
   deliveryDestinationId: string | null
   deliveryDate: string
   showAmounts: boolean
-  taxRatePercent: string
   shipToAddress: string
   shipToContact: string
   shipToPhone: string
@@ -141,9 +140,6 @@ export function DeliveryNoteForm({
   )
   // 追補 v1.1（§6 改訂）: 既定 ON。edit 時は initial.showAmounts を尊重（?? は false を上書きしない）。
   const [showAmounts, setShowAmounts] = useState(initial?.showAmounts ?? true)
-  const [taxRatePercent, setTaxRatePercent] = useState(
-    initial?.taxRatePercent ?? "10",
-  )
   const [shipToAddress, setShipToAddress] = useState(initial?.shipToAddress ?? "")
   const [shipToContact, setShipToContact] = useState(initial?.shipToContact ?? "")
   const [shipToPhone, setShipToPhone] = useState(initial?.shipToPhone ?? "")
@@ -208,7 +204,6 @@ export function DeliveryNoteForm({
       deliveryDate,
       currency: "JPY",
       showAmounts,
-      taxRatePercent,
       shipToAddress: shipToAddress || null,
       shipToContact: shipToContact || null,
       shipToPhone: shipToPhone || null,
@@ -391,19 +386,9 @@ export function DeliveryNoteForm({
             checked={showAmounts}
             onCheckedChange={(c) => setShowAmounts(c === true)}
           />
-          金額を表示する（単価・小計・消費税・合計）
+          金額を表示する（単価・小計）
         </label>
-        {showAmounts && (
-          <div className="flex items-center gap-2">
-            <Label className="text-xs text-muted-foreground">消費税率(%)</Label>
-            <Input
-              type="number"
-              value={taxRatePercent}
-              onChange={(e) => setTaxRatePercent(e.target.value)}
-              className="h-8 w-[80px]"
-            />
-          </div>
-        )}
+        {/* B-224（D-40）: 消費税率の欄は無い。税は合計請求書でまとめて計算する */}
       </div>
 
       {/* 明細 */}

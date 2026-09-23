@@ -567,9 +567,12 @@ async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
   const relatedSoIds = [...new Set(massRows.map((i) => i.soId as string))]
   const primarySoId = relatedSoIds[0] ?? null
 
+  // B-224（D-40・D-45）: 納品書は小計（税抜）まで。消費税と税込合計は計算も保存もしない。
+  // 税を語るのは合計請求書だけ（請求書1枚につき税率ごとに1回・D-22）。
+  // ★taxAmount / totalAmount は null を明示して渡す（update で旧値が残らないように）。既存行の値は消さない（D-46）。
   let subtotalAmount: Prisma.Decimal | null = null
-  let taxAmount: Prisma.Decimal | null = null
-  let totalAmount: Prisma.Decimal | null = null
+  const taxAmount: Prisma.Decimal | null = null
+  const totalAmount: Prisma.Decimal | null = null
   if (data.showAmounts) {
     if (data.items.some((it) => it.unitPrice == null)) {
       warnings.push("単価未入力の明細があります（金額表示ONのまま保存しました）")
@@ -578,10 +581,7 @@ async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
       (a, it) => a + (it.unitPrice != null ? it.quantity * it.unitPrice : 0),
       0,
     )
-    const tax = Math.round((sub * data.taxRatePercent) / 100)
     subtotalAmount = new Prisma.Decimal(Math.round(sub))
-    taxAmount = new Prisma.Decimal(tax)
-    totalAmount = new Prisma.Decimal(Math.round(sub) + tax)
   }
 
   return {
