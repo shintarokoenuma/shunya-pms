@@ -12,6 +12,7 @@ import {
   ClientStatus,
   LeadSource,
   PaymentTermType,
+  TaxRoundingMode,
 } from "@prisma/client"
 import {
   clientBaseSchema,
@@ -52,6 +53,7 @@ import {
   LEAD_SOURCE_LABEL,
   PAYMENT_TERM_LABEL,
   STATUS_LABEL,
+  TAX_ROUNDING_MODE_LABEL,
 } from "./labels"
 import { AddressFields } from "@/components/forms/address-fields"
 import { COUNTRY_OPTIONS } from "@/lib/constants/countries"
@@ -132,6 +134,9 @@ export function ClientForm(props: Props) {
       paymentDay: undefined,
       depositRequired: true,
       depositPercentage: 30,
+      taxRoundingMode: TaxRoundingMode.ROUND_HALF_UP,
+      isQualifiedInvoiceIssuer: true,
+      taxId: "",
       assignedToUserId: "",
       primaryContact: {
         firstName: "",
@@ -582,6 +587,72 @@ export function ClientForm(props: Props) {
                 )}
               />
             )}
+
+            {/* B-109 PR-2a（D-23）: 消費税の端数処理 */}
+            <FormField
+              control={form.control}
+              name="taxRoundingMode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>消費税の端数処理</FormLabel>
+                  <FormControl>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger className="md:w-[280px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.values(TaxRoundingMode).map((v) => (
+                          <SelectItem key={v} value={v}>
+                            {TAX_ROUNDING_MODE_LABEL[v]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormControl>
+                  <FormDescription>
+                    請求書の消費税を計算するときの、1円未満の扱いです。今の請求書（KKAP+）の取引先ごとの設定に合わせてください。
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* B-109 PR-2a: 適格請求書発行事業者（supplier-form と同じ形） */}
+            <FormField
+              control={form.control}
+              name="isQualifiedInvoiceIssuer"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between rounded-md border p-3">
+                  <div>
+                    <FormLabel className="text-base">適格請求書発行事業者</FormLabel>
+                    <FormDescription>
+                      インボイス制度の発行事業者として登録されているか
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="taxId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>登録番号</FormLabel>
+                  <FormControl>
+                    <Input placeholder="T1234567890123" maxLength={50} {...field} />
+                  </FormControl>
+                  <FormDescription>適格請求書発行事業者の登録番号（T＋13桁）</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </CardContent>
         </Card>
 

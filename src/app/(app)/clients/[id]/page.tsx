@@ -26,6 +26,7 @@ import {
   DISPLAY_PATTERN_LABEL,
   LEAD_SOURCE_LABEL,
   PAYMENT_TERM_LABEL,
+  TAX_ROUNDING_MODE_LABEL,
 } from "../_components/labels"
 import {
   BRAND_STATUS_LABEL,
@@ -292,6 +293,16 @@ export default async function ClientDetailPage({
                   }
                 />
               )}
+              {/* B-109 PR-2a（D-23） */}
+              <Item
+                label="消費税の端数処理"
+                value={TAX_ROUNDING_MODE_LABEL[client.taxRoundingMode]}
+              />
+              <Item
+                label="適格事業者登録"
+                value={client.isQualifiedInvoiceIssuer ? "登録あり" : "未登録"}
+              />
+              <Item label="登録番号" value={client.taxId} mono />
               <Item label="表示パターン" value={DISPLAY_PATTERN_LABEL[client.displayPattern]} />
             </Dl>
           </CardContent>

@@ -5,6 +5,7 @@ import {
   ClientStatus,
   LeadSource,
   PaymentTermType,
+  TaxRoundingMode,
 } from "@prisma/client"
 
 export const BUSINESS_TYPE_LABEL: Record<ClientBusinessType, string> = {
@@ -66,6 +67,13 @@ export const PAYMENT_TERM_LABEL: Record<PaymentTermType, string> = {
   CASH_ON_DELIVERY: "代引き",
   LETTER_OF_CREDIT: "L/C",
   CUSTOM: "カスタム条件",
+}
+
+/** B-109 PR-2a（D-23）: 消費税の端数処理。画面の語は実装ブリーフ §4-2 のとおり。 */
+export const TAX_ROUNDING_MODE_LABEL: Record<TaxRoundingMode, string> = {
+  TRUNCATE: "切り捨て",
+  ROUND_HALF_UP: "四捨五入（既定）",
+  CEILING: "切り上げ",
 }
 
 export const JP_PREFECTURES = [

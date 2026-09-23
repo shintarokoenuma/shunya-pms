@@ -41,6 +41,7 @@ function normalizeForDb<T extends Record<string, unknown>>(data: T): T {
     "shippingAddressLine2",
     "referrer",
     "notes",
+    "taxId", // B-109 PR-2a: 空欄は null で保存（列は nullable）
   ] as const
   for (const f of stringFields) {
     const v = result[f]
@@ -333,11 +334,18 @@ export async function updateClient(
           clientCode: before.clientCode,
           companyName: before.companyName,
           status: before.status,
+          // B-109 PR-2a: 端数処理・適格事業者・登録番号の変更を記録に残す（D-35 で辿る前提）
+          taxRoundingMode: before.taxRoundingMode,
+          isQualifiedInvoiceIssuer: before.isQualifiedInvoiceIssuer,
+          taxId: before.taxId,
         },
         afterData: {
           clientCode: after.clientCode,
           companyName: after.companyName,
           status: after.status,
+          taxRoundingMode: after.taxRoundingMode,
+          isQualifiedInvoiceIssuer: after.isQualifiedInvoiceIssuer,
+          taxId: after.taxId,
         },
         description: `クライアント編集: ${after.companyName}`,
       })
