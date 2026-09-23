@@ -6316,6 +6316,9 @@ model Invoice {
   totalAmount Decimal @map("total_amount") @db.Decimal(15, 2) // 今回御請求額（繰越金額 + subtotal + totalTaxAmount）。当月の税込計は subtotal + totalTaxAmount
 
   // B-109 PR-2c: 繰越型の合計請求書（D-24・D-29）。★端数処理は Invoice に持たない（D-35）
+  // 請求の期間は導出ではなく保存する（発行済みの期間が締め日の設定変更や手直しで後からズレないように）
+  periodStartDate DateTime @map("period_start_date") @db.Date // 請求期間の始まり（前回の締め日の翌日）
+  periodEndDate   DateTime @map("period_end_date") @db.Date   // 請求期間の終わり（締め日）
   previousBalanceAmount Decimal? @map("previous_balance_amount") @db.Decimal(15, 2) // 前回御請求額
   paymentReceivedAmount Decimal? @map("payment_received_amount") @db.Decimal(15, 2) // 御入金額（期間内の入金合計）
   carriedForwardAmount  Decimal? @map("carried_forward_amount") @db.Decimal(15, 2) // 繰越金額（前回御請求額 − 御入金額）

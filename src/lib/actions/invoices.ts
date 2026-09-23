@@ -25,12 +25,7 @@ import {
   TAX_RATE_PERCENT,
   type InvoiceAmounts,
 } from "@/lib/calc/invoice-amounts"
-import {
-  addDaysYmd,
-  fromYmd,
-  periodStartFromEnd,
-  toYmd,
-} from "@/lib/calc/invoice-period"
+import { addDaysYmd, fromYmd, toYmd } from "@/lib/calc/invoice-period"
 import {
   listClientPayments,
   sumPayments,
@@ -47,7 +42,7 @@ import {
  * - 二重請求はサーバの保存時にも再確認する（UI だけに頼らない）。
  * - ★発行済み（SENT 以降）の請求書の金額を再計算する処理は書かない（D-35）。
  * - ★Invoice / InvoiceItem は TENANT_MODELS に無いため companyId / deletedAt を必ず明示する。
- * - ★期間の列は無い。締め日を invoiceDate に保存し、始まりは直前の請求書の締め日の翌日で導出する（invoice-period.ts）。
+ * - 期間は periodStartDate / periodEndDate に保存する（導出しない。発行済みの期間が後からズレないように）。invoiceDate は請求日（＝締め日）。
  */
 
 export type ActionResult<T = void> =
@@ -156,48 +151,6 @@ function composeAddress(p: AddressParts): string {
 }
 
 const ISSUER_ADDRESS = `${COMPANY_PROFILE.postalCode} ${COMPANY_PROFILE.address}`
-
-// =============================================================================
-// 直前の請求書（同じクライアント・取消されていない）と期間の始まりの導出
-// =============================================================================
-type InvoicePoolRow = {
-  id: string
-  clientId: string
-  invoiceDate: Date
-  createdAt: Date
-}
-
-/** row より前（invoiceDate が小さい・同日なら createdAt が前）の直前の請求書を pool から選ぶ */
-function previousInvoiceOf<T extends InvoicePoolRow>(row: InvoicePoolRow, pool: T[]): T | null {
-  let best: T | null = null
-  for (const p of pool) {
-    if (p.clientId !== row.clientId || p.id === row.id) continue
-    const before =
-      p.invoiceDate.getTime() < row.invoiceDate.getTime() ||
-      (p.invoiceDate.getTime() === row.invoiceDate.getTime() &&
-        p.createdAt.getTime() < row.createdAt.getTime())
-    if (!before) continue
-    if (
-      !best ||
-      p.invoiceDate.getTime() > best.invoiceDate.getTime() ||
-      (p.invoiceDate.getTime() === best.invoiceDate.getTime() &&
-        p.createdAt.getTime() > best.createdAt.getTime())
-    ) {
-      best = p
-    }
-  }
-  return best
-}
-
-function derivePeriodStart(
-  row: InvoicePoolRow,
-  pool: InvoicePoolRow[],
-  closingDay: number | null | undefined,
-): string {
-  const prev = previousInvoiceOf(row, pool)
-  const end = toYmd(row.invoiceDate)
-  return prev ? addDaysYmd(toYmd(prev.invoiceDate), 1) : periodStartFromEnd(end, closingDay)
-}
 
 // =============================================================================
 // 候補（新規フォーム）
@@ -336,12 +289,18 @@ async function loadCandidateContext(
       status: { not: InvoiceStatus.CANCELLED },
     },
     orderBy: [{ invoiceDate: "desc" }, { createdAt: "desc" }],
-    select: { id: true, invoiceNumber: true, invoiceDate: true, totalAmount: true },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      invoiceDate: true,
+      periodEndDate: true,
+      totalAmount: true,
+    },
   })
 
-  // 御入金額: 前回の締め日の翌日〜今回の締め日（直前が無ければ期間の始まりから）
+  // 御入金額: 前回の締め日（直前の請求書の periodEndDate）の翌日〜今回の締め日（直前が無ければ期間の始まりから）
   const paymentWindow = {
-    start: prev ? addDaysYmd(toYmd(prev.invoiceDate), 1) : q.periodStart,
+    start: prev ? addDaysYmd(toYmd(prev.periodEndDate), 1) : q.periodStart,
     end: q.periodEnd,
   }
   const payments = await listClientPayments(companyId, client.id, { window: paymentWindow })
@@ -372,7 +331,6 @@ const CLIENT_SELECT = {
   legalEntity: true,
   taxId: true,
   taxRoundingMode: true,
-  closingDay: true,
   postalCode: true,
   prefecture: true,
   city: true,
@@ -520,7 +478,9 @@ export async function createInvoice(
                 clientId: client.id,
                 primaryDeliveryNoteId: dnIds[0] ?? null,
                 relatedDeliveryNoteIds: dnIds.length > 0 ? dnIds : Prisma.DbNull,
-                // ★期間の列は無い: 締め日（期間の終わり）を invoiceDate に保存する
+                // 期間は保存する（導出しない）。invoiceDate は請求日＝締め日
+                periodStartDate: fromYmd(data.periodStart),
+                periodEndDate: fromYmd(data.periodEnd),
                 invoiceDate: fromYmd(data.periodEnd),
                 paymentDueDate: fromYmd(data.paymentDueDate),
                 issuerName: COMPANY_PROFILE.name,
@@ -675,12 +635,12 @@ export async function listInvoices(
           id: true,
           invoiceNumber: true,
           clientId: true,
-          invoiceDate: true,
+          periodStartDate: true,
+          periodEndDate: true,
           paymentDueDate: true,
           carriedForwardAmount: true,
           totalAmount: true,
           status: true,
-          createdAt: true,
         },
         orderBy: [{ invoiceNumber: "desc" }],
         skip,
@@ -690,25 +650,12 @@ export async function listInvoices(
     ])
 
     const clientIds = [...new Set(rows.map((r) => r.clientId))]
-    const [clients, pool] = await Promise.all([
-      clientIds.length
-        ? prisma.client.findMany({
-            where: { id: { in: clientIds }, companyId: sess.companyId },
-            select: { id: true, companyName: true, closingDay: true },
-          })
-        : Promise.resolve([]),
-      clientIds.length
-        ? prisma.invoice.findMany({
-            where: {
-              companyId: sess.companyId,
-              clientId: { in: clientIds },
-              deletedAt: null,
-              status: { not: InvoiceStatus.CANCELLED },
-            },
-            select: { id: true, clientId: true, invoiceDate: true, createdAt: true },
-          })
-        : Promise.resolve([]),
-    ])
+    const clients = clientIds.length
+      ? await prisma.client.findMany({
+          where: { id: { in: clientIds }, companyId: sess.companyId },
+          select: { id: true, companyName: true },
+        })
+      : []
     const clientById = new Map(clients.map((c) => [c.id, c]))
 
     const items: InvoiceListItem[] = rows.map((r) => {
@@ -717,8 +664,8 @@ export async function listInvoices(
         id: r.id,
         invoiceNumber: r.invoiceNumber,
         clientName: c?.companyName ?? null,
-        periodStart: derivePeriodStart(r, pool, c?.closingDay),
-        periodEnd: toYmd(r.invoiceDate),
+        periodStart: toYmd(r.periodStartDate),
+        periodEnd: toYmd(r.periodEndDate),
         carriedForwardAmount: r.carriedForwardAmount?.toNumber() ?? 0,
         totalAmount: r.totalAmount.toNumber(),
         paymentDueDate: toYmd(r.paymentDueDate),
@@ -798,19 +745,10 @@ export async function getInvoice(id: string): Promise<ActionResult<InvoiceDetail
     })
     if (!row) return { ok: false, error: "請求書が見つかりません" }
 
-    const [client, pool, replaces, replacedBy] = await Promise.all([
+    const [client, replaces, replacedBy] = await Promise.all([
       prisma.client.findFirst({
         where: { id: row.clientId, companyId: sess.companyId },
-        select: { companyName: true, closingDay: true },
-      }),
-      prisma.invoice.findMany({
-        where: {
-          companyId: sess.companyId,
-          clientId: row.clientId,
-          deletedAt: null,
-          status: { not: InvoiceStatus.CANCELLED },
-        },
-        select: { id: true, clientId: true, invoiceDate: true, createdAt: true },
+        select: { companyName: true },
       }),
       row.replacesInvoiceId
         ? prisma.invoice.findFirst({
@@ -824,8 +762,8 @@ export async function getInvoice(id: string): Promise<ActionResult<InvoiceDetail
       }),
     ])
 
-    const periodEnd = toYmd(row.invoiceDate)
-    const periodStart = derivePeriodStart(row, pool, client?.closingDay)
+    const periodStart = toYmd(row.periodStartDate)
+    const periodEnd = toYmd(row.periodEndDate)
 
     // 納品日・納品書番号は InvoiceItem に列が無いため納品書明細から引く（manual join）
     const dnItemIds = row.items
