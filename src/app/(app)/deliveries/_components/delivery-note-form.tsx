@@ -422,6 +422,10 @@ export function DeliveryNoteForm({
             />
           </div>
         </div>
+        {/* B-109 PR-2b（D-26・D-28）: 赤伝の説明。数量 input に min は付けない */}
+        <p className="text-xs text-muted-foreground">
+          値引き・返品はマイナスの数量で入れてください（赤伝）。単価はプラスのままにします。
+        </p>
         <div className="space-y-3">
           {items.map((row, idx) => {
             const isMass = !!row.skuId

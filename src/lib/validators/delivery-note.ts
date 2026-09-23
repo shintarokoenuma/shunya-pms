@@ -24,13 +24,15 @@ const optionalRelationId = z
   .default(null)
   .transform((v) => (v === "" ? null : v))
 
-/** 数量（Int・> 0）。§3-2: DeliveryNoteItem.quantity は整数。 */
+/** 数量（Int・0 以外）。§3-2: DeliveryNoteItem.quantity は整数。
+ *  ★B-109 PR-2b（D-26・D-28）: 赤伝（値引き・委託の戻り）はマイナスの数量で表す。単価はプラスのまま。
+ *    受注から引き当てた行（soItemId あり）は従来どおり 1 以上（納品済み数の算出に効くため）。 */
 const quantityIntField = z
   .union([z.string(), z.number()])
   .transform((v) => (typeof v === "number" ? v : Number(v)))
   .refine(
-    (v) => Number.isInteger(v) && v > 0,
-    "数量は1以上の整数で入力してください",
+    (v) => Number.isInteger(v) && v !== 0,
+    "数量は0以外の整数で入力してください",
   )
 
 /** 単価（任意・未定可。空文字/null → null。入っていれば >= 0） */
@@ -84,6 +86,14 @@ export const deliveryNoteItemInputSchema = z
         code: "custom",
         message: "量産の明細は受注の SKU が必要です",
         path: ["soItemId"],
+      })
+    }
+    // B-109 PR-2b（D-26・D-27）: 受注から引き当てた行は 1 以上に限る（赤伝は手入力行で表す）。
+    if (v.soItemId && v.quantity <= 0) {
+      ctx.addIssue({
+        code: "custom",
+        message: "受注から引き当てた行の数量は1以上で入力してください",
+        path: ["quantity"],
       })
     }
   })
