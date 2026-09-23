@@ -134,7 +134,7 @@ export function ClientForm(props: Props) {
       paymentDay: undefined,
       depositRequired: true,
       depositPercentage: 30,
-      taxRoundingMode: TaxRoundingMode.TRUNCATE,
+      taxRoundingMode: TaxRoundingMode.ROUND_HALF_UP,
       isQualifiedInvoiceIssuer: true,
       taxId: "",
       assignedToUserId: "",

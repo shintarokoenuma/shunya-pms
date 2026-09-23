@@ -188,8 +188,8 @@ export const clientBaseSchema = z
       .min(0, "0以上で入力してください")
       .max(100, "100以下で入力してください")
       .optional(),
-    // B-109 PR-2a（D-23）: 消費税の端数処理はクライアントごと。既定は切り捨て。
-    taxRoundingMode: z.nativeEnum(TaxRoundingMode).default("TRUNCATE"),
+    // B-109 PR-2a（D-23・D-36）: 消費税の端数処理はクライアントごと。既定は四捨五入。
+    taxRoundingMode: z.nativeEnum(TaxRoundingMode).default("ROUND_HALF_UP"),
     // B-109 PR-2a: 適格請求書発行事業者と登録番号（列は既存・validator と画面に無かった）
     isQualifiedInvoiceIssuer: z.boolean().default(true),
     taxId: optionalString(50),
