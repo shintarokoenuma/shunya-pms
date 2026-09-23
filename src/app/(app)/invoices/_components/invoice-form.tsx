@@ -235,9 +235,10 @@ export function InvoiceForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_360px]">
-        {/* 候補の明細 */}
-        <div className="space-y-3">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_360px]">
+        {/* 候補の明細。★min-w-0: グリッドの子は既定で中身より縮まないため、
+            これが無いと表の最小幅がページ全体を横に押し広げる（overflow-x-auto が効かない） */}
+        <div className="min-w-0 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium">
               候補の明細（{candidates.length}件）
@@ -383,11 +384,17 @@ export function InvoiceForm({
           ) : (
             <p className="text-sm text-muted-foreground">クライアントを選ぶと金額が出ます</p>
           )}
-          {ctx && (
-            <p className="text-xs text-muted-foreground">
-              御入金額は {fmtYmd(ctx.paymentWindow.start)}〜{fmtYmd(ctx.paymentWindow.end)} に記録された入金の合計です
-            </p>
-          )}
+          {ctx &&
+            (ctx.paymentWindow.start <= ctx.paymentWindow.end ? (
+              <p className="text-xs text-muted-foreground">
+                御入金額は {fmtYmd(ctx.paymentWindow.start)}〜{fmtYmd(ctx.paymentWindow.end)} に記録された入金の合計です
+              </p>
+            ) : (
+              // 直前の請求書の締め日が今回の締め日以降だと窓が逆転する（同じ期間で2枚目を作ろうとした等）
+              <p className="text-xs text-muted-foreground">
+                直前の請求書（{ctx.previousInvoice?.invoiceNumber}）の締め日が今回の締め日以降のため、この期間に入る入金はありません
+              </p>
+            ))}
           <p className="text-xs text-muted-foreground">
             消費税は請求書1枚につき税率ごとに1回だけ計算します
           </p>

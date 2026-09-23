@@ -146,8 +146,9 @@ export default async function InvoiceDetailPage({ params }: { params: Params }) 
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_380px]">
-        <Card>
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_380px]">
+        {/* ★min-w-0: 上と同じ理由（表の最小幅でページが横に伸びるのを防ぐ） */}
+        <Card className="min-w-0">
           <CardHeader>
             <CardTitle className="text-base">御入金（この期間）</CardTitle>
           </CardHeader>
