@@ -13,6 +13,8 @@ export type CompanyProfile = {
   fax: string
   email: string
   website?: string
+  /** 適格請求書発行事業者の登録番号（B-109 D-5・請求書の issuerTaxId に写す） */
+  taxId: string
 }
 
 export const COMPANY_PROFILE: CompanyProfile = {
@@ -22,4 +24,5 @@ export const COMPANY_PROFILE: CompanyProfile = {
   tel: "TEL: 03-5459-1177",
   fax: "FAX: 03-5459-1181",
   email: "MAIL: info@shunya.cc",
+  taxId: "T2011001051698",
 }

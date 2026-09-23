@@ -6313,7 +6313,13 @@ model Invoice {
   totalTaxAmount  Decimal? @map("total_tax_amount") @db.Decimal(15, 2)
 
   // 合計
-  totalAmount Decimal @map("total_amount") @db.Decimal(15, 2) // 税込合計
+  totalAmount Decimal @map("total_amount") @db.Decimal(15, 2) // 今回御請求額（繰越金額 + subtotal + totalTaxAmount）。当月の税込計は subtotal + totalTaxAmount
+
+  // B-109 PR-2c: 繰越型の合計請求書（D-24・D-29）。★端数処理は Invoice に持たない（D-35）
+  previousBalanceAmount Decimal? @map("previous_balance_amount") @db.Decimal(15, 2) // 前回御請求額
+  paymentReceivedAmount Decimal? @map("payment_received_amount") @db.Decimal(15, 2) // 御入金額（期間内の入金合計）
+  carriedForwardAmount  Decimal? @map("carried_forward_amount") @db.Decimal(15, 2) // 繰越金額（前回御請求額 − 御入金額）
+  replacesInvoiceId     String?  @map("replaces_invoice_id") // 再発行の元（取消した請求書の id・修正インボイス）
 
   // JPY換算（多通貨時）
   subtotalJpy    Decimal? @map("subtotal_jpy") @db.Decimal(15, 2)
@@ -6401,6 +6407,7 @@ model Invoice {
   @@index([companyId, paymentDueDate])
   @@index([companyId, isFullyPaid])
   @@index([primarySoId])
+  @@index([replacesInvoiceId])
   @@map("invoices")
 }
 
