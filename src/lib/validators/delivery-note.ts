@@ -109,13 +109,8 @@ export const deliveryNoteInputSchema = z.object({
   deliveryDate: z.string().min(1, "納品日を入力してください"),
   currency: z.nativeEnum(Currency).default(Currency.JPY),
   // §6: 金額表示の要否。既定は非表示。
+  // B-224（D-40・D-47）: 税率は受けない。納品書は小計（税抜）まで。
   showAmounts: z.boolean().default(false),
-  // §6: 消費税は v1 は 10% 固定＋手入力上書き可。
-  taxRatePercent: z
-    .union([z.string(), z.number()])
-    .transform((v) => (typeof v === "number" ? v : Number(v)))
-    .refine((v) => Number.isFinite(v) && v >= 0, "税率は0以上で入力してください")
-    .default(10),
   // §4-3: 宛先はマスターから解決してコピーするが、人の上書きを許す（任意）。
   shipToAddress: optionalString(2000),
   shipToContact: optionalString(255),

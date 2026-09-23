@@ -191,20 +191,14 @@ export default async function DeliveryNoteDetailPage({
             </Table>
           </div>
 
+          {/* B-224（D-40・D-45）: 納品書は小計（税抜）まで。消費税と税込合計は出さない */}
           {dn.showAmounts && (
             <div className="mt-3 flex flex-col items-end gap-1 text-sm">
-              <div>
+              <div className="font-medium">
                 <span className="text-muted-foreground mr-3">小計</span>
                 {fmtYen(dn.subtotalAmount)}
               </div>
-              <div>
-                <span className="text-muted-foreground mr-3">消費税</span>
-                {fmtYen(dn.taxAmount)}
-              </div>
-              <div className="font-medium">
-                <span className="text-muted-foreground mr-3">合計</span>
-                {fmtYen(dn.totalAmount)}
-              </div>
+              <p className="text-xs text-muted-foreground">消費税は合計請求書でまとめて計算します。</p>
             </div>
           )}
         </CardContent>
