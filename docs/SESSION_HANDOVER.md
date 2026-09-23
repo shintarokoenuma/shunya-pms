@@ -145,8 +145,11 @@ docs 単独の commit: f4c115e（B-222 ブリーフ v1.0）／e96e4e0（B-225 �
 
 ## 15. スキルの反映（★次セッションの最初にやること）
 
-- **反映済み（本セッション）**: `shunya-environment-safety-check` — ルール 00-1（`NOT NULL` の `ADD COLUMN` はマージ前に本番の件数を測る）／ルール 00-2（schema に列を足したら dev サーバを再起動）／ルール 0-2（クリップボード方式の3ステップとガードの形）／ルール 0-1 への追記（`tail -c` の桁数を増やさない）
+- **未反映 4本目**: `shunya-environment-safety-check` — ルール 00-1（`NOT NULL` の `ADD COLUMN` はマージ前に本番の件数を測る）／ルール 00-2（schema に列を足したら dev サーバを再起動）／ルール 0-2（クリップボード方式の3ステップとガードの形）／ルール 0-1 への追記（`tail -c` の桁数を増やさない）
 - ★**更新したスキルは、このチャットには反映されない。次のチャットを開いてから有効になる。**
+- ★**`anthropic-skills` はローカルのプラグインではなく claude.ai 同期のスキル群だった**（`~/.claude/skills/synced/f437de56-…/` ・`manifest.json` に `skillId: skill_01Q4EXN2hApteDpeabE5q9aT` / `source: "plugin"`）。**提案カードが2回弾かれたのはこれが理由。**
+- ★**ローカルの synced ファイルを書き換えても、次の同期で claude.ai 側の版に戻る。**永続化する先は **claude.ai のスキル編集画面**。ローカルへのパッチは次の同期までの暫定。
+- ★`~/.claude/skills/` 直下に **2026-05〜08 の古い個人コピーが6本**残っている（environment-safety-check は 151行・5月30日版で ルール 00 が無い）。synced 版と同名なので、**どちらが読まれるかが環境依存。次セッションで退避を検討する。**
 - **未反映 3本**（すべて `anthropic-skills` プラグイン配下。提案カードでは更新できないので本体を直接書き換える）:
   1. `shunya-design-reread` ← §13 の 2・3
   2. `file-write-verification` ← §13 の 4
