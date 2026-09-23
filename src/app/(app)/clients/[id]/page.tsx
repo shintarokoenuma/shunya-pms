@@ -110,8 +110,9 @@ export default async function ClientDetailPage({
   const buyersResult = await listBuyers({ clientId: id, pageSize: 100 })
   const buyers = buyersResult.ok ? buyersResult.data.items : []
 
-  // B-109 PR-2c（D-25）: クライアント単位の入金（新しい順）
-  const payments = await listClientPayments(id)
+  // B-109 PR-2c（D-25）: クライアント単位の入金（新しい順）。B-222 PR-2d（D-38）: この節は直近5件だけ出す。
+  // ★action 側で 5 に絞らない（請求書の御入金の節など他の消費者に影響する）
+  const payments = (await listClientPayments(id)).slice(0, 5)
 
   // shunya 側担当者の名前を取得
   const assignedUser = client.assignedToUserId
@@ -520,11 +521,20 @@ export default async function ClientDetailPage({
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-3">
           <CardTitle className="text-base">入金</CardTitle>
-          <PaymentRecordDialog clientId={id} />
+          <div className="flex items-center gap-3">
+            {/* ★period=all を必ず付ける。付けないと飛んだ先で今月に絞られ、先月以前の入金が「無い」ように見える */}
+            <Link
+              href={`/payments?clientId=${id}&period=all`}
+              className="text-sm text-primary hover:underline whitespace-nowrap"
+            >
+              すべて見る →
+            </Link>
+            <PaymentRecordDialog clientId={id} />
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            入金はクライアントごとに記録します。次の合計請求書の「御入金額」と「繰越金額」に自動で入ります。
+            入金はクライアントごとに記録します。次の合計請求書の「御入金額」と「繰越金額」に自動で入ります。ここには直近5件を出します。すべての入金は「入金」の画面で見られます。
           </p>
           {payments.length === 0 ? (
             <div className="text-sm text-muted-foreground py-4 text-center">

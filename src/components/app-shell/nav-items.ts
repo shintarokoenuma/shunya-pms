@@ -1,4 +1,5 @@
 import {
+  Banknote,
   Building2,
   Calculator,
   ClipboardCheck,
@@ -78,10 +79,12 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "発注（仕入 PO）", href: "/purchase-orders", icon: ShoppingCart, enabled: true },
       { label: "発注（作業 WO）", href: "/work-orders", icon: Hammer, enabled: true },
       { label: "受注", href: "/sales-orders", icon: ClipboardCheck, enabled: true },
-      // B-108: 納品書（DLV）。B-109 PR-2c: 請求（INV）を別項目として追加
+      // 納品（DLV・B-108）/ 請求（INV・B-109 PR-2c）/ 入金（PAY・B-222 PR-2d・D-38）は別項目
       // （sidebar-ui-design-2026-05-27 は 納品/請求 を別項目として設計）。
+      // ★「経理」グループへの再編は支払（B-212）と締め（B-123）が入るときにまとめて行う。
       { label: "納品", href: "/deliveries", icon: Receipt, enabled: true },
       { label: "請求", href: "/invoices", icon: FileText, enabled: true },
+      { label: "入金", href: "/payments", icon: Banknote, enabled: true },
     ],
   },
   {
