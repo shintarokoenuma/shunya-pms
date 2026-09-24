@@ -113,8 +113,8 @@ docs 単独の commit: f4c115e（B-222 ブリーフ v1.0）／e96e4e0（B-225 �
 
 ## 11. B-番号の増減（本セッション）
 
-- 新規 **1件**: B-225（入金の訂正・取消）
-- 状態変更 **3件**: B-222 / B-223 / B-224 を 未着手 → **完了**
+- 新規 **2件**: B-225（入金の訂正・取消）／B-226（製品名の中立化・同日中に完了）
+- 状態変更 **4件**: B-222 / B-223 / B-224 / B-226 を 未着手 → **完了**
 - 取り下げ **0件**
 - 番号未採番の合意 **0件**（慎太郎さんに確認「なし」）
 
@@ -154,5 +154,34 @@ docs 単独の commit: f4c115e（B-222 ブリーフ v1.0）／e96e4e0（B-225 �
   1. `shunya-design-reread` ← §13 の 2・3
   2. `file-write-verification` ← §13 の 4
   3. `shunya-session-start` ← §13 の 5
+
+## 16. 追加作業（2026-09-24 03時台〜11時台 JST・締めの後）
+
+**B-226 製品名の中立化を実装し、本番まで反映した。** PR #164（`fa21957` + `62fb585` → squash **`041af38`**）。
+
+### 目的
+**PMS を製品、shunya をそれを使うテナントとして見せる。** 構造は既にそうなっていた（ヘッダの会社名は DB の `Company.companyName`）。足りなかったのは製品名側が `shunya PMS` だったこと。
+
+### 変更（16ファイル・26行・schema 変更なし）
+サイドバー `shunya PMS`→`PMS`／ロゴ頭文字 `S`→`P`、タブ title→`PMS｜生産管理システム`、
+login 見出し→`PMS`・**ロゴの小文字 `s`→`P`**、dashboard の Phase 0 文言から shunya 削除、
+app-shell の会社名 fallback `?? "shunya"`→`?? ""`、`shunya 側担当`→`自社担当`（11か所）、
+validator のエラー文2件、`shunya 所有`→`自社所有`（2件）、
+header のバッジと user-menu の生 enum → `管理者モード`。
+
+### ★意図的に変更していない（次セッションで触らないこと）
+- `src/lib/constants/company-profile.ts` の「株式会社shunya」「info@shunya.cc」= **帳票（発注書・見積書・仕様書）の発行元法人名**
+- enum `SHUNYA` と `@default(SHUNYA)`、`prisma.ts` の extension 名 `shunya-tenant-isolation` と `[shunya]` エラー、`tenant-context.ts` の `__shunya*`
+- `package.json` の name、ログインのデモ用メール、`© 2026 shunya. All rights reserved.`
+- `shunya-master-patterns.md` を指す docs 参照コメント（17件）
+
+### 管理者モード表示の設計
+`header.tsx` の `tenantType === "MASTER_ADMIN"` の**条件分岐は元からあり、変更していない**。文言を生 enum から「管理者モード」に変えただけ。`user-menu.tsx` は全テナントに `{tenantType} / {role}` を出していたため、MASTER_ADMIN のときだけ「管理者モード / role」、それ以外は role のみに変更。★**特権モードに入っていることの識別は残す**（完全に消すと気づかず他社データに触れる）。
+
+### 教訓（★スキルに入れる）
+1. ★**語で grep すると1文字のロゴは網に掛からない。** `shunya` で探したためサイドバーの `S` は拾えたが、login の小文字 `s` を見落とし、慎太郎さんのスクリーンショットで発覚した。**頭文字ロゴは語ではなく「その画面の JSX を読む」で探す**
+2. ★**既存の条件分岐を確認せずに「足す」と言わない。** C案（CUSTOMER には出さない）は header に既に実装済みだった。recon の出力を読んでから提案する
+3. ★**dev の Console Error は拡張機能由来かを先に切り分ける。** 2026-09-24 の hydration mismatch は Feedly が `<body>` に `data-feedly-mini` を足したもの、MetaMask のエラーは拡張の `inpage.js`。**シークレットウィンドウで消えれば拡張が原因**。`suppressHydrationWarning` で黙らせると本物の不具合も隠れるので入れない
+4. ★**長い指示ブロックは途中で切れる。** 2026-09-24 に3回発生（python の文字列の途中・for ループの途中）。**1ブロックを短くし、commit/push は別ブロックに分ける**
 
 END-OF-HANDOVER-CLOSE-Y
