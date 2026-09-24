@@ -9,8 +9,13 @@
  *     ALLOW_DEV_HOST_OVERRIDE=1 が無ければ abort。
  *   - テナントは tenantType MASTER_ADMIN を動的解決。AuditLog の userId は OWNER（role=OWNER）を動的解決。
  *   - 冪等: 各行はコード等のキーで get-or-create（既存ならスキップ）。2回流しても件数が増えない。
- *   - ★既存行の UPDATE / DELETE はしない（D-1）。例外は「この実行で作った ModelCode」への patternNumber 書き込み（D-10）だけ。
- *   - ★量産 WO / ProgressTask は作らない（D-8 / D-9）。Phase 2 で画面から作る。
+ *   - ★既存行の UPDATE / DELETE はしない（D-1）。例外は「この実行で作った ModelCode」への patternNumber 書き込み（D-10）と、
+ *     受注作成時の Sku.orderedQuantity / productionQuantity の再集計（createSalesOrder と同じ recomputeSkuOrderedQuantities・D-13）。
+ *   - ★量産 WO / ProgressTask / PO は作らない（D-8 / D-9）。Phase 2 で量産見積の生成画面から作る。
+ *   - 量産見積（PE）3 件は画面の createProductionEstimateFromSample と同じ計算（computeProductionEstimate）・保存形で作るが、
+ *     確定サンプル経由ではない（sourceSampleProductionId null・明細は BOM 行 source BOM ＋ 工賃 source MANUAL）。
+ *   - 受注（SO）1 件は createSalesOrder と同じ書き込み規則（productId null・version 1・totalAmount=subtotal 税抜）で
+ *     status CONFIRMED（confirmedAt / confirmedByUserId も入れる）。
  *   - createProduct の副作用（ModelCode 自動発番・patternNumber=productCode・ProductStatusHistory 1行）を同じ形で再現（D-10）。
  *   - Sku / Bom / BomItem / ProductColorway / Comment は各 action と同じ形で作り、AuditLog を同じ形（action CREATE・entityType・
  *     afterData）で書く。afterData には source: "seed-dev-demo-data" を足す。
@@ -20,6 +25,11 @@
  *   npx tsx scripts/seed-dev-demo-data.ts             # 実投入（★--dry-run の出力を慎太郎さんが確認してから）
  */
 import { Prisma, PrismaClient, type Company } from "@prisma/client"
+import {
+  computeProductionEstimate,
+  type ProductionEstimateLineForCalc,
+} from "@/lib/production-estimate/calc"
+import { computeProductionQuantity } from "@/lib/calc/sales-order-quantity"
 
 const prisma = new PrismaClient()
 
@@ -568,6 +578,193 @@ const SEASON_TYPE = "SS"
 const YEAR = 2027
 const SEASON = `${String(YEAR).slice(-2)}${SEASON_TYPE}` // composeSeason と同じ合成（"27SS"）
 
+// ─────────────────────────────────────────────────── 量産見積（PE）・受注（SO）の定義
+/**
+ * 量産見積は画面では createProductionEstimateFromSample（確定サンプル経由）でしか作れない。
+ * デモ品番にはサンプル生産が無いので、同 action の FullItem → toCalcLine → computeProductionEstimate →
+ * ヘッダ/明細保存（toItemCreateBase）と同じ対応をここに写し、明細は BOM 行（source BOM）と工賃（source MANUAL）で組む。
+ * sourceSampleProductionId は null（画面経路との相違点・PR 本文に明記）。
+ */
+type PeLaborDef = { itemName: string; unitPrice: number; factoryCode: string }
+type PeDef = {
+  productName: string
+  title: string
+  marginRate: number
+  finalUnitPriceManualJpy: number
+  notes: string
+  labor: PeLaborDef[]
+}
+const PE_TITLE = `${SEASON} 量産見積`
+const PRODUCTION_ESTIMATES: PeDef[] = [
+  {
+    productName: "リネン開襟シャツ",
+    title: PE_TITLE,
+    marginRate: 30,
+    finalUnitPriceManualJpy: 4800,
+    notes: "27SS 初回生産分。生地は先染め・ロット指定。",
+    labor: [
+      { itemName: "縫製工賃", unitPrice: 850, factoryCode: "FC-003" },
+      { itemName: "検品・仕上げ", unitPrice: 60, factoryCode: "FC-003" },
+      { itemName: "国際物流・通関", unitPrice: 180, factoryCode: "FC-003" },
+    ],
+  },
+  {
+    productName: "リネンワイドパンツ",
+    title: PE_TITLE,
+    marginRate: 30,
+    finalUnitPriceManualJpy: 5600,
+    notes: "27SS 初回生産分。生地は先染め・ロット指定。",
+    labor: [
+      { itemName: "縫製工賃", unitPrice: 780, factoryCode: "FC-003" },
+      { itemName: "検品・仕上げ", unitPrice: 60, factoryCode: "FC-003" },
+      { itemName: "国際物流・通関", unitPrice: 170, factoryCode: "FC-003" },
+    ],
+  },
+  {
+    productName: "カバーオール",
+    title: PE_TITLE,
+    marginRate: 30,
+    finalUnitPriceManualJpy: 6200,
+    notes: "27SS 初回生産分。生地は先染め・ロット指定。",
+    labor: [
+      { itemName: "縫製工賃", unitPrice: 2200, factoryCode: "FC-004" },
+      { itemName: "製品洗い", unitPrice: 180, factoryCode: "FC-004" },
+      { itemName: "検品・仕上げ", unitPrice: 80, factoryCode: "FC-004" },
+    ],
+  },
+]
+
+/** 受注（createSalesOrder と同じ書き込み規則: productId null・version 1・isLatest true・totalAmount=subtotal 税抜）。 */
+const SALES_ORDERS = [
+  {
+    clientCode: "CL-003",
+    buyerOrderNumber: "EB-PO-27SS-014",
+    title: `${SEASON} 初回発注`,
+    orderDate: "2026-09-20",
+    desiredDeliveryDate: "2027-03-12",
+    status: "CONFIRMED",
+    sourceType: "EMAIL",
+    /** 品番ごとの単価 = その品番の PE の finalUnitPriceManualJpy */
+    productNames: ["リネン開襟シャツ", "リネンワイドパンツ"],
+  },
+]
+
+/**
+ * production-estimates.ts 163-185 toCalcLine と同じ対応（FullItem 相当 → 計算入力）。
+ * ここでは Prisma の createMany 入力（number 正規化前の値）から直接組む。
+ */
+type PeItemDraft = {
+  key: string
+  itemOrder: number
+  itemCategory: "MATERIAL" | "LABOR"
+  isSeparateBilling: boolean
+  procurementRoute: "COMPANY_ARRANGED"
+  itemName: string
+  itemNameEn: string | null
+  materialId: string | null
+  costCategoryId: string | null
+  source: "MANUAL" | "BOM"
+  sourceBomItemId: string | null
+  supplierId: string | null
+  factoryId: string | null
+  unitPrice: number | null
+  currency: "JPY" | "USD" | "CNY" | "VND" | "EUR"
+  usagePerUnit: number | null
+  lossRate: number
+  procurementMode: "ROLL" | "METER" | null
+  rollLength: number | null
+  rollPrice: number | null
+  rollCurrency: "JPY" | "USD" | "CNY" | "VND" | "EUR" | null
+  cutFee: number | null
+  quantity: number | null
+  unit: string | null
+  presentedPriceManualJpy: number | null
+  notes: string | null
+}
+function toCalcLine(f: PeItemDraft): ProductionEstimateLineForCalc {
+  return {
+    id: f.key,
+    itemCategory: f.itemCategory,
+    isSeparateBilling: f.isSeparateBilling,
+    procurementRoute: f.procurementRoute,
+    usagePerUnit: f.usagePerUnit,
+    lossRate: f.lossRate,
+    procurementMode: f.procurementMode,
+    rollLength: f.rollLength,
+    rollPrice: f.rollPrice,
+    rollCurrency: f.rollCurrency,
+    cutFee: f.cutFee,
+    unitPrice: f.unitPrice,
+    currency: f.currency,
+    quantity: f.quantity,
+    unit: f.unit,
+    presentedPriceManualJpy: f.presentedPriceManualJpy,
+  }
+}
+/** production-estimates.ts 79-81 dec と同じ（number → Decimal・null 保持）。 */
+function dec(n: number | null): Prisma.Decimal | null {
+  return n != null ? new Prisma.Decimal(n) : null
+}
+/** production-estimates.ts 188-223 toItemCreateBase と同じ対応（productionEstimateId・subtotal は呼び出し側）。 */
+function toItemCreateBase(
+  f: PeItemDraft,
+): Omit<Prisma.ProductionEstimateItemCreateManyInput, "productionEstimateId" | "subtotal" | "subtotalJpy"> {
+  return {
+    itemOrder: f.itemOrder,
+    itemCategory: f.itemCategory,
+    isSeparateBilling: f.isSeparateBilling,
+    procurementRoute: f.procurementRoute,
+    itemName: f.itemName,
+    itemNameEn: f.itemNameEn,
+    materialId: f.materialId,
+    costCategoryId: f.costCategoryId,
+    source: f.source,
+    sourcePoItemId: null,
+    sourceWoItemId: null,
+    sourceBomItemId: f.sourceBomItemId,
+    supplierId: f.supplierId,
+    factoryId: f.factoryId,
+    contractorId: null,
+    unitPrice: dec(f.unitPrice),
+    currency: f.currency,
+    usagePerUnit: dec(f.usagePerUnit),
+    lossRate: new Prisma.Decimal(f.lossRate),
+    procurementMode: f.procurementMode,
+    rollLength: dec(f.rollLength),
+    rollPrice: dec(f.rollPrice),
+    rollCurrency: f.rollCurrency,
+    cutFee: dec(f.cutFee),
+    quantity: dec(f.quantity),
+    unit: f.unit,
+    presentedPriceManualJpy: dec(f.isSeparateBilling ? f.presentedPriceManualJpy : null),
+    notes: f.notes,
+  }
+}
+
+/**
+ * sales-orders.ts 60-66 COUNTED_STATUSES ＋ 135-162 recomputeSkuOrderedQuantities と同じ集計。
+ * CONFIRMED 以降・isLatest・deletedAt null の SoItem を SKU ごとに合計し、Sku.orderedQuantity / productionQuantity を書く
+ * （0 件なら 0 を書く・D-13 の「受注の経路でしか受注数を入れない」を同じ規則で満たす）。
+ */
+const COUNTED_STATUSES = ["CONFIRMED", "IN_PRODUCTION", "PARTIAL_DELIVERED", "DELIVERED", "COMPLETED"] as const
+async function recomputeSkuOrderedQuantities(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  skuIds: string[],
+): Promise<void> {
+  const ids = [...new Set(skuIds.filter((v): v is string => !!v))]
+  for (const skuId of ids) {
+    const agg = await tx.soItem.aggregate({
+      _sum: { orderedQuantity: true, productionQuantity: true },
+      where: { skuId, so: { companyId, deletedAt: null, isLatest: true, status: { in: [...COUNTED_STATUSES] } } },
+    })
+    await tx.sku.update({
+      where: { id: skuId },
+      data: { orderedQuantity: agg._sum.orderedQuantity ?? 0, productionQuantity: agg._sum.productionQuantity ?? 0 },
+    })
+  }
+}
+
 // ─────────────────────────────────────────────────── 投入
 async function main() {
   guardHost()
@@ -779,6 +976,7 @@ async function main() {
   }
 
   // --- Product (+ ModelCode + StatusHistory) → Colorway → Sku → Bom → BomItem(+Colorway) → Comment ---
+  const productIdByName = new Map<string, string>()
   for (const p of PRODUCTS) {
     log(`\n=== 品番: ${p.brandCode} ${p.productName} ===`)
     const brandId = brandIds[p.brandCode]
@@ -854,6 +1052,8 @@ async function main() {
         return created
       },
     )
+
+    productIdByName.set(p.productName, productId)
 
     // --- ProductColorway（createColorway と同じ形） ---
     const colorwayIdByCode: Record<string, string> = {}
@@ -1015,6 +1215,307 @@ async function main() {
           return cm
         },
       )
+    }
+  }
+
+  // ─────────────────────────────────────────────── 量産見積（Comment の後・SO の前）
+  // 画面の createProductionEstimateFromSample（production-estimates.ts 339-676）と同じ対応:
+  //   (c) 明細 → FullItem[]（ここでは BOM 行 source BOM ＋ 工賃 source MANUAL）
+  //   → computeProductionEstimate（565-570）→ tx 内で採番（581）・ヘッダ create（586-601）・明細 createMany（602-612）
+  //   → AuditLog CREATE / ProductionEstimate（639-654 と同じ afterData ＋ source）
+  const factoryIdByCode = new Map<string, string>()
+  for (const f of await prisma.factory.findMany({ where: { companyId, factoryCode: { in: [...new Set(PRODUCTION_ESTIMATES.flatMap((d) => d.labor.map((l) => l.factoryCode)))] }, deletedAt: null }, select: { id: true, factoryCode: true } })) {
+    factoryIdByCode.set(f.factoryCode, f.id)
+  }
+  const pePrefix = `PE-${new Date().getFullYear()}-` // estimateNumberPrefix（83-85）
+  const finalUnitPriceByProductName = new Map<string, number>()
+  for (const d of PRODUCTION_ESTIMATES) {
+    finalUnitPriceByProductName.set(d.productName, d.finalUnitPriceManualJpy)
+    const productId = productIdByName.get(d.productName)
+    if (!productId) throw new Error(`品番が無い: ${d.productName}`)
+    log(`\n=== 量産見積: ${d.productName} ===`)
+    const peCreatedBefore = stats.get("ProductionEstimate")?.created ?? 0
+    await getOrCreate(
+      "ProductionEstimate",
+      `${d.productName} / ${d.title}`,
+      () =>
+        productId.startsWith("dry:")
+          ? Promise.resolve(null)
+          : prisma.productionEstimate.findFirst({ where: { companyId, productId, title: d.title, deletedAt: null }, select: { id: true } }),
+      async () => {
+        // (c) BOM 既定値 → MATERIAL 行（ヘッダは live BOM 1 本・createdAt desc は 420-424 と同じ）
+        const bom = await prisma.bom.findFirst({ where: { productId, companyId, deletedAt: null }, orderBy: { createdAt: "desc" }, select: { id: true } })
+        if (!bom) throw new Error(`BOM が無い: ${d.productName}`)
+        const bomItems = await prisma.bomItem.findMany({ where: { bomId: bom.id }, orderBy: { itemOrder: "asc" } })
+        const materialIdsInBom = [...new Set(bomItems.map((b) => b.materialId).filter((x): x is string => x !== null))]
+        const materials = materialIdsInBom.length
+          ? await prisma.material.findMany({ where: { id: { in: materialIdsInBom }, companyId }, select: { id: true, materialName: true, materialNameEn: true, rollLength: true, rollPrice: true, currency: true } })
+          : []
+        const materialById = new Map(materials.map((m) => [m.id, m]))
+        // (d) 見積数量＝Σ Sku.productionQuantity（455-462）
+        const skus = await prisma.sku.findMany({ where: { productId, companyId }, select: { productionQuantity: true } })
+        const estimateQuantity = skus.reduce((s, r) => s + r.productionQuantity, 0)
+
+        const drafts: PeItemDraft[] = []
+        let order = 0
+        for (const b of bomItems) {
+          const mat = b.materialId ? materialById.get(b.materialId) : undefined
+          const isRoll = b.procurementMode === "ROLL"
+          drafts.push({
+            key: String(order),
+            itemOrder: order,
+            itemCategory: "MATERIAL",
+            isSeparateBilling: false,
+            procurementRoute: "COMPANY_ARRANGED",
+            itemName: mat?.materialName ?? b.customMaterialName ?? "（品目名未設定）",
+            itemNameEn: mat?.materialNameEn ?? b.customMaterialNameEn ?? null,
+            materialId: b.materialId,
+            costCategoryId: null,
+            source: "BOM",
+            sourceBomItemId: b.id,
+            supplierId: b.supplierId,
+            factoryId: null,
+            unitPrice: b.unitPrice != null ? Number(b.unitPrice) : null,
+            currency: b.currency,
+            // 案A（489-498）: MATERIAL 行は所要量ベース。BOM 既定があれば優先、無ければ usagePerUnit=1・lossRate=0
+            usagePerUnit: b.usagePerUnit != null ? Number(b.usagePerUnit) : 1,
+            lossRate: Number(b.lossRate),
+            procurementMode: b.procurementMode,
+            rollLength: isRoll && mat?.rollLength != null ? Number(mat.rollLength) : null,
+            rollPrice: isRoll && mat?.rollPrice != null ? Number(mat.rollPrice) : null,
+            rollCurrency: isRoll ? mat?.currency ?? null : null,
+            cutFee: null,
+            // BOM 由来は購入数量を持たない（PoItem.quantity 相当が無い）。計算は usagePerUnit ベースで quantity を使わない
+            quantity: null,
+            unit: b.unit,
+            presentedPriceManualJpy: null,
+            notes: null,
+          })
+          order++
+        }
+        for (const l of d.labor) {
+          const factoryId = factoryIdByCode.get(l.factoryCode)
+          if (!factoryId) throw new Error(`Factory ${l.factoryCode} が無い`)
+          drafts.push({
+            key: String(order),
+            itemOrder: order,
+            itemCategory: "LABOR",
+            isSeparateBilling: false,
+            procurementRoute: "COMPANY_ARRANGED",
+            itemName: l.itemName,
+            itemNameEn: null,
+            materialId: null,
+            costCategoryId: null,
+            source: "MANUAL",
+            sourceBomItemId: null,
+            supplierId: null,
+            factoryId,
+            unitPrice: l.unitPrice,
+            currency: "JPY",
+            usagePerUnit: null,
+            lossRate: 0,
+            procurementMode: null,
+            rollLength: null,
+            rollPrice: null,
+            rollCurrency: null,
+            cutFee: null,
+            // dev 既存 PE の LABOR 行と同じ持ち方（quantity=見積数量・unit 枚 → 単価×数量）
+            quantity: estimateQuantity,
+            unit: "枚",
+            presentedPriceManualJpy: null,
+            notes: null,
+          })
+          order++
+        }
+        // 565-570: 画面と同じ計算（exchangeRate は null）
+        const calc = computeProductionEstimate(drafts.map(toCalcLine), estimateQuantity, d.marginRate, null)
+        const calcById = new Map(calc.rows.map((r) => [r.itemId, r]))
+
+        let created: { id: string; estimateNumber: string } | null = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            created = await prisma.$transaction(async (tx) => {
+              const estimateNumber = await nextNumbered(pePrefix, 4, async () => {
+                const last = await tx.productionEstimate.findFirst({ where: { companyId, estimateNumber: { startsWith: pePrefix } }, orderBy: { estimateNumber: "desc" }, select: { estimateNumber: true } })
+                return last?.estimateNumber ?? null
+              })
+              const header = await tx.productionEstimate.create({
+                data: {
+                  companyId,
+                  estimateNumber,
+                  productId,
+                  sourceSampleProductionId: null,
+                  title: d.title,
+                  notes: d.notes,
+                  estimateQuantity,
+                  currency: "JPY",
+                  exchangeRateUsdJpy: null,
+                  marginRate: dec(d.marginRate),
+                  marginRateSource: "MANUAL_OVERRIDE",
+                  initialCostBillingMode: "SEPARATE",
+                  autoUnitCostJpy: dec(calc.autoUnitCostJpy),
+                  autoUnitPriceJpy: dec(calc.autoUnitPriceJpy),
+                  finalUnitPriceManualJpy: dec(d.finalUnitPriceManualJpy),
+                  createdByUserId: owner.id,
+                },
+                select: { id: true, estimateNumber: true },
+              })
+              await tx.productionEstimateItem.createMany({
+                data: drafts.map((f) => {
+                  const row = calcById.get(f.key)
+                  return { ...toItemCreateBase(f), productionEstimateId: header.id, subtotal: dec(row?.subtotal ?? null), subtotalJpy: dec(row?.subtotalJpy ?? null) }
+                }),
+              })
+              return header
+            }, { timeout: 15000 })
+            break
+          } catch (e) {
+            if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") continue
+            throw e
+          }
+        }
+        if (!created) throw new Error(`採番衝突が解消されない: PE ${d.productName}`)
+        await audit(companyId, owner.id, "ProductionEstimate", created.id, {
+          estimateNumber: created.estimateNumber,
+          productId,
+          sourceSampleProductionId: null,
+          estimateQuantity,
+          itemCount: drafts.length,
+          autoUnitCostJpy: calc.autoUnitCostJpy,
+          autoUnitPriceJpy: calc.autoUnitPriceJpy,
+        }, `量産見積（デモ）: ${created.estimateNumber} ${d.productName}`)
+        log(`         → ${created.estimateNumber}  qty=${estimateQuantity} autoCost=${calc.autoUnitCostJpy} autoPrice=${calc.autoUnitPriceJpy} items=${drafts.length}`)
+        return created
+      },
+    )
+    // 明細は PE と同じ tx で作る（画面と同じ）。集計は行数（BOM 行数＋工賃行数）だけ別に出す。
+    {
+      const bom = productId.startsWith("dry:") ? null : await prisma.bom.findFirst({ where: { productId, companyId, deletedAt: null }, select: { _count: { select: { items: true } } } })
+      const n = (bom?._count.items ?? 0) + d.labor.length
+      const justCreated = (stats.get("ProductionEstimate")?.created ?? 0) !== peCreatedBefore
+      for (let i = 0; i < n; i++) bump("ProductionEstimateItem", justCreated ? "created" : "skipped")
+      log(`  ${justCreated ? "CREATE" : "skip  "} ${"ProductionEstimateItem".padEnd(20)} ${d.productName} × ${n} 行`)
+    }
+  }
+
+  // ─────────────────────────────────────────────── 受注（PE の後）
+  // 画面の createSalesOrder（sales-orders.ts 464-600）と同じ対応:
+  //   buildAndValidateItems（200-261: 単価は品番単位・小計=単価×数量・productionQuantity=computeProductionQuantity）
+  //   → sumSubtotals（263-268）→ tx 内で採番（496）・ヘッダ create（500-529）・SoItem createMany（530-546）
+  //   → recomputeSkuOrderedQuantities（547-552）→ AuditLog CREATE / SalesOrder（582-595 と同じ afterData ＋ source）
+  //   status CONFIRMED のため、updateSalesOrderStatus（747-808）が入れる confirmedAt / confirmedByUserId も同じ値で入れる。
+  for (const so of SALES_ORDERS) {
+    const clientId = clientIds[so.clientCode]
+    log(`\n=== 受注: ${so.clientCode} ${so.buyerOrderNumber} ===`)
+    // 品番ブロック（SKU は skuCode 順・現在の productionQuantity を受注数にする）
+    type SoRow = { skuId: string; skuCode: string; orderedQuantity: number; unitPrice: Prisma.Decimal; subtotal: Prisma.Decimal; productionQuantity: number }
+    const rows: SoRow[] = []
+    for (const name of so.productNames) {
+      const productId = productIdByName.get(name)
+      if (!productId) throw new Error(`品番が無い: ${name}`)
+      const unitPriceNum = finalUnitPriceByProductName.get(name)
+      if (unitPriceNum == null) throw new Error(`単価（PE の finalUnitPriceManualJpy）が無い: ${name}`)
+      const skus = productId.startsWith("dry:") ? [] : await prisma.sku.findMany({ where: { companyId, productId, deletedAt: null }, orderBy: { skuCode: "asc" }, select: { id: true, skuCode: true, productionQuantity: true } })
+      for (const s of skus) {
+        const unitPrice = new Prisma.Decimal(unitPriceNum)
+        // 既定の歩留まり（validator: yieldMode QUANTITY・yieldQuantity null → +0）
+        const productionQuantity = computeProductionQuantity(s.productionQuantity, "QUANTITY", null, null)
+        rows.push({ skuId: s.id, skuCode: s.skuCode, orderedQuantity: s.productionQuantity, unitPrice, subtotal: unitPrice.mul(s.productionQuantity), productionQuantity })
+      }
+    }
+    const totalQuantity = rows.reduce((s, r) => s + r.orderedQuantity, 0)
+    const subtotal = rows.reduce((s, r) => s.add(r.subtotal), new Prisma.Decimal(0))
+    const soPrefix = `SO-${new Date().getFullYear()}-` // salesOrderNumberPrefix（68-70）
+    const before = stats.get("SalesOrder")?.created ?? 0
+    await getOrCreate(
+      "SalesOrder",
+      `${so.clientCode} / ${so.buyerOrderNumber}`,
+      () =>
+        clientId.startsWith("dry:")
+          ? Promise.resolve(null)
+          : prisma.salesOrder.findFirst({ where: { companyId, clientId, buyerOrderNumber: so.buyerOrderNumber, deletedAt: null }, select: { id: true } }),
+      async () => {
+        if (rows.length === 0) throw new Error("SKU が 0 件（受注明細を作れない）")
+        const now = new Date()
+        let created: { id: string; soNumber: string } | null = null
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            created = await prisma.$transaction(async (tx) => {
+              const soNumber = await nextNumbered(soPrefix, 4, async () => {
+                const last = await tx.salesOrder.findFirst({ where: { companyId, soNumber: { startsWith: soPrefix } }, orderBy: { soNumber: "desc" }, select: { soNumber: true } })
+                return last?.soNumber ?? null
+              })
+              const header = await tx.salesOrder.create({
+                data: {
+                  companyId,
+                  soNumber,
+                  productId: null, // D-3: 品番は SoItem→Sku で辿る
+                  clientId,
+                  buyerId: null,
+                  sourceType: so.sourceType as never,
+                  buyerOrderNumber: so.buyerOrderNumber,
+                  orderDate: new Date(so.orderDate),
+                  desiredDeliveryDate: new Date(so.desiredDeliveryDate),
+                  currency: "JPY",
+                  title: so.title,
+                  internalNotes: null,
+                  buyerSpecialRequests: null,
+                  status: so.status as never,
+                  originalFiles: [],
+                  version: 1,
+                  isLatest: true,
+                  totalQuantity,
+                  subtotal,
+                  totalAmount: subtotal, // §1-1: 税抜合計
+                  createdByUserId: owner.id,
+                  // updateSalesOrderStatus（765-772）が CONFIRMED 時に入れる列
+                  ...(so.status === "CONFIRMED" ? { confirmedAt: now, confirmedByUserId: owner.id } : {}),
+                },
+                select: { id: true, soNumber: true },
+              })
+              await tx.soItem.createMany({
+                data: rows.map((r) => ({
+                  soId: header.id,
+                  skuId: r.skuId,
+                  orderedQuantity: r.orderedQuantity,
+                  unitPrice: r.unitPrice,
+                  subtotal: r.subtotal,
+                  currency: "JPY",
+                  moqStatus: "NOT_DETERMINED",
+                  moqDecisionReason: null,
+                  yieldMode: "QUANTITY",
+                  yieldRate: null,
+                  yieldQuantity: null,
+                  productionQuantity: r.productionQuantity,
+                })),
+              })
+              await recomputeSkuOrderedQuantities(tx, companyId, rows.map((r) => r.skuId))
+              return header
+              // 画面（createSalesOrder）は timeout 15000。ここはリモート proxy 越しに SKU 28 件 × 2 往復するため
+              // 15 秒を超えて P2028 になった（dev 実測）。集計規則は同じまま、待ち時間だけ伸ばす。
+            }, { maxWait: 30000, timeout: 180000 })
+            break
+          } catch (e) {
+            if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") continue
+            throw e
+          }
+        }
+        if (!created) throw new Error(`採番衝突が解消されない: SO ${so.buyerOrderNumber}`)
+        await audit(companyId, owner.id, "SalesOrder", created.id, {
+          soNumber: created.soNumber,
+          clientId,
+          status: so.status,
+          itemCount: rows.length,
+          totalQuantity,
+        }, `受注（デモ）: ${created.soNumber} ${so.title}`)
+        log(`         → ${created.soNumber}  status=${so.status} totalQuantity=${totalQuantity} totalAmount=${subtotal.toString()} items=${rows.length}`)
+        return created
+      },
+    )
+    const justCreated = (stats.get("SalesOrder")?.created ?? 0) !== before
+    for (const r of rows) {
+      bump("SoItem", justCreated ? "created" : "skipped")
+      log(`  ${justCreated ? "CREATE" : "skip  "} ${"SoItem".padEnd(20)} ${r.skuCode} × ${r.orderedQuantity} @ ${r.unitPrice.toString()}`)
     }
   }
 
