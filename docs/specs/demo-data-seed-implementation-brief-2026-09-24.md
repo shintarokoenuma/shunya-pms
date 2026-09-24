@@ -112,3 +112,15 @@ dev に、見栄えのする架空のクライアント・工場・品番を足�
 - デモ用に予定したコードが既に使われている
 - 品番作成の副作用が action と同じ形で再現できない
 - 画面が読む列のうち、シードでも画面でも埋める経路が無いものがある
+
+## 7. Phase 0 レビューの決定（2026-09-24・claude.ai 側）
+
+| # | 内容 |
+|---|---|
+| D-8 | ★量産 WO はシードで作らない。Phase 2 で量産見積（PE）を画面から作り、`/production-estimates/[id]/generate`（generateProductionOrders）を画面から実行して作る。これで量産 WO（品番カルテの工場欄・縫製仕様書の宛先）・仕入 PO・量産の進行タスク（PRODUCTION）が正規経路で揃う |
+| D-9 | ProgressTask はシードで作らない（D-8 と、サンプル製作ラウンドの画面作成で生成される） |
+| D-10 | createProduct の副作用（ModelCode 自動発番 M-{BRAND}-{4桁}・modelName=productName・patternNumber=productCode・ProductStatusHistory 1行 changeReason「品番カルテ新規作成」）をシードで同じ形に再現する。ProgressTask・Sku・Bom は createProduct では作られないため、それぞれの action と同じ形で別に作る |
+| D-11 | 作成順は Client → Brand → Supplier → Material → Factory(+FactoryContact) → Product(+ModelCode+StatusHistory) → ProductColorway → Sku → Bom → BomItem → BomItemColorway → Comment |
+| D-12 | 品番の冪等キーは (companyId, brandId, productName, deletedAt null)。productCode は採番規則で生成するため冪等キーに使えない |
+| D-13 | Sku.orderedQuantity は 0（createSkusForProduct と同じ）。受注数は受注の経路でしか入れない。productionQuantity のみシードで入れる |
+| D-14 | repo の MEMO_INBOX に M-032 が無い（ナレッジ側にのみある）。締めで同期する |
