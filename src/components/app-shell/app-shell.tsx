@@ -23,7 +23,7 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
     email: session.user.email,
     role: session.user.role,
     tenantType: session.user.tenantType,
-    companyName: company?.companyName ?? "shunya",
+    companyName: company?.companyName ?? "",
   }
 
   return (

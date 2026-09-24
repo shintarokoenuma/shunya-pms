@@ -41,7 +41,7 @@ export function UserMenu({ name, email, role, tenantType }: Props) {
             <p className="text-sm font-medium">{name}</p>
             <p className="text-xs text-muted-foreground">{email}</p>
             <p className="text-xs text-muted-foreground mt-1">
-              {tenantType} / {role}
+              {tenantType === "MASTER_ADMIN" ? "管理者モード / " + role : role}
             </p>
           </div>
         </DropdownMenuLabel>

@@ -704,10 +704,10 @@ export function SupplierForm(props: Props) {
           </CardContent>
         </Card>
 
-        {/* ===== shunya 側担当 ===== */}
+        {/* ===== 自社担当 ===== */}
         <Card>
           <CardHeader>
-            <CardTitle>shunya 側担当</CardTitle>
+            <CardTitle>自社担当</CardTitle>
           </CardHeader>
           <CardContent>
             <FormField

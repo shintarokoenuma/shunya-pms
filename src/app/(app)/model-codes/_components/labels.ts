@@ -43,7 +43,7 @@ export const MODEL_CODE_STATUS_OPTIONS: {
 // 所有権（OwnershipType）
 // =============================================================================
 export const OWNERSHIP_TYPE_LABELS: Record<OwnershipType, string> = {
-  SHUNYA: "shunya 所有",
+  SHUNYA: "自社所有",
   CLIENT: "クライアント所有",
   SHARED: "共有",
   CONTRACT_BASED: "契約による",
@@ -53,7 +53,7 @@ export const OWNERSHIP_TYPE_OPTIONS: {
   value: OwnershipType
   label: string
 }[] = [
-  { value: "SHUNYA", label: "shunya 所有" },
+  { value: "SHUNYA", label: "自社所有" },
   { value: "CLIENT", label: "クライアント所有" },
   { value: "SHARED", label: "共有" },
   { value: "CONTRACT_BASED", label: "契約による（個別案件で設定）" },

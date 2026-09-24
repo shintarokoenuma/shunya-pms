@@ -10,9 +10,9 @@ export function Sidebar() {
           className="flex items-center gap-2.5 font-semibold"
         >
           <div className="size-8 rounded-md bg-foreground text-background flex items-center justify-center text-sm font-bold">
-            S
+            P
           </div>
-          <span className="text-sm">shunya PMS</span>
+          <span className="text-sm">PMS</span>
         </Link>
       </div>
       <SidebarNav />

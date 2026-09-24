@@ -24,7 +24,7 @@ export default async function DashboardPage() {
           👋 ようこそ、{session.user.name}さん
         </h2>
         <p className="text-muted-foreground text-sm">
-          shunya 生産管理システムへようこそ。Phase 0 セットアップ完了！
+          生産管理システムへようこそ。Phase 0 セットアップ完了！
         </p>
       </div>
 
@@ -109,7 +109,7 @@ export default async function DashboardPage() {
             </li>
             <li className="flex items-center gap-2">
               <span className="text-emerald-600">✓</span>
-              <span>初期データ投入完了（shunya MASTER_ADMIN）</span>
+              <span>初期データ投入完了</span>
             </li>
             <li className="flex items-center gap-2">
               <span className="text-emerald-600">✓</span>

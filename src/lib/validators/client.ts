@@ -198,7 +198,7 @@ export const clientBaseSchema = z
     assignedToUserId: z
       .string()
       .trim()
-      .min(1, "shunya側担当者は必須です"),
+      .min(1, "自社担当者は必須です"),
     primaryContact: primaryContactSchema,
 
     // 運用

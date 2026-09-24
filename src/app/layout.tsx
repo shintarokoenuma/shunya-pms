@@ -14,7 +14,7 @@ const inter = Inter({
 })
 
 export const metadata: Metadata = {
-  title: "shunya 生産管理システム",
+  title: "PMS｜生産管理システム",
   description: "アパレルOEM向け生産管理システム",
 }
 

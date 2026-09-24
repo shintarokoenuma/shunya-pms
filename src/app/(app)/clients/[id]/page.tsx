@@ -114,7 +114,7 @@ export default async function ClientDetailPage({
   // ★action 側で 5 に絞らない（請求書の御入金の節など他の消費者に影響する）
   const payments = (await listClientPayments(id)).slice(0, 5)
 
-  // shunya 側担当者の名前を取得
+  // 自社担当者の名前を取得
   const assignedUser = client.assignedToUserId
     ? await prisma.user.findUnique({
         where: { id: client.assignedToUserId },
@@ -349,10 +349,10 @@ export default async function ClientDetailPage({
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* shunya 側担当者 */}
+        {/* 自社担当者 */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">shunya 側担当</CardTitle>
+            <CardTitle className="text-base">自社担当</CardTitle>
           </CardHeader>
           <CardContent>
             <Dl>
