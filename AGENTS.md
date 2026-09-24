@@ -47,3 +47,15 @@ shunya プロジェクトのマスター CRUD 実装は **`docs/shunya-master-pa
 
 新しいマスター（外注先・納品先・素材等）を実装する際は、**まずこのドキュメントを読んでから**着手すること。
 
+
+---
+
+## 🔒 テナント分離（companyId）の書き方（B-230・2026-09-25）
+
+根拠: `docs/MEMO_INBOX.md` M-036（2026-09-24 の read-only 棚卸し）、`docs/BACKLOG.md` B-230〜B-232。
+
+- **`companyId` を持つモデルへのクエリは、where に `companyId` を手書きする。** 新しく書くコードは `deletedAt: null` も手書きする（既存コードに `deletedAt` を後から足す時は、削除済み行を含む既存データの編集が失敗しないかを確認する）。
+- **`companyId` を持たない子テーブル**（明細・履歴など。PoItem / WoItem / SoItem / BomItem / DeliveryNoteItem / InvoiceItem / ProductionEstimateItem など）は、**親を `companyId` 付きで取得して所有を確認してから触る。** id だけで子を引いて済ませない。
+- **`src/lib/prisma.ts` の Extension（companyId / deletedAt の自動注入・物理削除の例外化）は、`withTenantContext()` で包んだ `src/lib/actions/brands.ts` と `src/lib/actions/clients.ts` の中でしか効かない。** 他のファイルでは `TENANT_MODELS` に入っているモデル（Client / Product / Sku など）でも自動注入は起きない。「TENANT なので自動注入される」と書いたコメントや前提を置かない。
+- 一覧の `where` を変数で組む場合は、その変数の先頭で `companyId: sess.companyId` を入れる（`purchase-orders.ts` の `listPurchaseOrders` と同じ形）。
+- 書き忘れの機械的な検出（B-231）と、物理削除 22 箇所の意図確認（B-232）は別 PR で扱う。

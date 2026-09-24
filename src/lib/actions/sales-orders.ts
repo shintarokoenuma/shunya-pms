@@ -207,8 +207,10 @@ async function buildAndValidateItems(
     return { ok: false, error: "同じ SKU が複数行にあります" }
   }
 
+  // ★withTenantContext 外なので companyId を手書きで明示する（B-230）。他社の SKU は「見つからない」扱いになる。
+  //   deletedAt は足さない（削除済み SKU を含む既存受注の編集が失敗しないよう既存挙動を維持）。
   const skus = await prisma.sku.findMany({
-    where: { id: { in: allSkuIds } },
+    where: { id: { in: allSkuIds }, companyId },
     select: { id: true, productId: true },
   })
   const skuProduct = new Map(skus.map((s) => [s.id, s.productId]))
@@ -475,9 +477,10 @@ export async function createSalesOrder(
     }
     const data = parsed.data
 
-    // クライアント所有確認（TENANT: companyId 自動注入）。
+    // クライアント所有確認。★このファイルは withTenantContext 外なので Extension の自動注入は効かない。
+    //   companyId は手書きで明示する（B-230）。
     const client = await prisma.client.findFirst({
-      where: { id: data.clientId },
+      where: { id: data.clientId, companyId: sess.companyId },
       select: { id: true },
     })
     if (!client) return { ok: false, error: "クライアントが見つかりません" }
@@ -893,7 +896,8 @@ export async function getSalesOrderSectionForProduct(
     })
     if (!product) return { ok: false, error: "品番が見つかりません" }
 
-    // 品番配下の SKU（Sku は TENANT: companyId/deletedAt 自動注入）。
+    // 品番配下の SKU。★このファイルは withTenantContext 外で自動注入は効かない。
+    //   直前で品番を companyId 付きで所有確認しているため、その productId で絞れている（B-230）。
     const skus = await prisma.sku.findMany({
       where: { productId },
       orderBy: [{ colorCode: "asc" }, { sizeOrder: "asc" }],
@@ -975,7 +979,8 @@ export async function markSalesOrdersConvertedForProduct(
     const sess = await requireSession()
     if (!sess.ok) return
 
-    // Sku は TENANT（companyId/deletedAt 自動注入）。
+    // 品番配下の SKU。★withTenantContext 外で自動注入は効かない。続く SalesOrder の検索は
+    //   companyId を明示しているため、他社の SKU id が混ざっても対象は自社 SO に限られる（B-230）。
     const skus = await prisma.sku.findMany({
       where: { productId },
       select: { id: true },
