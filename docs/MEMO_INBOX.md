@@ -1227,3 +1227,25 @@ memo-inbox スキルは「受け取ったターンの中で保存する」と定
   - 連携方式: API 連携か、片方への統合か（saagara = Express＋別DB、shunya-pms = Next.js＋Prisma）
   - 品番・SKU・取引先マスターの共有方法（どちらを正にするか）
   - 受注の締め（いつ合算して生産数量を確定するか）
+
+### M-036 ★テナント分離の棚卸し結果（read-only 調査 2026-09-24・main 049fbb8）
+- 記入: 2026-09-24
+- 状態: 未起票
+- 経緯: M-034（3エディション構想）で他社が同じシステムに入る前提になったため、会社ごとの絞り込みの漏れを実測した。
+- 実測結果:
+  - 全132モデル = A（companyId あり・自動対象）12 / B（companyId あり・自動対象外）77 / C（companyId なし・親経由）43 / 矛盾 0
+  - ★自動注入（src/lib/prisma.ts の Extension）は withTenantContext で包んだ時だけ動く。包んでいるのは brands.ts / clients.ts の2ファイルのみ。prisma を使う他の76ファイルは companyId の手書きに依存している
+  - ★「TENANT: companyId 自動注入」と誤解したコメントが残っている（sales-orders.ts:478・896・978）
+  - 手書きの絞り込みはほぼ全箇所で正しい。C 分類の id 直接アクセス17件はすべて親の companyId 確認あり
+  - ★EXTERNAL ロールの拒否は comments.ts / company-settings.ts の2ファイルのみ。原価・仕入先・工場を返す action にも到達できる。User → Client の参照列（B-172 spec D-2）は未作成
+  - 穴（中）: sales-orders.ts:479 client.findFirst { id: data.clientId } と :210 sku.findMany（createSalesOrder / updateSalesOrder）に所有確認が無い。他社の clientId / skuId を自社 SO に紐づけられる
+  - 物理削除 prisma.*.delete が22箇所（鉄則 #3 の論理削除強制も同じ理由で効いていない）
+- 慎太郎さんへの注意（運用ルール）: B-172 が実装されるまで、EXTERNAL の User を本番に作らない
+- Claude の提案（未承認）:
+  - 方針は「companyId 手書きを正式ルール化」＋誤解コメントの削除＋未指定呼び出しの検出チェック。エディション化の段階で PostgreSQL RLS を最後の防壁として足す
+  - sales-orders.ts:479 / :210 は where に companyId: sess.companyId を足す小修正
+- 未確定（着手時に要確認）:
+  - 方針 (a) 全 action を withTenantContext で包み TENANT_MODELS を拡大 / (b) 手書きを正式ルール化 のどちらにするか
+  - 物理削除22箇所のうち、意図して物理削除にしているものがあるか（1件ずつ確認）
+  - product-orders.ts:103〜115・global-search.ts:233〜239 の親 PO/WO 取得条件（今回未確認）
+  - 休眠モデル48個（在庫・貿易・メール・AI 系）を実装する時の companyId 手書き
