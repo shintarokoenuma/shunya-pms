@@ -212,12 +212,12 @@ export const supplierInputSchema = z
       }
     }
 
-    // 担当者: shunya 側担当 必須
+    // 担当者: 自社担当 必須
     if (!data.assignedToUserId || data.assignedToUserId === "") {
       ctx.addIssue({
         code: "custom",
         path: ["assignedToUserId"],
-        message: "shunya 側担当者は必須です",
+        message: "自社担当者は必須です",
       })
     }
   })

@@ -19,7 +19,7 @@ export function Header({ user }: Props) {
         <span className="text-sm text-muted-foreground">{user.companyName}</span>
         {user.tenantType === "MASTER_ADMIN" && (
           <Badge variant="secondary" className="text-xs">
-            MASTER_ADMIN
+            管理者モード
           </Badge>
         )}
       </div>
