@@ -124,3 +124,34 @@ dev に、見栄えのする架空のクライアント・工場・品番を足�
 | D-12 | 品番の冪等キーは (companyId, brandId, productName, deletedAt null)。productCode は採番規則で生成するため冪等キーに使えない |
 | D-13 | Sku.orderedQuantity は 0（createSkusForProduct と同じ）。受注数は受注の経路でしか入れない。productionQuantity のみシードで入れる |
 | D-14 | repo の MEMO_INBOX に M-032 が無い（ナレッジ側にのみある）。締めで同期する |
+
+## 8. 追加の決定と結果（2026-09-24 夜・締め CLOSE-Z で記録・claude.ai 側）
+
+| # | 内容 |
+|---|---|
+| D-15 | ★量産見積はシードで作る。画面の作成入口は `createProductionEstimateFromSample`（確定サンプル経由）しか無く、デモ品番にはサンプルが無いため。明細は BOM 行（source BOM・sourceBomItemId・BOM の仕入先）＋工賃（source MANUAL・factoryId 付き）。金額は画面と同じ `computeProductionEstimate`（src/lib/production-estimate/calc.ts）の結果を保存する。sourceSampleProductionId は null |
+| D-16 | 受注はシードで CONFIRMED のまま作る（confirmedAt / confirmedByUserId も入れる）。Sku.orderedQuantity / productionQuantity は `recomputeSkuOrderedQuantities` と同じ集計で更新（D-13 を同じ規則で満たす）。画面の TENTATIVE→CONFIRMED の UPDATE 監査は残らない |
+| D-17 | PO / WO / 進行（量産）は D-8 のとおり画面の量産発注生成で作る |
+| D-18 | スクリプトの受注トランザクションは timeout 180000（dev はリモート proxy 越しで 1 往復約 1.8 秒・画面と同じ 15000 では P2028 で落ちた） |
+
+### 結果（dev・hopper:12921）
+
+- シード（PR #165・commit 0830dc9 / 131a490 / fd8365e・**未マージ**）: クライアント3・ブランド3・仕入先2・素材11・工場2（担当者2）・品番6・色20・SKU80・BOM6（明細27・調達カラー20）・メモ3・**量産見積3（PE-2026-0004〜0006・明細26）・受注1（SO-2026-0006・確定・970枚・¥4,976,000 税抜・SoItem 28）**。3回目の実行は created 0（冪等）
+- 量産見積の自動値: シャツ 原価 4,255.11 / 自動単価 5,531.64 / 提示 4,800、パンツ 4,807.67 / 6,249.97 / 5,600、カバーオール 5,255.70 / 6,832.41 / 6,200（利益率 30%）。★シャツは提示単価が自動単価を下回る（原価に対し約13%）
+- 絵型: 慎太郎さんが ETB・HNK の4品番にアップロード済み。SLC 2品番は未
+- 量産発注生成: 3 PE とも画面から実行済み（2026-09-24 20:06〜20:26 JST）。**シャツとカバーオールは2回押されて PO / WO が二重**（シャツ PO 4・WO 2、カバーオール PO 4・WO 2、パンツ PO 2・WO 1。すべて DRAFT）。既存 B-142（再生成ガードが無い）の実例。SO-2026-0006 は isConvertedToProduction = true
+- 既存［ダミー］データは不変
+
+### 撮影上の注意
+
+- 量産見積・見積・受注の一覧には絞り込みが無い。一覧は新しい順なのでデモ行が一番上に来る。［ダミー］は画面の下を切って撮る
+- 請求書 PDF は未実装（B-109 PR-4）
+
+### 残り
+
+- 納品書 → 請求書の画面入力と撮影（ÉTÉ BLANC 宛て）
+- SLC 2品番の絵型
+- 二重 PO / WO の扱い（慎太郎さん判断）
+- PR #165 のマージ（マージで本番に反映されるのはスクリプトと docs のみ・本番では実行しない）
+
+END-OF-DEMO-BRIEF-2026-09-24
