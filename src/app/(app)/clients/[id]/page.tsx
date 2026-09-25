@@ -303,7 +303,7 @@ export default async function ClientDetailPage({
                   label="デポジット比率"
                   value={
                     client.depositPercentage
-                      ? `${Number(client.depositPercentage)} %`
+                      ? `${Math.round(Number(client.depositPercentage))} %`
                       : null
                   }
                 />

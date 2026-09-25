@@ -574,14 +574,16 @@ export function ClientForm(props: Props) {
                   <FormItem>
                     <FormLabel>デポジット比率 (%) *</FormLabel>
                     <FormControl>
+                      {/* B-109 PR-3 の確認で発見: 整数（1〜100）。入力中は文字列のまま持ち、数値にするのは送信時（zod の coerce）。
+                          打鍵ごとに Number() に直すと途中の入力が丸められて打ち直せない */}
                       <Input
-                        type="number" min={0} max={100} step="0.01"
+                        type="number" min={1} max={100} step={1} inputMode="numeric"
                         placeholder="30"
-                        value={typeof field.value === "number" ? field.value : ""}
-                        onChange={(e) => field.onChange(e.target.value === "" ? undefined : Number(e.target.value))}
+                        value={typeof field.value === "number" || typeof field.value === "string" ? field.value : ""}
+                        onChange={(e) => field.onChange(e.target.value === "" ? undefined : e.target.value)}
                       />
                     </FormControl>
-                    <FormDescription>新規取引のデフォルト 30 %</FormDescription>
+                    <FormDescription>1〜100 の整数。新規取引のデフォルト 30 %</FormDescription>
                     <FormMessage />
                   </FormItem>
                 )}
