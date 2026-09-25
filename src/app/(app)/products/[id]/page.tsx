@@ -887,7 +887,8 @@ function DetailRow({
   value: React.ReactNode
 }) {
   return (
-    <div className="grid grid-cols-[160px_1fr] gap-3 text-sm py-1">
+    // B-093 PR-2（D-4）: 640px 未満はラベル幅 96px（狭い幅で値が 1 語ずつ折り返さないように）
+    <div className="grid grid-cols-[96px_1fr] sm:grid-cols-[160px_1fr] gap-3 text-sm py-1">
       <div className="text-muted-foreground">{label}</div>
       <div>{value}</div>
     </div>
