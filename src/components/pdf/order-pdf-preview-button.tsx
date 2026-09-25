@@ -39,11 +39,15 @@ export function OrderPdfPreviewButton({
   kind,
   id,
   fallbackName,
+  label = "発注書 PDF",
 }: {
   endpoint: string
-  kind: "purchase-order" | "work-order"
+  /** B-109 PR-4（P4-D17）: 請求書・納品書でも使い回す。PO/WO の見た目は変えない */
+  kind: "purchase-order" | "work-order" | "invoice" | "delivery-note"
   id: string
   fallbackName: string
+  /** ボタンの表示名。既定は「発注書 PDF」 */
+  label?: string
 }) {
   const preview = usePdfPreview()
   const [pending, startTransition] = useTransition()
@@ -76,7 +80,7 @@ export function OrderPdfPreviewButton({
         disabled={pending}
       >
         <FileText className="mr-1 h-4 w-4" />
-        発注書 PDF
+        {label}
       </Button>
       <PdfPreviewDialog
         url={preview.url}

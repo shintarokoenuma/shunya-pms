@@ -19,7 +19,7 @@ import {
 import { updateInvoiceStatus } from "@/lib/actions/invoices"
 
 /**
- * addendum v0.9 §2-3: ボタンは `取消` / `再発行`（PDF は PR-4）。
+ * addendum v0.9 §2-3: ボタンは `取消` / `再発行`。PDF は詳細ページ側の OrderPdfPreviewButton（B-109 PR-4）。
  * - DRAFT: 送付済みにする / 取消
  * - SENT: 取消（送付済みにしたら書き換えません。誤りは取消 → 再発行）
  * - CANCELLED: 再発行（取消した請求書の明細は候補に戻っているので、新規作成をその内容で開く）

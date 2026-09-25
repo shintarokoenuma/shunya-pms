@@ -545,6 +545,8 @@ export async function createInvoice(
                 billToLegalEntity: client.legalEntity,
                 billToAddress,
                 billToTaxId: client.taxId,
+                // B-109 PR-4（P4-D4）: 振込先を発行時にスナップショット（発行者欄と同じ考え・D-35）
+                bankInfo: COMPANY_PROFILE.bank,
                 currency: "JPY",
                 subtotal: D(amounts.subtotal),
                 taxableAmount10: D(amounts.taxableAmount10),

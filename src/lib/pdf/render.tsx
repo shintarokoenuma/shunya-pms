@@ -7,6 +7,10 @@ import { PeQuotationDocument } from "./pe-quotation-document"
 import type { PeQuotationPdfData } from "./pe-quotation-data"
 import { SewingSpecDocument } from "./sewing-spec-document"
 import type { SewingSpecPdfData } from "./sewing-spec-data"
+import { InvoiceDocument } from "./invoice-document"
+import type { InvoicePdfData } from "./invoice-data"
+import { DeliveryNoteDocument } from "./delivery-note-document"
+import type { DeliveryNotePdfData } from "./delivery-note-data"
 
 /**
  * S-4c-2(H2): 「組み立て(OrderDocument)」と「出力先」を分離するための生成層。
@@ -37,6 +41,16 @@ export async function renderPeQuotationPdfBuffer(
   data: PeQuotationPdfData,
 ): Promise<Buffer> {
   return renderToBuffer(<PeQuotationDocument data={data} />)
+}
+
+/** B-109 PR-4 請求書 PDF（複数を縦積み・1件でも配列で受ける）。 */
+export async function renderInvoicePdfBuffer(dataList: InvoicePdfData[]): Promise<Buffer> {
+  return renderToBuffer(<InvoiceDocument dataList={dataList} />)
+}
+
+/** B-109 PR-4 納品書 PDF（複数を縦積み・1件でも配列で受ける）。 */
+export async function renderDeliveryNotePdfBuffer(dataList: DeliveryNotePdfData[]): Promise<Buffer> {
+  return renderToBuffer(<DeliveryNoteDocument dataList={dataList} />)
 }
 
 /** B-054 PR-4a 縫製仕様書 PDF。route はこの Buffer をレスポンスに載せる。 */
