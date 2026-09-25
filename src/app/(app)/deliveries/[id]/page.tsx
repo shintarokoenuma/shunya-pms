@@ -54,6 +54,8 @@ export default async function DeliveryNoteDetailPage({
   if (!result.ok) notFound()
   const dn = result.data
   const isDraft = dn.status === "DRAFT"
+  // B-109 PR-3（P3-D9・P3-D10）: 前受金の伝票（DEPOSIT 行を持つ）はバッジを出し、フォームで編集させない
+  const isDepositNote = dn.items.some((it) => it.lineKind === "DEPOSIT")
 
   return (
     <div className="space-y-6 p-6">
@@ -73,6 +75,7 @@ export default async function DeliveryNoteDetailPage({
               <Badge variant={DELIVERY_NOTE_STATUS_BADGE_VARIANT[dn.status]}>
                 {DELIVERY_NOTE_STATUS_LABELS[dn.status]}
               </Badge>
+              {isDepositNote && <Badge variant="outline">前受金</Badge>}
             </div>
             <div className="mt-1 text-sm text-muted-foreground">
               {dn.clientName ?? "（クライアント未設定）"}
@@ -80,7 +83,7 @@ export default async function DeliveryNoteDetailPage({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <DeliveryNoteStatusControl id={dn.id} status={dn.status} />
-            {isDraft && (
+            {isDraft && !isDepositNote && (
               <Button asChild variant="outline" size="sm">
                 <Link href={`/deliveries/${dn.id}/edit`}>
                   <Pencil className="mr-1 h-4 w-4" />
@@ -154,6 +157,17 @@ export default async function DeliveryNoteDetailPage({
                   <TableRow key={it.id}>
                     <TableCell className="text-sm">
                       {it.productName}
+                      {/* B-109 PR-3（P3-D9）: 前受金の行は「前受金」「前受金充当」バッジと受注番号 */}
+                      {it.lineKind && (
+                        <span className="ml-2 inline-flex items-center gap-1">
+                          <Badge variant="outline">{it.lineKind === "DEPOSIT" ? "前受金" : "前受金充当"}</Badge>
+                          {it.soId && dn.soNumberById[it.soId] && (
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {dn.soNumberById[it.soId]}
+                            </span>
+                          )}
+                        </span>
+                      )}
                       {/* B-114 §2-7: 量産行は「量産」バッジと受注番号 */}
                       {it.skuId && (
                         <span className="ml-2 inline-flex items-center gap-1">

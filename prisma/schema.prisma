@@ -6071,6 +6071,12 @@ model DeliveryNote {
   @@map("delivery_notes")
 }
 
+/** B-109 PR-3: 納品書明細の行の種類（前受金）。通常の行は null。 */
+enum DeliveryLineKind {
+  DEPOSIT // 前受金の請求行
+  DEPOSIT_APPLIED // 前受金の充当行（マイナス）
+}
+
 enum DeliveryNoteStatus {
   DRAFT // ドラフト
   PENDING_APPROVAL // 承認待ち
@@ -6117,6 +6123,10 @@ model DeliveryNoteItem {
   soId     String? @map("so_id")
   soItemId String? @map("so_item_id")
   woId     String? @map("wo_id")
+
+  // B-109 PR-3（P3-D1）: 前受金の行の印。null＝通常の行。DEPOSIT＝前受金の請求行（数量 1）、
+  // DEPOSIT_APPLIED＝前受金の充当行（数量 −1）。どちらも soId を持ち、soItemId / skuId は null（納品済み数に混ざらない）。
+  lineKind DeliveryLineKind? @map("line_kind")
 
   // 引き当て元（B-108 PR2・仕様確認書 v1.1 §C-2）
   // ★直上の woId は SO/WO 連携用の休眠列であり別物。流用しないこと。

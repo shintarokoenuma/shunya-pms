@@ -1,19 +1,28 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { Prisma, DeliveryNoteStatus } from "@prisma/client"
+import { Prisma, DeliveryLineKind, DeliveryNoteStatus, SalesOrderStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { COMPANY_PROFILE } from "@/lib/constants/company-profile"
 import {
   deliveryNoteInputSchema,
   deliveryNoteListParamsSchema,
+  depositRequestSchema,
   DELIVERY_NOTE_STATUS_UI_VALUES,
   DELIVERY_NOTE_DELIVERED_STATUSES,
+  DEPOSIT_PAYMENT_TERM_TYPES,
   SO_ALLOCATABLE_STATUSES,
   type DeliveryNoteListParams,
   type DeliveryNoteInput,
 } from "@/lib/validators/delivery-note"
+import {
+  depositLineName,
+  depositSummaryFor,
+  loadDepositSummaries,
+  sumDeliveryQuantity,
+  type DepositSummary,
+} from "@/lib/billing/deposits"
 
 /**
  * B-108: サンプル納品書 Server Actions（PO/WO の作法を写経）。
@@ -205,6 +214,8 @@ export type DeliveryNoteListItem = {
   deliveryDate: Date
   totalQuantity: number
   createdAt: Date
+  /** B-109 PR-3（P3-D9）: 前受金の請求行を持つ納品書（前受金の伝票） */
+  hasDeposit: boolean
 }
 
 export async function listDeliveryNotes(
@@ -247,6 +258,8 @@ export async function listDeliveryNotes(
           deliveryDate: true,
           totalQuantity: true,
           createdAt: true,
+          // B-109 PR-3（P3-D9）: 前受金の伝票かどうか（DEPOSIT 行が 1 つでもあれば）
+          items: { where: { lineKind: DeliveryLineKind.DEPOSIT }, select: { id: true }, take: 1 },
         },
         orderBy: [{ deliveryNumber: "desc" }],
         skip,
@@ -273,6 +286,7 @@ export async function listDeliveryNotes(
       deliveryDate: r.deliveryDate,
       totalQuantity: r.totalQuantity,
       createdAt: r.createdAt,
+      hasDeposit: r.items.length > 0,
     }))
 
     return {
@@ -350,7 +364,11 @@ export async function getDeliveryNote(id: string) {
 // - §4-2/§4-3: 送り先解決（destination → buyer → client.shipping* → client 基本・上書き優先）
 // - §6: 金額計算（showAmounts のときのみ）と警告
 // =============================================================================
-async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
+async function prepareDeliveryNote(
+  companyId: string,
+  data: DeliveryNoteInput,
+  opts: { excludeDeliveryNoteId?: string } = {},
+) {
   // クライアント（必須）を companyId スコープで解決。
   const client = await prisma.client.findFirst({
     where: { id: data.clientId, companyId, deletedAt: null },
@@ -474,6 +492,40 @@ async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
     }
   }
 
+  // B-109 PR-3（P3-D2〜D4）: 前受金の行（DEPOSIT / DEPOSIT_APPLIED）をサーバで検証。
+  //   受注: companyId 一致・deletedAt null・clientId が納品書の clientId と一致・取消でない
+  //   充当額の合計は、その受注の未充当額（自分の納品書の行を除いて集計）を超えない
+  const depositRows = data.items.filter((i) => !!i.lineKind)
+  if (depositRows.length > 0) {
+    const depSoIds = [...new Set(depositRows.map((i) => i.soId as string))]
+    const sos = await prisma.salesOrder.findMany({
+      where: { id: { in: depSoIds }, companyId, deletedAt: null },
+      select: { id: true, clientId: true, status: true },
+    })
+    const soById = new Map(sos.map((x) => [x.id, x]))
+    for (const soId of depSoIds) {
+      const so = soById.get(soId)
+      if (!so || so.clientId !== data.clientId || so.status === SalesOrderStatus.CANCELLED) {
+        return { ok: false as const, error: "前受金の行の受注が見つからないか、このクライアントの受注ではありません" }
+      }
+    }
+    const summaries = await loadDepositSummaries(companyId, depSoIds, {
+      excludeDeliveryNoteId: opts.excludeDeliveryNoteId,
+    })
+    for (const soId of depSoIds) {
+      const applying = depositRows
+        .filter((i) => i.soId === soId && i.lineKind === DeliveryLineKind.DEPOSIT_APPLIED)
+        .reduce((a, i) => a + (i.unitPrice ?? 0), 0)
+      const remaining = depositSummaryFor(summaries, soId).remaining
+      if (applying > remaining) {
+        return {
+          ok: false as const,
+          error: `前受金の充当額（¥${applying.toLocaleString("ja-JP")}）が未充当の前受金（¥${remaining.toLocaleString("ja-JP")}）を超えています`,
+        }
+      }
+    }
+  }
+
   // §4-2 / §4-3: 宛先を解決して値コピー。フォームで上書きがあればそれを優先。
   let resolvedAddress = ""
   let resolvedContact: string | null = null
@@ -537,6 +589,8 @@ async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
       skuId: it.skuId ?? null,
       soId: it.soId ?? null,
       soItemId: it.soItemId ?? null,
+      // B-109 PR-3（P3-D1）: 前受金の行の印（通常の行は null）。update の deleteMany→createMany でも保たれる（P3-D10）。
+      lineKind: it.lineKind ?? null,
       productId: it.productId,
       clientProductCode: it.clientProductCode,
       productName: it.productName,
@@ -561,10 +615,14 @@ async function prepareDeliveryNote(companyId: string, data: DeliveryNoteInput) {
     }
   })
 
-  const totalQuantity = data.items.reduce((a, it) => a + it.quantity, 0)
+  // B-109 PR-3: 前受金・充当の行は枚数ではないので数量合計から除く（billing/deposits の 1 か所）
+  const totalQuantity = sumDeliveryQuantity(data.items)
 
   // B-114 §2-5: ヘッダの受注紐付け。量産行があれば primarySoId＝最初の soId、relatedSoIds＝重複なし配列。無ければ両方 null。
-  const relatedSoIds = [...new Set(massRows.map((i) => i.soId as string))]
+  // B-109 PR-3（P3-D2・D3）: 前受金の行の soId も紐付けに含める（前受金の伝票は受注に紐づく）。
+  const relatedSoIds = [
+    ...new Set([...massRows, ...depositRows].map((i) => i.soId as string)),
+  ]
   const primarySoId = relatedSoIds[0] ?? null
 
   // B-224（D-40・D-45）: 納品書は小計（税抜）まで。消費税と税込合計は計算も保存もしない。
@@ -668,6 +726,90 @@ async function recomputeDeliveredQuantities(
 // =============================================================================
 const CREATE_MAX_RETRIES = 3
 
+type Prepared = Extract<Awaited<ReturnType<typeof prepareDeliveryNote>>, { ok: true }>["prepared"]
+
+/**
+ * 採番＋ヘッダ＋明細の作成（同一 tx・P2002 リトライ）。createDeliveryNote と、
+ * B-109 PR-3 の前受金の伝票（createDepositRequest・DELIVERED で作る）で共用する。
+ * ★ヘッダの列の埋め方はここ 1 か所（新しい作り方を作らない・P3-D6）。
+ */
+async function insertDeliveryNote(
+  companyId: string,
+  userId: string,
+  p: Prepared,
+  status: DeliveryNoteStatus,
+): Promise<
+  | { ok: true; created: { id: string; deliveryNumber: string } }
+  | { ok: false; error: string }
+> {
+  const prefix = deliveryNumberPrefix(new Date().getFullYear())
+  let created: { id: string; deliveryNumber: string } | null = null
+  let lastError: unknown = null
+
+  for (let attempt = 0; attempt < CREATE_MAX_RETRIES; attempt++) {
+    try {
+      created = await prisma.$transaction(
+        async (tx) => {
+          const deliveryNumber = await computeNextDeliveryNumber(tx.deliveryNote, companyId, prefix)
+          const dn = await tx.deliveryNote.create({
+            data: {
+              companyId,
+              deliveryNumber,
+              // §3-1: 代表 productId は入れない（明細側 productId で引く）。
+              clientId: p.clientId,
+              buyerId: p.buyerId,
+              deliveryDestinationId: p.deliveryDestinationId,
+              shipFromAddress: SHIP_FROM_ADDRESS,
+              shipFromContact: COMPANY_PROFILE.name,
+              shipToAddress: p.shipToAddress,
+              shipToContact: p.shipToContact,
+              shipToPhone: p.shipToPhone,
+              deliveryDate: p.deliveryDate,
+              totalQuantity: p.totalQuantity,
+              showAmounts: p.showAmounts,
+              subtotalAmount: p.subtotalAmount,
+              taxAmount: p.taxAmount,
+              totalAmount: p.totalAmount,
+              currency: p.currency,
+              status,
+              createdByUserId: userId,
+              internalNotes: p.internalNotes,
+              clientNotes: p.clientNotes,
+              // B-114 §2-5: 受注の紐付け（量産行が無ければ null）
+              primarySoId: p.primarySoId,
+              relatedSoIds: p.relatedSoIds.length > 0 ? p.relatedSoIds : Prisma.DbNull,
+            },
+            select: { id: true, deliveryNumber: true },
+          })
+          await tx.deliveryNoteItem.createMany({
+            data: p.itemRows.map((r) => ({ ...r, deliveryNoteId: dn.id })),
+          })
+          return dn
+        },
+        { timeout: 15000 },
+      )
+      break
+    } catch (e) {
+      lastError = e
+      if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+        continue // deliveryNumber unique 衝突：再試行
+      }
+      throw e
+    }
+  }
+
+  if (!created) {
+    return {
+      ok: false,
+      error:
+        lastError instanceof Error
+          ? `採番衝突が解消されませんでした：${lastError.message}`
+          : "採番衝突が解消されませんでした",
+    }
+  }
+  return { ok: true, created }
+}
+
 export async function createDeliveryNote(
   input: unknown,
 ): Promise<ActionResult<{ id: string; deliveryNumber: string; warnings: string[] }>> {
@@ -686,78 +828,9 @@ export async function createDeliveryNote(
     if (!prep.ok) return prep
     const p = prep.prepared
 
-    const prefix = deliveryNumberPrefix(new Date().getFullYear())
-    let created: { id: string; deliveryNumber: string } | null = null
-    let lastError: unknown = null
-
-    for (let attempt = 0; attempt < CREATE_MAX_RETRIES; attempt++) {
-      try {
-        created = await prisma.$transaction(
-          async (tx) => {
-            const deliveryNumber = await computeNextDeliveryNumber(
-              tx.deliveryNote,
-              sess.companyId,
-              prefix,
-            )
-            const dn = await tx.deliveryNote.create({
-              data: {
-                companyId: sess.companyId,
-                deliveryNumber,
-                // §3-1: 代表 productId は入れない（明細側 productId で引く）。
-                clientId: p.clientId,
-                buyerId: p.buyerId,
-                deliveryDestinationId: p.deliveryDestinationId,
-                shipFromAddress: SHIP_FROM_ADDRESS,
-                shipFromContact: COMPANY_PROFILE.name,
-                shipToAddress: p.shipToAddress,
-                shipToContact: p.shipToContact,
-                shipToPhone: p.shipToPhone,
-                deliveryDate: p.deliveryDate,
-                totalQuantity: p.totalQuantity,
-                showAmounts: p.showAmounts,
-                subtotalAmount: p.subtotalAmount,
-                taxAmount: p.taxAmount,
-                totalAmount: p.totalAmount,
-                currency: p.currency,
-                status: DeliveryNoteStatus.DRAFT,
-                createdByUserId: sess.userId,
-                internalNotes: p.internalNotes,
-                clientNotes: p.clientNotes,
-                // B-114 §2-5: 受注の紐付け（量産行が無ければ null）
-                primarySoId: p.primarySoId,
-                relatedSoIds: p.relatedSoIds.length > 0 ? p.relatedSoIds : Prisma.DbNull,
-              },
-              select: { id: true, deliveryNumber: true },
-            })
-            await tx.deliveryNoteItem.createMany({
-              data: p.itemRows.map((r) => ({ ...r, deliveryNoteId: dn.id })),
-            })
-            return dn
-          },
-          { timeout: 15000 },
-        )
-        break
-      } catch (e) {
-        lastError = e
-        if (
-          e instanceof Prisma.PrismaClientKnownRequestError &&
-          e.code === "P2002"
-        ) {
-          continue // deliveryNumber unique 衝突：再試行
-        }
-        throw e
-      }
-    }
-
-    if (!created) {
-      return {
-        ok: false,
-        error:
-          lastError instanceof Error
-            ? `採番衝突が解消されませんでした：${lastError.message}`
-            : "採番衝突が解消されませんでした",
-      }
-    }
+    const inserted = await insertDeliveryNote(sess.companyId, sess.userId, p, DeliveryNoteStatus.DRAFT)
+    if (!inserted.ok) return inserted
+    const created = inserted.created
 
     await prisma.auditLog.create({
       data: {
@@ -819,8 +892,17 @@ export async function updateDeliveryNote(
     if (existing.status !== DeliveryNoteStatus.DRAFT) {
       return { ok: false, error: "ドラフト以外の納品書は編集できません" }
     }
+    // B-109 PR-3（P3-D10）: 前受金の伝票（DEPOSIT 行を持つ）はフォームで編集させない（取消して作り直す）。
+    const depositLine = await prisma.deliveryNoteItem.findFirst({
+      where: { deliveryNoteId: id, lineKind: DeliveryLineKind.DEPOSIT },
+      select: { id: true },
+    })
+    if (depositLine) {
+      return { ok: false, error: "前受金の伝票は編集できません（取消して作り直してください）" }
+    }
 
-    const prep = await prepareDeliveryNote(sess.companyId, data)
+    // 充当額の上限は、この納品書の行を除いて集計する（P3-D4）
+    const prep = await prepareDeliveryNote(sess.companyId, data, { excludeDeliveryNoteId: id })
     if (!prep.ok) return prep
     const p = prep.prepared
 
@@ -999,5 +1081,240 @@ export async function softDeleteDeliveryNote(
       ok: false,
       error: e instanceof Error ? e.message : "削除に失敗しました",
     }
+  }
+}
+
+// =============================================================================
+// B-109 PR-3: 前受金（受注から請求・納品書での充当の提案・受注画面の節）
+// =============================================================================
+
+/** 受注の最初の明細の品番（前受金の行は productId が必須のため・P3-D2）。 */
+async function firstProductOfSalesOrder(
+  companyId: string,
+  soId: string,
+): Promise<{ id: string; productName: string } | null> {
+  const item = await prisma.soItem.findFirst({
+    where: { soId, so: { companyId } },
+    orderBy: { createdAt: "asc" },
+    select: { skuId: true },
+  })
+  if (!item) return null
+  const sku = await prisma.sku.findFirst({
+    where: { id: item.skuId, companyId },
+    select: { productId: true },
+  })
+  if (!sku) return null
+  return prisma.product.findFirst({
+    where: { id: sku.productId, companyId, deletedAt: null },
+    select: { id: true, productName: true },
+  })
+}
+
+/**
+ * P3-D6: 受注から「前受金を請求」。P3-D2 の行 1 つを持つ納品書を DELIVERED で 1 枚作る。
+ * ヘッダの埋め方は既存の作成処理（prepareDeliveryNote → insertDeliveryNote）と同じ。
+ */
+export async function createDepositRequest(
+  input: unknown,
+): Promise<ActionResult<{ id: string; deliveryNumber: string }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const parsed = depositRequestSchema.safeParse(input)
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容に誤りがあります" }
+    }
+    const data = parsed.data
+
+    const so = await prisma.salesOrder.findFirst({
+      where: { id: data.soId, companyId: sess.companyId, deletedAt: null },
+      select: { id: true, soNumber: true, clientId: true, status: true },
+    })
+    if (!so) return { ok: false, error: "受注が見つかりません" }
+    if (so.status === SalesOrderStatus.CANCELLED) {
+      return { ok: false, error: "取消した受注には前受金を請求できません" }
+    }
+    const client = await prisma.client.findFirst({
+      where: { id: so.clientId, companyId: sess.companyId, deletedAt: null },
+      select: { id: true, paymentTermType: true },
+    })
+    if (!client) return { ok: false, error: "クライアントが見つかりません" }
+    if (!(DEPOSIT_PAYMENT_TERM_TYPES as readonly string[]).includes(client.paymentTermType)) {
+      return { ok: false, error: "このクライアントの取引条件では前受金を請求できません（デポジット＋COD か 前払い のときだけ）" }
+    }
+    const product = await firstProductOfSalesOrder(sess.companyId, so.id)
+    if (!product) return { ok: false, error: "受注に明細が無いため前受金の行を作れません" }
+
+    // P3-D2: 前受金の行 1 つ（soItemId / skuId は null・数量 1・単位「式」）
+    const noteInput: DeliveryNoteInput = deliveryNoteInputSchema.parse({
+      clientId: so.clientId,
+      buyerId: null,
+      deliveryDestinationId: null,
+      deliveryDate: data.deliveryDate,
+      currency: "JPY",
+      showAmounts: true,
+      shipToAddress: null,
+      shipToContact: null,
+      shipToPhone: null,
+      internalNotes: null,
+      clientNotes: null,
+      items: [
+        {
+          productId: product.id,
+          productName: depositLineName(DeliveryLineKind.DEPOSIT, so.soNumber),
+          clientProductCode: null,
+          colorCode: null,
+          colorName: null,
+          size: null,
+          quantity: 1,
+          unit: "式",
+          unitPrice: data.amount,
+          sourceSampleProductionId: null,
+          sourceWoItemId: null,
+          sourceWorkOrderId: null,
+          sourcePoItemId: null,
+          sourcePurchaseOrderId: null,
+          skuId: null,
+          soId: so.id,
+          soItemId: null,
+          lineKind: DeliveryLineKind.DEPOSIT,
+        },
+      ],
+    })
+    const prep = await prepareDeliveryNote(sess.companyId, noteInput)
+    if (!prep.ok) return prep
+    const inserted = await insertDeliveryNote(sess.companyId, sess.userId, prep.prepared, DeliveryNoteStatus.DELIVERED)
+    if (!inserted.ok) return inserted
+    const created = inserted.created
+
+    await prisma.auditLog.create({
+      data: {
+        companyId: sess.companyId,
+        userId: sess.userId,
+        action: "CREATE",
+        entityType: "DeliveryNote",
+        entityId: created.id,
+        afterData: {
+          deliveryNumber: created.deliveryNumber,
+          kind: "DEPOSIT",
+          soId: so.id,
+          soNumber: so.soNumber,
+          amount: data.amount,
+          deliveryDate: data.deliveryDate,
+        },
+        description: `前受金の請求: ${so.soNumber} ¥${data.amount.toLocaleString("ja-JP")}（${created.deliveryNumber}）`,
+      },
+    })
+
+    revalidatePath("/deliveries")
+    revalidatePath(`/sales-orders/${so.id}`)
+    revalidatePath("/invoices")
+    return { ok: true, data: created }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "前受金の請求に失敗しました" }
+  }
+}
+
+export type DepositSuggestion = {
+  soId: string
+  soNumber: string
+  /** 未充当の前受金（この納品書の行を除いて集計） */
+  remaining: number
+  /** 充当行に入れる品番（受注の最初の明細の品番） */
+  productId: string
+  productName: string
+}
+
+/**
+ * P3-D7: 納品書の作成・編集で、明細にある受注に未充当の前受金が残っていれば提案に使う。
+ * excludeDeliveryNoteId は編集中の納品書（自分の行を集計から除く）。
+ */
+export async function getDepositSuggestions(
+  soIds: string[],
+  excludeDeliveryNoteId?: string,
+): Promise<ActionResult<DepositSuggestion[]>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+    const ids = [...new Set(soIds.filter((v): v is string => !!v))]
+    if (ids.length === 0) return { ok: true, data: [] }
+    const sos = await prisma.salesOrder.findMany({
+      where: { id: { in: ids }, companyId: sess.companyId, deletedAt: null },
+      select: { id: true, soNumber: true },
+    })
+    const summaries = await loadDepositSummaries(sess.companyId, ids, { excludeDeliveryNoteId })
+    const out: DepositSuggestion[] = []
+    for (const so of sos) {
+      const sum = depositSummaryFor(summaries, so.id)
+      if (sum.remaining <= 0) continue
+      const product = await firstProductOfSalesOrder(sess.companyId, so.id)
+      if (!product) continue
+      out.push({
+        soId: so.id,
+        soNumber: so.soNumber,
+        remaining: sum.remaining,
+        productId: product.id,
+        productName: depositLineName(DeliveryLineKind.DEPOSIT_APPLIED, so.soNumber),
+      })
+    }
+    return { ok: true, data: out }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "前受金の取得に失敗しました" }
+  }
+}
+
+export type SalesOrderDepositSection = {
+  summary: DepositSummary
+  /** 前受金の伝票（DEPOSIT 行を持つ納品書）と充当の行を持つ納品書 */
+  notes: {
+    id: string
+    deliveryNumber: string
+    status: DeliveryNoteStatus
+    /** yyyy-MM-dd */
+    deliveryDate: string
+    kind: "DEPOSIT" | "DEPOSIT_APPLIED"
+    amount: number
+  }[]
+}
+
+/** P3-D6: 受注の画面の「前受金」の節（請求済み／充当済み／残り と伝票へのリンク）。 */
+export async function getSalesOrderDepositSection(
+  soId: string,
+): Promise<ActionResult<SalesOrderDepositSection>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+    const summaries = await loadDepositSummaries(sess.companyId, [soId])
+    const rows = await prisma.deliveryNoteItem.findMany({
+      where: {
+        soId,
+        lineKind: { not: null },
+        deliveryNote: { companyId: sess.companyId, deletedAt: null, status: { not: DeliveryNoteStatus.CANCELLED } },
+      },
+      select: {
+        lineKind: true,
+        quantity: true,
+        unitPrice: true,
+        deliveryNote: { select: { id: true, deliveryNumber: true, status: true, deliveryDate: true } },
+      },
+      orderBy: [{ deliveryNote: { deliveryDate: "asc" } }, { itemOrder: "asc" }],
+    })
+    return {
+      ok: true,
+      data: {
+        summary: depositSummaryFor(summaries, soId),
+        notes: rows.map((r) => ({
+          id: r.deliveryNote.id,
+          deliveryNumber: r.deliveryNote.deliveryNumber,
+          status: r.deliveryNote.status,
+          deliveryDate: r.deliveryNote.deliveryDate.toISOString().slice(0, 10),
+          kind: r.lineKind as "DEPOSIT" | "DEPOSIT_APPLIED",
+          amount: Math.abs(Math.floor(r.quantity * (r.unitPrice != null ? r.unitPrice.toNumber() : 0))),
+        })),
+      },
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "前受金の取得に失敗しました" }
   }
 }

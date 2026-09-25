@@ -417,6 +417,19 @@ export function InvoiceForm({
               </div>
             </div>
           )}
+          {/* B-109 PR-3（P3-D8）: 未充当の前受金の警告。止めない（B-223 と同じ扱い） */}
+          {ctx && ctx.depositWarnings.length > 0 && (
+            <div className="flex items-start gap-2 rounded bg-amber-100 p-2 text-amber-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="space-y-1 text-xs">
+                {ctx.depositWarnings.map((w) => (
+                  <p key={w.soId}>
+                    {w.soNumber} の前受金 {fmtYen(w.remaining)} がまだ充当されていません。この請求書に載る納品書に「前受金充当」の行を入れてください。
+                  </p>
+                ))}
+              </div>
+            </div>
+          )}
           <p className="text-xs text-muted-foreground">
             消費税は請求書1枚につき税率ごとに1回だけ計算します
           </p>

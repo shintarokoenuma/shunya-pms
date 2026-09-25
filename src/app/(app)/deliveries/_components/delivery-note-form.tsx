@@ -1,9 +1,9 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, Loader2, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -18,7 +18,9 @@ import {
 } from "@/components/ui/select"
 import {
   createDeliveryNote,
+  getDepositSuggestions,
   updateDeliveryNote,
+  type DepositSuggestion,
   type ClientOption,
   type BuyerOption,
   type DestinationOption,
@@ -51,6 +53,8 @@ export type ItemRow = {
   soItemId: string | null
   /** 受注の単価（差分表示専用・送信しない）。無ければ "" */
   orderUnitPrice: string
+  /** B-109 PR-3（P3-D1）: 前受金の行の印。通常の行は null */
+  lineKind: "DEPOSIT" | "DEPOSIT_APPLIED" | null
 }
 
 /** 編集フォームの初期値（編集ページが getDeliveryNote から組み立てる）。 */
@@ -89,6 +93,7 @@ function emptyRow(): ItemRow {
     soId: null,
     soItemId: null,
     orderUnitPrice: "",
+    lineKind: null,
   }
 }
 
@@ -148,6 +153,56 @@ export function DeliveryNoteForm({
     initial?.items && initial.items.length > 0 ? initial.items : [emptyRow()],
   )
 
+  // B-109 PR-3（P3-D7）: 明細にある受注（soId）に未充当の前受金が残っていれば提案する（保存は止めない）。
+  // 集計はサーバ（billing/deposits）。編集中は自分の納品書の行を除く。
+  const soIdsKey = useMemo(
+    () => [...new Set(items.map((r) => r.soId).filter((v): v is string => !!v))].sort().join(","),
+    [items],
+  )
+  const [suggestions, setSuggestions] = useState<DepositSuggestion[]>([])
+  useEffect(() => {
+    let alive = true
+    const ids = soIdsKey ? soIdsKey.split(",") : []
+    if (ids.length === 0) {
+      // 受注の行が無ければ提案も無い（setState はコールバック側で行う）
+      Promise.resolve().then(() => {
+        if (alive) setSuggestions([])
+      })
+      return () => {
+        alive = false
+      }
+    }
+    getDepositSuggestions(ids, isEdit ? id : undefined).then((r) => {
+      if (alive) setSuggestions(r.ok ? r.data : [])
+    })
+    return () => {
+      alive = false
+    }
+  }, [soIdsKey, isEdit, id])
+  // フォーム内で既に入れている充当額（受注ごと）を引いた「まだ入れられる額」
+  const openSuggestions = suggestions
+    .map((sg) => {
+      const inForm = items
+        .filter((r) => r.lineKind === "DEPOSIT_APPLIED" && r.soId === sg.soId)
+        .reduce((a, r) => a + (Number(r.unitPrice) || 0), 0)
+      return { ...sg, open: sg.remaining - inForm }
+    })
+    .filter((sg) => sg.open > 0)
+  const addAppliedRow = (sg: DepositSuggestion & { open: number }) =>
+    setItems((prev) => [
+      ...prev.filter((r) => !(prev.length === 1 && r.productId === "" && r.productName === "")),
+      {
+        ...emptyRow(),
+        productId: sg.productId,
+        productName: sg.productName,
+        quantity: "-1",
+        unit: "式",
+        unitPrice: String(sg.open),
+        soId: sg.soId,
+        lineKind: "DEPOSIT_APPLIED",
+      },
+    ])
+
   // クライアントで絞った buyer / destination。
   const clientBuyers = useMemo(
     () => buyers.filter((b) => !clientId || b.clientId === clientId),
@@ -176,7 +231,9 @@ export function DeliveryNoteForm({
     setItems((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== idx)))
 
   // 引き当てダイアログからの一括追加。既存が「空の1行だけ」なら置き換える。
-  const handleAllocationAdd = (rows: AllocationPickedRow[]) => {
+  const handleAllocationAdd = (picked: AllocationPickedRow[]) => {
+    // 引き当て行は通常の行（lineKind null）
+    const rows: ItemRow[] = picked.map((r) => ({ ...r, lineKind: null }))
     setItems((prev) => {
       const isPristine =
         prev.length === 1 &&
@@ -227,6 +284,8 @@ export function DeliveryNoteForm({
         skuId: r.skuId,
         soId: r.soId,
         soItemId: r.soItemId,
+        // B-109 PR-3（P3-D1）: 前受金の行の印
+        lineKind: r.lineKind,
       })),
     }
     startTransition(async () => {
@@ -411,9 +470,27 @@ export function DeliveryNoteForm({
         <p className="text-xs text-muted-foreground">
           値引き・返品はマイナスの数量で入れてください（赤伝）。単価はプラスのままにします。
         </p>
+        {/* B-109 PR-3（P3-D7）: 充当していない前受金の提案（保存は止めない） */}
+        {openSuggestions.map((sg) => (
+          <div
+            key={sg.soId}
+            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
+          >
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                {sg.soNumber} に充当していない前受金 ¥{sg.open.toLocaleString("ja-JP")} があります
+              </span>
+            </div>
+            <Button type="button" size="sm" variant="outline" onClick={() => addAppliedRow(sg)}>
+              充当の行を入れる
+            </Button>
+          </div>
+        ))}
         <div className="space-y-3">
           {items.map((row, idx) => {
             const isMass = !!row.skuId
+            const isDeposit = !!row.lineKind
             const differs = priceDiffers(row)
             return (
             <div
@@ -426,13 +503,21 @@ export function DeliveryNoteForm({
                   受注の SKU（品番・色・サイズは変更できません）
                 </div>
               )}
+              {isDeposit && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Badge variant="outline">{row.lineKind === "DEPOSIT" ? "前受金" : "前受金充当"}</Badge>
+                  {row.lineKind === "DEPOSIT_APPLIED"
+                    ? "数量は −1 固定。金額（単価）は未充当の範囲で減らせます"
+                    : "前受金の行（受注から作られたもの）"}
+                </div>
+              )}
               <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 <div className="space-y-1">
                   <Label className="text-xs">品番（必須）</Label>
                   <Select
                     value={row.productId || ""}
                     onValueChange={(v) => onPickProduct(idx, v)}
-                    disabled={isMass}
+                    disabled={isMass || isDeposit}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="品番を選択" />
@@ -492,6 +577,8 @@ export function DeliveryNoteForm({
                     type="number"
                     value={row.quantity}
                     onChange={(e) => setItem(idx, { quantity: e.target.value })}
+                    readOnly={isDeposit}
+                    className={isDeposit ? "bg-muted" : undefined}
                   />
                 </div>
                 <div className="space-y-1">

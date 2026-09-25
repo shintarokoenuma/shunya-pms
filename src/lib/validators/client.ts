@@ -183,10 +183,12 @@ export const clientBaseSchema = z
       .max(31, "1〜31で入力してください")
       .optional(),
     depositRequired: z.boolean().default(false),
+    // B-109 PR-3 の確認で発見: デポジット比率は整数 1〜100（列は Decimal(5,2) のまま整数だけ入れる）
     depositPercentage: z.coerce
       .number()
-      .min(0, "0以上で入力してください")
-      .max(100, "100以下で入力してください")
+      .int("デポジット比率は1〜100の整数で入力してください")
+      .min(1, "デポジット比率は1〜100の整数で入力してください")
+      .max(100, "デポジット比率は1〜100の整数で入力してください")
       .optional(),
     // B-109 PR-2a（D-23・D-36）: 消費税の端数処理はクライアントごと。既定は四捨五入。
     taxRoundingMode: z.nativeEnum(TaxRoundingMode).default("ROUND_HALF_UP"),

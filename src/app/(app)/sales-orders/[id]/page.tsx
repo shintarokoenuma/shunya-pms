@@ -16,8 +16,15 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { getSalesOrder } from "@/lib/actions/sales-orders"
+import { getSalesOrderDepositSection } from "@/lib/actions/delivery-notes"
+import { DEPOSIT_PAYMENT_TERM_TYPES } from "@/lib/validators/delivery-note"
 import { SalesOrderStatusControl } from "../_components/sales-order-status-control"
 import { SalesOrderCancelButton } from "../_components/sales-order-cancel-button"
+import { DepositRequestDialog } from "../_components/deposit-request-dialog"
+import {
+  DELIVERY_NOTE_STATUS_LABELS,
+  DELIVERY_NOTE_STATUS_BADGE_VARIANT,
+} from "../../deliveries/_components/labels"
 import {
   ORDER_SOURCE_TYPE_LABELS,
   SKU_MOQ_STATUS_LABELS,
@@ -61,10 +68,25 @@ export default async function SalesOrderDetailPage({
       })
     : []
   const productInfo = new Map(products.map((p) => [p.id, p]))
+  // ★withTenantContext 外なので companyId を手書きで明示する（AGENTS.md テナント分離の書き方）
   const client = await prisma.client.findFirst({
-    where: { id: so.clientId },
-    select: { companyName: true },
+    where: { id: so.clientId, companyId: session.user.companyId },
+    select: { companyName: true, paymentTermType: true, depositPercentage: true },
   })
+
+  // B-109 PR-3（P3-D6）: 前受金。取引条件が デポジット＋COD / 前払い のクライアントで、受注が取消でないときだけ出す
+  const depositTerm =
+    client && (DEPOSIT_PAYMENT_TERM_TYPES as readonly string[]).includes(client.paymentTermType)
+  const canRequestDeposit = !!depositTerm && so.status !== "CANCELLED"
+  const depositRate =
+    client?.paymentTermType === "ADVANCE_PAYMENT"
+      ? 100
+      : client?.depositPercentage != null
+        ? Number(client.depositPercentage)
+        : 0
+  const defaultDepositAmount = Math.floor(((so.subtotal ?? 0) * depositRate) / 100)
+  const depositLabel = client?.paymentTermType === "ADVANCE_PAYMENT" ? "100%（前払い）" : `${depositRate}%`
+  const depositSection = depositTerm ? await getSalesOrderDepositSection(so.id) : null
 
   // productId → items
   const grouped = new Map<string, typeof so.items>()
@@ -85,6 +107,14 @@ export default async function SalesOrderDetailPage({
           </Link>
         </Button>
         <div className="flex items-center gap-2">
+          {canRequestDeposit && (
+            <DepositRequestDialog
+              soId={so.id}
+              soNumber={so.soNumber}
+              defaultAmount={defaultDepositAmount}
+              depositLabel={depositLabel}
+            />
+          )}
           <SalesOrderCancelButton id={so.id} soNumber={so.soNumber} />
           <Button asChild variant="outline" size="sm">
             <Link href={`/sales-orders/${so.id}/edit`}>
@@ -138,6 +168,43 @@ export default async function SalesOrderDetailPage({
           />
         </CardContent>
       </Card>
+
+      {/* B-109 PR-3（P3-D6）: 前受金の節（請求済み／充当済み／残り と伝票へのリンク） */}
+      {depositSection && depositSection.ok && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">前受金</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div className="grid grid-cols-3 gap-x-6 gap-y-2">
+              <Cell label="請求済み" value={`¥${depositSection.data.summary.invoiced.toLocaleString("ja-JP")}`} />
+              <Cell label="充当済み" value={`¥${depositSection.data.summary.applied.toLocaleString("ja-JP")}`} />
+              <Cell label="残り" value={`¥${depositSection.data.summary.remaining.toLocaleString("ja-JP")}`} />
+            </div>
+            {depositSection.data.notes.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                前受金の請求はまだありません。「前受金を請求」で伝票を作ると、次の合計請求書の候補に出ます。
+              </p>
+            ) : (
+              <ul className="space-y-1">
+                {depositSection.data.notes.map((n, i) => (
+                  <li key={`${n.id}-${i}`} className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{n.kind === "DEPOSIT" ? "前受金" : "前受金充当"}</Badge>
+                    <Link href={`/deliveries/${n.id}`} className="font-mono hover:underline">
+                      {n.deliveryNumber}
+                    </Link>
+                    <span className="text-muted-foreground">{n.deliveryDate}</span>
+                    <span className="tabular-nums">¥{n.amount.toLocaleString("ja-JP")}</span>
+                    <Badge variant={DELIVERY_NOTE_STATUS_BADGE_VARIANT[n.status]}>
+                      {DELIVERY_NOTE_STATUS_LABELS[n.status]}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {[...grouped.entries()].map(([pid, items]) => {
         const p = productInfo.get(pid)
