@@ -34,11 +34,21 @@ export function PaymentsSearch({
 
   const clientId = searchParams.get("clientId") ?? "all"
   const period = searchParams.get("period") ?? ""
+  // B-225（D-5）: 状態。既定は「有効」（URL に無い）。"cancelled" のときだけ status を付ける
+  const status = searchParams.get("status") === "cancelled" ? "cancelled" : "active"
 
-  const push = (next: { clientId?: string; start?: string; end?: string; period?: string }) => {
+  const push = (next: {
+    clientId?: string
+    start?: string
+    end?: string
+    period?: string
+    status?: "active" | "cancelled"
+  }) => {
     const params = new URLSearchParams()
     const c = next.clientId ?? clientId
     if (c !== "all") params.set("clientId", c)
+    const st = next.status ?? status
+    if (st === "cancelled") params.set("status", "cancelled")
     if (next.period === "all") {
       params.set("period", "all")
     } else if (next.period === "month") {
@@ -89,6 +99,19 @@ export function PaymentsSearch({
           aria-label="終了日"
         />
       </div>
+      <Select
+        value={status}
+        onValueChange={(v) => push({ status: v === "cancelled" ? "cancelled" : "active" })}
+        disabled={isPending}
+      >
+        <SelectTrigger className="w-full sm:w-[150px]" aria-label="状態">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="active">有効</SelectItem>
+          <SelectItem value="cancelled">取消済み</SelectItem>
+        </SelectContent>
+      </Select>
       <div className="flex items-center gap-2">
         <Button
           type="button"

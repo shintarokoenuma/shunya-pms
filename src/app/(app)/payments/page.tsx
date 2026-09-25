@@ -14,6 +14,8 @@ type SearchParams = Promise<{
   end?: string
   period?: string
   page?: string
+  /** B-225（D-5）: "cancelled" のときだけ取消済みを出す。それ以外は有効（従来どおり） */
+  status?: string
 }>
 
 const YMD = /^\d{4}-\d{2}-\d{2}$/
@@ -48,6 +50,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
   const sp = await searchParams
   const page = sp.page ? Number(sp.page) : 1
   const period = resolvePeriod(sp)
+  const statusFilter: "active" | "cancelled" = sp.status === "cancelled" ? "cancelled" : "active"
 
   const [result, clients] = await Promise.all([
     listPayments({
@@ -55,6 +58,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
       start: period.start || undefined,
       end: period.end || undefined,
       page,
+      status: statusFilter,
     }),
     listActiveClientsForInvoiceSelect(),
   ])
@@ -76,6 +80,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
           <h1 className="text-2xl font-semibold tracking-tight">入金</h1>
           <p className="text-sm text-muted-foreground">
             クライアントからの入金の記録（PAY）。次の合計請求書の「御入金額」と「繰越金額」に自動で入ります。
+            打ち間違えた入金は「取消」して、正しい内容を入れ直します。
           </p>
           <p className="mt-1 text-sm font-medium tabular-nums">{period.label}</p>
         </div>
@@ -83,7 +88,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
       </div>
       <PaymentsSearch clients={clientOptions} start={period.start} end={period.end} />
       <div className="min-w-0">
-        <PaymentsTable items={items} total={total} />
+        <PaymentsTable items={items} total={total} statusFilter={statusFilter} />
       </div>
       <PaymentsPagination page={currentPage} totalPages={totalPages} total={count} />
     </div>
