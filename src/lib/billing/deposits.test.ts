@@ -8,7 +8,7 @@
  */
 
 import { DeliveryLineKind } from "@prisma/client"
-import { depositSummaryFor, summarizeDeposits } from "./deposits"
+import { depositSummaryFor, sumDeliveryQuantity, summarizeDeposits } from "./deposits"
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`ASSERT FAILED: ${msg}`)
@@ -76,6 +76,20 @@ const A = DeliveryLineKind.DEPOSIT_APPLIED
     { soId: "so2", lineKind: D, quantity: 1, unitPrice: 200 },
   ])
   assert(depositSummaryFor(m, "so1").invoiced === 100 && depositSummaryFor(m, "so2").invoiced === 200, "⑥ 受注ごと")
+}
+
+// ⑦ 数量合計: 前受金・充当の行は枚数に数えない（前受金の伝票は 0）
+{
+  assert(sumDeliveryQuantity([{ quantity: 1, lineKind: D }]) === 0, "⑦ 前受金の伝票 → 0")
+  assert(
+    sumDeliveryQuantity([
+      { quantity: 10, lineKind: null },
+      { quantity: 5 },
+      { quantity: -1, lineKind: A },
+    ]) === 15,
+    "⑦' 通常 10 + 5・充当 −1 は除く → 15",
+  )
+  assert(sumDeliveryQuantity([{ quantity: -2, lineKind: null }, { quantity: 5 }]) === 3, "⑦'' 赤伝のマイナスは従来どおり数える")
 }
 
 console.log("deposits.test.ts: all assertions passed")

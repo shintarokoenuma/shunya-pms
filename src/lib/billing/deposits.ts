@@ -86,6 +86,16 @@ export async function loadDepositSummaries(
   )
 }
 
+/**
+ * 納品書の数量合計（DeliveryNote.totalQuantity）。前受金の行（DEPOSIT / DEPOSIT_APPLIED）は枚数ではないので除く。
+ * ★作成・編集・前受金の伝票の作成はすべて prepareDeliveryNote → この関数を通る（1 か所）。前受金の伝票は 0 になる。
+ */
+export function sumDeliveryQuantity(
+  items: { quantity: number; lineKind?: DeliveryLineKind | null }[],
+): number {
+  return items.reduce((a, it) => (it.lineKind ? a : a + it.quantity), 0)
+}
+
 /** 表示用の品名（P3-D2 / P3-D3）。 */
 export function depositLineName(kind: DeliveryLineKind, soNumber: string): string {
   return kind === DeliveryLineKind.DEPOSIT ? `前受金（${soNumber}）` : `前受金充当（${soNumber}）`

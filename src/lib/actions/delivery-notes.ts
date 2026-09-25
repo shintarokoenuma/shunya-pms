@@ -20,6 +20,7 @@ import {
   depositLineName,
   depositSummaryFor,
   loadDepositSummaries,
+  sumDeliveryQuantity,
   type DepositSummary,
 } from "@/lib/billing/deposits"
 
@@ -614,7 +615,8 @@ async function prepareDeliveryNote(
     }
   })
 
-  const totalQuantity = data.items.reduce((a, it) => a + it.quantity, 0)
+  // B-109 PR-3: 前受金・充当の行は枚数ではないので数量合計から除く（billing/deposits の 1 か所）
+  const totalQuantity = sumDeliveryQuantity(data.items)
 
   // B-114 §2-5: ヘッダの受注紐付け。量産行があれば primarySoId＝最初の soId、relatedSoIds＝重複なし配列。無ければ両方 null。
   // B-109 PR-3（P3-D2・D3）: 前受金の行の soId も紐付けに含める（前受金の伝票は受注に紐づく）。
