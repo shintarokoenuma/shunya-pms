@@ -2,7 +2,7 @@ import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import { COMPANY_PROFILE } from "@/lib/constants/company-profile"
 import type { DeliveryNotePdfData } from "./delivery-note-data"
-import { numText, yenText, ymdSlash } from "./invoice-rows"
+import { NO_HYPHEN_BREAK, numText, yenText, ymdSlash } from "./invoice-rows"
 
 registerPdfFonts()
 
@@ -77,16 +77,16 @@ function DeliveryNotePage({ data }: { data: DeliveryNotePdfData }) {
         <View style={styles.docMeta}>
           <Text style={styles.docNumber}>{data.deliveryNumber}</Text>
           <Text>納品日　{ymdSlash(data.deliveryDate)}</Text>
-          {data.soNumbers.length > 0 ? <Text>受注　{data.soNumbers.join("、")}</Text> : null}
+          {data.soNumbers.length > 0 ? <Text hyphenationCallback={NO_HYPHEN_BREAK}>受注　{data.soNumbers.join("、")}</Text> : null}
         </View>
       </View>
 
       {/* 2. 宛先と発行者 */}
       <View style={styles.partiesRow}>
         <View style={styles.shipTo}>
-          <Text style={styles.shipToName}>{data.clientName}　御中</Text>
-          {data.shipToAddress ? <Text style={styles.shipToLine}>納品先：{data.shipToAddress}</Text> : null}
-          {data.shipToContact ? <Text style={styles.shipToLine}>ご担当：{data.shipToContact}</Text> : null}
+          <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.shipToName}>{data.clientName}　御中</Text>
+          {data.shipToAddress ? <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.shipToLine}>納品先：{data.shipToAddress}</Text> : null}
+          {data.shipToContact ? <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.shipToLine}>ご担当：{data.shipToContact}</Text> : null}
           {data.shipToPhone ? <Text style={styles.shipToLine}>TEL：{data.shipToPhone}</Text> : null}
           <Text style={styles.shipToLine}>下記のとおり納品いたします。</Text>
         </View>
@@ -105,7 +105,7 @@ function DeliveryNotePage({ data }: { data: DeliveryNotePdfData }) {
       {/* 3. 明細の表 */}
       <View style={styles.table}>
         <View style={styles.th} fixed>
-          <Text style={styles.cCode}>先方品番</Text>
+          <Text style={styles.cCode}>品番</Text>
           <Text style={amounts ? styles.cName : styles.cNameWide}>品名</Text>
           <Text style={styles.cColor}>色</Text>
           <Text style={styles.cSize}>サイズ</Text>
@@ -119,15 +119,15 @@ function DeliveryNotePage({ data }: { data: DeliveryNotePdfData }) {
         </View>
         {data.items.map((it, i) => (
           <View style={styles.tr} key={i} wrap={false}>
-            <Text style={styles.cCode}>{it.clientProductCode ?? ""}</Text>
+            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cCode}>{it.itemCode ?? ""}</Text>
             <View style={[amounts ? styles.cName : styles.cNameWide, { flexDirection: "row", alignItems: "center" }]}>
-              <Text>{it.productName}</Text>
+              <Text hyphenationCallback={NO_HYPHEN_BREAK}>{it.productName}</Text>
               {it.lineKind ? (
                 <Text style={styles.kindTag}>{it.lineKind === "DEPOSIT" ? "前受金" : "前受金充当"}</Text>
               ) : null}
             </View>
-            <Text style={styles.cColor}>{it.colorName ?? ""}</Text>
-            <Text style={styles.cSize}>{it.size ?? ""}</Text>
+            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cColor}>{it.colorName ?? ""}</Text>
+            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cSize}>{it.size ?? ""}</Text>
             <Text style={styles.cQty}>
               {numText(it.quantity)} {it.unit}
             </Text>
@@ -150,7 +150,7 @@ function DeliveryNotePage({ data }: { data: DeliveryNotePdfData }) {
           {data.hasDepositLines ? (
             <Text style={styles.small}>前受金・充当の行は数量合計に含めません</Text>
           ) : null}
-          {data.clientNotes ? <Text>備考　{data.clientNotes}</Text> : null}
+          {data.clientNotes ? <Text hyphenationCallback={NO_HYPHEN_BREAK}>備考　{data.clientNotes}</Text> : null}
         </View>
         <View style={styles.bottomRight}>
           {amounts ? (

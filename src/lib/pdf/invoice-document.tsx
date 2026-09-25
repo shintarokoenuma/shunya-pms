@@ -1,7 +1,7 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import type { InvoicePdfData } from "./invoice-data"
-import { mdSlash, numText, yenText, ymdSlash } from "./invoice-rows"
+import { NO_HYPHEN_BREAK, mdSlash, numText, yenText, ymdSlash } from "./invoice-rows"
 
 registerPdfFonts()
 
@@ -95,16 +95,16 @@ function InvoicePage({ data }: { data: InvoicePdfData }) {
       {/* 2. 宛先と発行者 */}
       <View style={styles.partiesRow}>
         <View style={styles.billTo}>
-          <Text style={styles.billToName}>{data.billToName}　御中</Text>
-          {data.billToAddress ? <Text style={styles.billToLine}>{data.billToAddress}</Text> : null}
+          <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.billToName}>{data.billToName}　御中</Text>
+          {data.billToAddress ? <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.billToLine}>{data.billToAddress}</Text> : null}
           <Text style={styles.billToLine}>下記のとおりご請求申し上げます。</Text>
           <Text style={styles.dueLine}>
             お支払期日　<Text style={styles.dueValue}>{ymdSlash(data.paymentDueDate)}</Text>
           </Text>
         </View>
         <View style={styles.issuer}>
-          <Text style={styles.issuerName}>{data.issuerName}</Text>
-          <Text style={styles.small}>{data.issuerAddress}</Text>
+          <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.issuerName}>{data.issuerName}</Text>
+          <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.small}>{data.issuerAddress}</Text>
           <Text style={styles.small}>
             {data.issuerPhone}　{data.issuerFax}
           </Text>
@@ -137,9 +137,9 @@ function InvoicePage({ data }: { data: InvoicePdfData }) {
         {data.rows.map((r, i) => (
           <View style={styles.tr} key={i} wrap={false}>
             <Text style={styles.cDate}>{mdSlash(r.date)}</Text>
-            <Text style={styles.cDoc}>{r.docNumber ?? ""}</Text>
-            <Text style={styles.cName}>{r.description}</Text>
-            <Text style={styles.cColor}>{r.kind === "item" ? r.colorSize : ""}</Text>
+            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cDoc}>{r.docNumber ?? ""}</Text>
+            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cName}>{r.description}</Text>
+            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cColor}>{r.kind === "item" ? r.colorSize : ""}</Text>
             <Text style={styles.cQty}>{r.kind === "item" ? numText(r.quantity) : ""}</Text>
             <Text style={styles.cPrice}>{r.kind === "item" ? numText(r.unitPrice) : ""}</Text>
             <Text style={styles.cAmt}>{numText(r.amount)}</Text>
@@ -156,10 +156,10 @@ function InvoicePage({ data }: { data: InvoicePdfData }) {
       <View style={styles.bottomRow} wrap={false}>
         <View style={styles.bankBox}>
           <Text style={styles.bankTitle}>お振込先</Text>
-          <Text>
+          <Text hyphenationCallback={NO_HYPHEN_BREAK}>
             {data.bank.bankName}　{data.bank.branchName}　{data.bank.accountType}　{data.bank.accountNumber}
           </Text>
-          <Text>口座名義　{data.bank.accountHolder}</Text>
+          <Text hyphenationCallback={NO_HYPHEN_BREAK}>口座名義　{data.bank.accountHolder}</Text>
           <Text style={styles.small}>恐れ入りますが振込手数料はご負担ください。</Text>
         </View>
         <View style={styles.taxBox}>

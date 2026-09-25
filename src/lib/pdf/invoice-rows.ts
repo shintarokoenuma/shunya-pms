@@ -52,6 +52,14 @@ export type InvoicePdfRow =
 
 const PAYMENT_PREFIX = "〔御入金〕"
 
+/**
+ * B-109 PR-4（P4-D19）: 折り返しに「-」を入れない hyphenationCallback（請求書・納品書の Text だけに渡す）。
+ * fonts.ts の全帳票共通の登録（1文字ずつ割る＝折り返し位置にハイフンが付く・B-208）は変えない。
+ * 1文字ごとに空の部分を挟むと、textkit は空の部分を「幅 0 の glue」として扱い、そこで折り返すのでハイフンが付かない
+ * （試し刷りで確認: 同じ文字列で "-" の glyph の出現が 5 → 3＝文字列中の実際の "-" だけになった）。
+ */
+export const NO_HYPHEN_BREAK = (word: string): string[] => Array.from(word).flatMap((c) => [c, ""])
+
 /** DB 由来の文字列を PDF 用に整える（フォントに無い ～ を 〜 に）。 */
 export function pdfText(s: string | null | undefined): string {
   if (!s) return ""

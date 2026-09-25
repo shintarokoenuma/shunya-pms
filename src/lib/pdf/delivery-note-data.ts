@@ -10,7 +10,8 @@ import { pdfText } from "./invoice-rows"
  * - 数量合計は totalQuantity（前受金の行を含まない・PR-3）
  */
 export type DeliveryNotePdfItem = {
-  clientProductCode: string | null
+  /** P4-D20: 先方品番。無ければ社内品番（Product.productCode）。請求書の itemCode と同じ決め方 */
+  itemCode: string | null
   productName: string
   colorName: string | null
   size: string | null
@@ -54,6 +55,15 @@ export async function getDeliveryNotePdfData(
     where: { id: row.clientId, companyId },
     select: { companyName: true },
   })
+  // P4-D20: 先方品番が無い行は社内品番を出す（companyId で絞る）
+  const productIds = [...new Set(row.items.map((it) => it.productId))]
+  const products = productIds.length
+    ? await prisma.product.findMany({
+        where: { id: { in: productIds }, companyId },
+        select: { id: true, productCode: true },
+      })
+    : []
+  const productCodeById = new Map(products.map((p) => [p.id, p.productCode]))
   const soIds = [...new Set(row.items.map((it) => it.soId).filter((v): v is string => !!v))]
   const sos = soIds.length
     ? await prisma.salesOrder.findMany({
@@ -78,7 +88,7 @@ export async function getDeliveryNotePdfData(
     clientNotes: pdfText(row.clientNotes),
     hasDepositLines: row.items.some((it) => it.lineKind !== null),
     items: row.items.map((it) => ({
-      clientProductCode: pdfText(it.clientProductCode) || null,
+      itemCode: pdfText(it.clientProductCode) || pdfText(productCodeById.get(it.productId)) || null,
       productName: pdfText(it.productName),
       colorName: pdfText(it.colorName) || null,
       size: pdfText(it.size) || null,
