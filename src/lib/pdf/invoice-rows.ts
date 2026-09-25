@@ -36,6 +36,9 @@ export type InvoicePdfRow =
       kind: "item"
       date: string | null
       docNumber: string | null
+      /** P4-D21: 紙面は上段に品番・下段に品名（description は「品番　品名」の互換表記） */
+      itemCode: string | null
+      itemName: string
       description: string
       colorSize: string
       quantity: number
@@ -59,6 +62,9 @@ const PAYMENT_PREFIX = "〔御入金〕"
  * （試し刷りで確認: 同じ文字列で "-" の glyph の出現が 5 → 3＝文字列中の実際の "-" だけになった）。
  */
 export const NO_HYPHEN_BREAK = (word: string): string[] => Array.from(word).flatMap((c) => [c, ""])
+
+/** B-109 PR-4（P4-D21）: 語を割らない＝その Text の中では折り返さない（品番に使う）。 */
+export const NO_BREAK = (word: string): string[] => [word]
 
 /** DB 由来の文字列を PDF 用に整える（フォントに無い ～ を 〜 に）。 */
 export function pdfText(s: string | null | undefined): string {
@@ -119,6 +125,8 @@ export function buildInvoiceRows(
       kind: "item",
       date: l.deliveryDate,
       docNumber: l.deliveryNumber,
+      itemCode: pdfText(l.itemCode) || null,
+      itemName: pdfText(l.itemName),
       description: d.description,
       colorSize: d.colorSize,
       quantity: l.quantity,

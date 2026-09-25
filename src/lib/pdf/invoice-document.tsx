@@ -1,7 +1,7 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import type { InvoicePdfData } from "./invoice-data"
-import { NO_HYPHEN_BREAK, mdSlash, numText, yenText, ymdSlash } from "./invoice-rows"
+import { NO_BREAK, NO_HYPHEN_BREAK, mdSlash, numText, yenText, ymdSlash } from "./invoice-rows"
 
 registerPdfFonts()
 
@@ -11,6 +11,7 @@ registerPdfFonts()
  * - 明細は納品の行と入金の行を日付順に1本の表（P4-D7・D8）。マイナスは ASCII の "-"・色は付けない（P4-D9）
  * - 取消は「取消」、再発行は「再発行（元: …）」（P4-D10）。ドラフトにも印は付けない（P4-D11）
  * - 表の見出しは各ページに繰り返す。フッタに番号とページ（P4-D18）
+ * - 品番は折り返さない（P4-D21）。「品番 / 品名」の欄は上段に品番（小さく）・下段に品名
  * ★固定文言に ※ ～ は使わない（フォントに無い）
  */
 const styles = StyleSheet.create({
@@ -49,6 +50,7 @@ const styles = StyleSheet.create({
   cDate: { width: "8%", paddingHorizontal: 3 },
   cDoc: { width: "15%", paddingHorizontal: 3 },
   cName: { width: "35%", paddingHorizontal: 3 },
+  cItemCode: { fontSize: 7.5, color: "#555" },
   cColor: { width: "14%", paddingHorizontal: 3 },
   cQty: { width: "8%", paddingHorizontal: 3, textAlign: "right" },
   cPrice: { width: "10%", paddingHorizontal: 3, textAlign: "right" },
@@ -138,7 +140,14 @@ function InvoicePage({ data }: { data: InvoicePdfData }) {
           <View style={styles.tr} key={i} wrap={false}>
             <Text style={styles.cDate}>{mdSlash(r.date)}</Text>
             <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cDoc}>{r.docNumber ?? ""}</Text>
-            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cName}>{r.description}</Text>
+            {r.kind === "item" ? (
+              <View style={styles.cName}>
+                {r.itemCode ? <Text hyphenationCallback={NO_BREAK} style={styles.cItemCode}>{r.itemCode}</Text> : null}
+                <Text hyphenationCallback={NO_HYPHEN_BREAK}>{r.itemName}</Text>
+              </View>
+            ) : (
+              <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cName}>{r.description}</Text>
+            )}
             <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cColor}>{r.kind === "item" ? r.colorSize : ""}</Text>
             <Text style={styles.cQty}>{r.kind === "item" ? numText(r.quantity) : ""}</Text>
             <Text style={styles.cPrice}>{r.kind === "item" ? numText(r.unitPrice) : ""}</Text>

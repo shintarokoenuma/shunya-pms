@@ -59,9 +59,19 @@ const payments = [
   const rows = buildInvoiceRows(lines, [])
   const t = rows.find((r) => r.kind === "item" && r.description.startsWith("AOI-01"))
   assert(t !== undefined && t.kind === "item" && t.description === "AOI-01　スポットプリントTシャツ" && t.colorSize === "晒し・S", "⑤ 品番　品名 / 色・サイズ")
+  assert(t !== undefined && t.kind === "item" && t.itemCode === "AOI-01" && t.itemName === "スポットプリントTシャツ", "⑤-2 品番と品名が別に取れる（P4-D21）")
   assert(yenText(-400) === "-¥400" && yenText(1760) === "¥1,760" && numText(-1) === "-1", "⑤' マイナスは ASCII の -")
   assert(pdfText("10〜11") === "10〜11" && pdfText("10～11") === "10〜11", "⑤'' ～（U+FF5E）→ 〜（U+301C）")
   assert(mdSlash("2026-10-06") === "10/06", "⑤''' mm/dd")
+}
+
+// ⑥ P4-D21: 品番が無い行は itemCode null・品名だけ（description も品名だけ）。itemCode・itemName も ～ → 〜
+{
+  const rows = buildInvoiceRows(lines, [])
+  const a = rows.find((r) => r.kind === "item" && r.itemName === "前受金充当（SO-2026-0002）")
+  assert(a !== undefined && a.kind === "item" && a.itemCode === null && a.description === "前受金充当（SO-2026-0002）", "⑥ 品番なし → itemCode null・description は品名だけ")
+  const b = buildInvoiceRows([{ ...lines[0], itemCode: "AB～01", itemName: "10～11" }], [])[0]
+  assert(b.kind === "item" && b.itemCode === "AB〜01" && b.itemName === "10〜11", "⑥-2 itemCode・itemName も ～ → 〜")
 }
 
 console.log("invoice-rows.test.ts: all assertions passed")

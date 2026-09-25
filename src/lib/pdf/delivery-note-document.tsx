@@ -2,7 +2,7 @@ import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import { COMPANY_PROFILE } from "@/lib/constants/company-profile"
 import type { DeliveryNotePdfData } from "./delivery-note-data"
-import { NO_HYPHEN_BREAK, numText, yenText, ymdSlash } from "./invoice-rows"
+import { NO_BREAK, NO_HYPHEN_BREAK, numText, yenText, ymdSlash } from "./invoice-rows"
 
 registerPdfFonts()
 
@@ -40,9 +40,9 @@ const styles = StyleSheet.create({
   table: { borderTop: "1pt solid #888" },
   th: { flexDirection: "row", backgroundColor: "#f0f0f0", borderBottom: "1pt solid #888", minHeight: 18, alignItems: "center", fontWeight: "bold" },
   tr: { flexDirection: "row", borderBottom: "0.5pt solid #ccc", minHeight: 17, alignItems: "center" },
-  cCode: { width: "16%", paddingHorizontal: 3 },
-  cName: { width: "34%", paddingHorizontal: 3 },
-  cNameWide: { width: "54%", paddingHorizontal: 3 },
+  cCode: { width: "22%", paddingHorizontal: 3 }, // P4-D21: 品番は折り返さないので広め
+  cName: { width: "28%", paddingHorizontal: 3 },
+  cNameWide: { width: "48%", paddingHorizontal: 3 },
   cColor: { width: "14%", paddingHorizontal: 3 },
   cSize: { width: "8%", paddingHorizontal: 3 },
   cQty: { width: "8%", paddingHorizontal: 3, textAlign: "right" },
@@ -119,9 +119,10 @@ function DeliveryNotePage({ data }: { data: DeliveryNotePdfData }) {
         </View>
         {data.items.map((it, i) => (
           <View style={styles.tr} key={i} wrap={false}>
-            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cCode}>{it.itemCode ?? ""}</Text>
+            <Text hyphenationCallback={NO_BREAK} style={styles.cCode}>{it.itemCode ?? ""}</Text>
             <View style={[amounts ? styles.cName : styles.cNameWide, { flexDirection: "row", alignItems: "center" }]}>
-              <Text hyphenationCallback={NO_HYPHEN_BREAK}>{it.productName}</Text>
+              {/* P4-D21: 品名の列を狭めたので、タグと重ならないよう品名側を折り返す */}
+              <Text hyphenationCallback={NO_HYPHEN_BREAK} style={{ flex: 1 }}>{it.productName}</Text>
               {it.lineKind ? (
                 <Text style={styles.kindTag}>{it.lineKind === "DEPOSIT" ? "前受金" : "前受金充当"}</Text>
               ) : null}
