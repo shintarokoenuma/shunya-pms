@@ -48,9 +48,13 @@ export function DeliveryNotesTable({ items }: { items: DeliveryNoteListItem[] })
                 )}
               </TableCell>
               <TableCell>
-                <Badge variant={DELIVERY_NOTE_STATUS_BADGE_VARIANT[item.status]}>
-                  {DELIVERY_NOTE_STATUS_LABELS[item.status]}
-                </Badge>
+                <span className="inline-flex items-center gap-1">
+                  <Badge variant={DELIVERY_NOTE_STATUS_BADGE_VARIANT[item.status]}>
+                    {DELIVERY_NOTE_STATUS_LABELS[item.status]}
+                  </Badge>
+                  {/* B-109 PR-3（P3-D9）: 前受金の伝票 */}
+                  {item.hasDeposit && <Badge variant="outline">前受金</Badge>}
+                </span>
               </TableCell>
               <TableCell className="text-sm">
                 {new Date(item.deliveryDate).toLocaleDateString("ja-JP")}

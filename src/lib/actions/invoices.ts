@@ -32,6 +32,7 @@ import {
   type ClientPaymentRow,
 } from "@/lib/billing/client-payments"
 import { findUncoveredPayments, type UncoveredPayment } from "@/lib/calc/uncovered-payments"
+import { depositSummaryFor, loadDepositSummaries } from "@/lib/billing/deposits"
 
 /**
  * B-109 PR-2c: 合計請求書（繰越型）Server Actions（delivery-notes の作法を写経）。
@@ -188,6 +189,8 @@ export type InvoiceCandidatesResult = {
   taxRoundingMode: TaxRoundingMode
   /** B-223（D-39・D-50）: 発行済みの請求書より後に記録され、どの請求書にも載っていない入金（警告用・保存は止めない） */
   uncoveredPayments: UncoveredPayment[]
+  /** B-109 PR-3（P3-D8）: 候補に受注の行があり、その受注に未充当の前受金が残っている（警告用・保存は止めない） */
+  depositWarnings: { soId: string; soNumber: string; remaining: number }[]
 }
 
 async function loadCandidateContext(
@@ -229,12 +232,36 @@ async function loadCandidateContext(
           quantity: true,
           unitPrice: true,
           subtotal: true,
+          // B-109 PR-3（P3-D8）: 受注の行（soItemId あり）の受注を拾う
+          soId: true,
+          soItemId: true,
         },
       },
     },
     orderBy: [{ deliveryDate: "asc" }, { deliveryNumber: "asc" }],
   })
   const allItemIds = notes.flatMap((n) => n.items.map((it) => it.id))
+
+  // B-109 PR-3（P3-D8）: 候補の受注の行に、未充当の前受金が残っていれば警告（集計は billing/deposits の 1 か所）
+  const candidateSoIds = [
+    ...new Set(
+      notes.flatMap((n) => n.items.filter((it) => !!it.soItemId && !!it.soId).map((it) => it.soId as string)),
+    ),
+  ]
+  const depositWarnings: { soId: string; soNumber: string; remaining: number }[] = []
+  if (candidateSoIds.length > 0) {
+    const [summaries, sos] = await Promise.all([
+      loadDepositSummaries(companyId, candidateSoIds),
+      prisma.salesOrder.findMany({
+        where: { id: { in: candidateSoIds }, companyId, deletedAt: null },
+        select: { id: true, soNumber: true },
+      }),
+    ])
+    for (const so of sos) {
+      const remaining = depositSummaryFor(summaries, so.id).remaining
+      if (remaining > 0) depositWarnings.push({ soId: so.id, soNumber: so.soNumber, remaining })
+    }
+  }
 
   // 取消されていない請求書に既に載っている明細を除く（D-6・二重請求の防止）
   const billed = allItemIds.length
@@ -346,6 +373,7 @@ async function loadCandidateContext(
       paymentReceivedAmount: sumPayments(payments),
       taxRoundingMode: client.taxRoundingMode,
       uncoveredPayments,
+      depositWarnings,
     },
   }
 }

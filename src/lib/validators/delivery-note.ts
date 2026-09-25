@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { Currency, DeliveryNoteStatus, type SalesOrderStatus } from "@prisma/client"
+import { Currency, DeliveryLineKind, DeliveryNoteStatus, type SalesOrderStatus } from "@prisma/client"
 
 /**
  * B-108: サンプル納品書（DeliveryNote / DeliveryNoteItem）バリデータ。
@@ -79,8 +79,42 @@ export const deliveryNoteItemInputSchema = z
   skuId: optionalRelationId,
   soId: optionalRelationId,
   soItemId: optionalRelationId,
+  // B-109 PR-3（P3-D1〜D4）: 前受金の行の印。null＝通常の行。
+  //   DEPOSIT＝前受金の請求行（数量 1）・DEPOSIT_APPLIED＝充当行（数量 −1）。どちらも soId 必須・soItemId / skuId 禁止。
+  lineKind: z.nativeEnum(DeliveryLineKind).nullable().default(null),
   })
   .superRefine((v, ctx) => {
+    // B-109 PR-3（P3-D4）: 前受金の行の形をサーバで確かめる（UI で隠すだけにしない）
+    if (v.lineKind) {
+      if (!v.soId) {
+        ctx.addIssue({ code: "custom", message: "前受金の行には受注が必要です", path: ["soId"] })
+      }
+      if (v.soItemId || v.skuId) {
+        ctx.addIssue({
+          code: "custom",
+          message: "前受金の行に受注の明細や SKU は付けられません（納品済み数に混ざります）",
+          path: ["soItemId"],
+        })
+      }
+      const wantQty = v.lineKind === DeliveryLineKind.DEPOSIT ? 1 : -1
+      if (v.quantity !== wantQty) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            v.lineKind === DeliveryLineKind.DEPOSIT
+              ? "前受金の行の数量は 1 にしてください"
+              : "前受金充当の行の数量は −1 にしてください",
+          path: ["quantity"],
+        })
+      }
+      if (v.unitPrice == null || !Number.isInteger(v.unitPrice) || v.unitPrice < 1) {
+        ctx.addIssue({
+          code: "custom",
+          message: "前受金の金額は 1 円以上の整数で入力してください",
+          path: ["unitPrice"],
+        })
+      }
+    }
     if (v.soItemId && (!v.skuId || !v.soId)) {
       ctx.addIssue({
         code: "custom",
@@ -122,6 +156,25 @@ export const deliveryNoteInputSchema = z.object({
 
 export type DeliveryNoteInput = z.infer<typeof deliveryNoteInputSchema>
 export type DeliveryNoteItemInput = z.infer<typeof deliveryNoteItemInputSchema>
+
+// =============================================================================
+// B-109 PR-3（P3-D6）: 受注からの「前受金を請求」
+// =============================================================================
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付は yyyy-MM-dd で入力してください")
+
+export const depositRequestSchema = z.object({
+  soId: z.string().min(1, "受注が指定されていません"),
+  amount: z
+    .union([z.string(), z.number()])
+    .transform((v) => (typeof v === "number" ? v : Number(v)))
+    .refine((v) => Number.isInteger(v) && v >= 1, "前受金の金額は 1 円以上の整数で入力してください"),
+  deliveryDate: ymd,
+})
+
+export type DepositRequestInput = z.infer<typeof depositRequestSchema>
+
+/** P3-D6: 「前受金を請求」を出す取引条件（代引きは納品時の支払いなので前受金は無い・P3-D11） */
+export const DEPOSIT_PAYMENT_TERM_TYPES = ["DEPOSIT_COD", "ADVANCE_PAYMENT"] as const
 
 // =============================================================================
 // 一覧パラメータ

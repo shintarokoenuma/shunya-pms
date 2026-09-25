@@ -49,6 +49,10 @@ export default async function EditDeliveryNotePage({
   if (dn.status !== "DRAFT") {
     redirect(`/deliveries/${id}`)
   }
+  // B-109 PR-3（P3-D10）: 前受金の伝票はフォームで編集させない（取消して作り直す）
+  if (dn.items.some((it) => it.lineKind === "DEPOSIT")) {
+    redirect(`/deliveries/${id}`)
+  }
 
   const initial: DeliveryNoteFormInitial = {
     clientId: dn.clientId,
@@ -83,6 +87,8 @@ export default async function EditDeliveryNotePage({
         it.soItemId && dn.orderUnitPriceBySoItemId[it.soItemId] != null
           ? String(dn.orderUnitPriceBySoItemId[it.soItemId])
           : "",
+      // B-109 PR-3（P3-D10）: 前受金の行の印を持ち回る（作り直しで落とさない）
+      lineKind: it.lineKind,
     })),
   }
 
