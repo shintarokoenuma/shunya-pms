@@ -3,7 +3,8 @@ import { SidebarNav } from "./sidebar-nav"
 
 export function Sidebar() {
   return (
-    <aside className="w-64 shrink-0 border-r bg-card flex flex-col h-screen sticky top-0">
+    // B-093 PR-1（D-2）: 768px 未満はサイドバーを隠し、ヘッダの ☰（MobileNav）から出す
+    <aside className="hidden md:flex w-64 shrink-0 border-r bg-card flex-col h-screen sticky top-0">
       <div className="h-16 flex items-center px-6 border-b shrink-0">
         <Link
           href="/dashboard"

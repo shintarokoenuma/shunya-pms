@@ -130,10 +130,11 @@ export function GlobalSearchTrigger() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="検索"
-        className="inline-flex items-center gap-2 rounded-md border bg-background px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent"
+        className="inline-flex items-center gap-2 rounded-md border bg-background px-2 sm:px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent"
       >
         <Search className="h-4 w-4" />
-        <span>検索</span>
+        {/* B-093 PR-1（D-5）: 640px 未満はアイコンだけ */}
+        <span className="hidden sm:inline">検索</span>
         <kbd className="ml-2 hidden items-center gap-0.5 rounded border bg-muted px-1.5 font-mono text-[10px] text-muted-foreground sm:inline-flex">
           ⌘K
         </kbd>

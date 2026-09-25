@@ -363,7 +363,8 @@ export default async function ProductDetailPage({
                 {PRODUCT_STATUS_LABELS[item.status]}
               </Badge>
             </div>
-            <dl className="mt-1 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground">
+            {/* B-093 PR-1（D-7）: 640px 未満は2列のマス目（ラベル上・値下）、640px 以上は横並び */}
+            <dl className="mt-1 grid grid-cols-2 gap-x-4 gap-y-2 text-sm text-muted-foreground sm:flex sm:flex-wrap sm:gap-x-5 sm:gap-y-1">
               <HeaderStat label="シーズン" value={`${item.season}（${item.year}）`} />
               <HeaderStat
                 label="クライアント"
@@ -895,7 +896,7 @@ function DetailRow({
 
 function HeaderStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-baseline gap-1.5">
+    <div className="flex flex-col sm:flex-row sm:items-baseline sm:gap-1.5">
       <dt className="text-xs">{label}</dt>
       <dd className="font-medium text-foreground">{value}</dd>
     </div>
