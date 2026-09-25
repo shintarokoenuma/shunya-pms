@@ -43,21 +43,31 @@ export type UncoveredPayment = {
   invoiceNumber: string
 }
 
+type InvoiceWindow = { inv: UncoveredInvoiceInput; start: string; end: string }
+
+/**
+ * 取消されていない請求書から「御入金額を集計した窓」を組む（B-223 と B-225 で共用・窓の作り方はここ 1 か所）。
+ * 窓は periodEndDate の昇順（同日なら createdAt の昇順）。最初の 1 枚の始まりは自分の periodStartDate（D-41）、
+ * 2 枚目以降は前の請求書の periodEndDate + 1 日。
+ */
+function buildInvoiceWindows(invoicesNotCancelled: UncoveredInvoiceInput[]): InvoiceWindow[] {
+  const invoices = [...invoicesNotCancelled].sort((a, b) => {
+    const d = a.periodEndDate.getTime() - b.periodEndDate.getTime()
+    return d !== 0 ? d : a.createdAt.getTime() - b.createdAt.getTime()
+  })
+  return invoices.map((inv, i) => ({
+    inv,
+    start: i === 0 ? toYmd(inv.periodStartDate) : addDaysYmd(toYmd(invoices[i - 1].periodEndDate), 1),
+    end: toYmd(inv.periodEndDate),
+  }))
+}
+
 export function findUncoveredPayments(
   payments: UncoveredPaymentInput[],
   invoicesNotCancelled: UncoveredInvoiceInput[],
   windowStart: string,
 ): UncoveredPayment[] {
-  // 窓は periodEndDate の昇順（同日なら createdAt の昇順）で組む
-  const invoices = [...invoicesNotCancelled].sort((a, b) => {
-    const d = a.periodEndDate.getTime() - b.periodEndDate.getTime()
-    return d !== 0 ? d : a.createdAt.getTime() - b.createdAt.getTime()
-  })
-  const windows = invoices.map((inv, i) => ({
-    inv,
-    start: i === 0 ? toYmd(inv.periodStartDate) : addDaysYmd(toYmd(invoices[i - 1].periodEndDate), 1),
-    end: toYmd(inv.periodEndDate),
-  }))
+  const windows = buildInvoiceWindows(invoicesNotCancelled)
 
   const out: UncoveredPayment[] = []
   for (const p of payments) {
@@ -75,4 +85,21 @@ export function findUncoveredPayments(
     }
   }
   return out
+}
+
+/**
+ * B-225（D-3）: この入金を「御入金額」に含めている（取消されていない）請求書を返す。
+ * 判定は B-223 の裏返し: 入金日を窓に含む請求書 I があり、I.createdAt >= P.createdAt（入金より後に作られた＝集計済み）。
+ * 取消しても発行済みの請求書は再計算しない（D-35）ので、警告に使う。窓が重ならない前提で 0 か 1 件だが配列で返す。
+ */
+export function findInvoicesCoveringPayment(
+  payment: { paymentDate: string; createdAt: string },
+  invoicesNotCancelled: UncoveredInvoiceInput[],
+): { id: string; invoiceNumber: string }[] {
+  const windows = buildInvoiceWindows(invoicesNotCancelled)
+  const paymentCreated = new Date(payment.createdAt).getTime()
+  return windows
+    .filter((w) => payment.paymentDate >= w.start && payment.paymentDate <= w.end)
+    .filter((w) => w.inv.createdAt.getTime() >= paymentCreated)
+    .map((w) => ({ id: w.inv.id, invoiceNumber: w.inv.invoiceNumber }))
 }

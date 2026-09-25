@@ -42,3 +42,15 @@ export const clientPaymentCreateSchema = z.object({
 })
 
 export type ClientPaymentCreateInput = z.infer<typeof clientPaymentCreateSchema>
+
+/** B-225（D-2）: 入金の取消。理由は必須（1〜200文字）。金額・日付は受けない（取消＋再入力・D-1）。 */
+export const clientPaymentCancelSchema = z.object({
+  id: z.string().min(1, "入金が指定されていません"),
+  reason: z
+    .string()
+    .transform((v) => v.trim())
+    .refine((v) => v.length >= 1, "取消の理由を入力してください")
+    .refine((v) => v.length <= 200, "取消の理由は200文字以内で入力してください"),
+})
+
+export type ClientPaymentCancelInput = z.infer<typeof clientPaymentCancelSchema>

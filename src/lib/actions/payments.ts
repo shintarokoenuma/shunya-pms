@@ -9,8 +9,9 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { clientPaymentCreateSchema } from "@/lib/validators/payment"
-import { fromYmd } from "@/lib/calc/invoice-period"
+import { clientPaymentCreateSchema, clientPaymentCancelSchema } from "@/lib/validators/payment"
+import { fromYmd, toYmd } from "@/lib/calc/invoice-period"
+import { findInvoicesCoveringPayment } from "@/lib/calc/uncovered-payments"
 import {
   listClientPayments as listClientPaymentsRows,
   listPaymentsPaged,
@@ -88,6 +89,8 @@ export type PaymentListParams = {
   start?: string
   end?: string
   page?: number
+  /** B-225（D-5）: 省略＝有効（従来どおり）。"cancelled" は取消済みだけ */
+  status?: "active" | "cancelled"
 }
 
 /** B-222 PR-2d: /payments の一覧（クライアント横断・期間・ページング・絞り込み結果の全件合計 D-43） */
@@ -112,6 +115,7 @@ export async function listPayments(
       {
         clientId: params.clientId || undefined,
         window: { start: params.start || undefined, end: params.end || undefined },
+        status: params.status,
       },
       { page, pageSize: LIST_PAGE_SIZE },
     )
@@ -229,5 +233,174 @@ export async function createClientPayment(
     return { ok: true, data: created }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "入金の記録に失敗しました" }
+  }
+}
+
+// =============================================================================
+// B-225: 入金の取消（打ち間違えた入金は取消して入れ直す・D-1）
+// ★編集は作らない。金額・日付・番号は書き換えない。deletedAt は使わない（状態の変更）。
+// ★取消しても発行済みの請求書は再計算しない（D-35）。集計は paymentWhere が CANCELLED を除外する。
+// =============================================================================
+
+/** D-2: 取消できる状態（実績として記録した入金だけ） */
+const CANCELLABLE_STATUSES: PaymentStatus[] = [PaymentStatus.CONFIRMED]
+
+export type PaymentCancelImpact = {
+  id: string
+  paymentNumber: string
+  counterpartName: string
+  /** yyyy-MM-dd */
+  paymentDate: string
+  amount: number
+  status: PaymentStatus
+  canCancel: boolean
+  /** D-3: 御入金額にこの入金が入っている（取消されていない）請求書。0 件なら警告なし */
+  coveringInvoices: { id: string; invoiceNumber: string }[]
+}
+
+/**
+ * D-3: 取消のダイアログに出す情報（読み取りのみ）。
+ * 窓の判定は B-223 と同じ部品（findInvoicesCoveringPayment）。請求書は同じクライアント・取消されていないもの。
+ */
+export async function getPaymentCancelImpact(id: string): Promise<ActionResult<PaymentCancelImpact>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const p = await prisma.payment.findFirst({
+      where: {
+        id,
+        companyId: sess.companyId,
+        deletedAt: null,
+        paymentDirection: PaymentDirection.INCOMING,
+        counterpartType: CounterpartType.CLIENT,
+      },
+      select: {
+        id: true,
+        paymentNumber: true,
+        counterpartId: true,
+        counterpartName: true,
+        actualPaymentDate: true,
+        scheduledDate: true,
+        amount: true,
+        status: true,
+        createdAt: true,
+      },
+    })
+    if (!p) return { ok: false, error: "入金が見つかりません" }
+
+    const invoices = await prisma.invoice.findMany({
+      where: {
+        companyId: sess.companyId,
+        clientId: p.counterpartId,
+        deletedAt: null,
+        status: { not: "CANCELLED" },
+      },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        periodStartDate: true,
+        periodEndDate: true,
+        createdAt: true,
+      },
+    })
+    const paymentDate = toYmd(p.actualPaymentDate ?? p.scheduledDate)
+    const coveringInvoices = findInvoicesCoveringPayment(
+      { paymentDate, createdAt: p.createdAt.toISOString() },
+      invoices,
+    )
+    return {
+      ok: true,
+      data: {
+        id: p.id,
+        paymentNumber: p.paymentNumber,
+        counterpartName: p.counterpartName,
+        paymentDate,
+        amount: p.amount.toNumber(),
+        status: p.status,
+        canCancel: CANCELLABLE_STATUSES.includes(p.status),
+        coveringInvoices,
+      },
+    }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "取得に失敗しました" }
+  }
+}
+
+/**
+ * D-2: 入金の取消。status を CANCELLED にし、AuditLog（STATUS_CHANGE・理由付き）を同じ tx で書く。
+ * 書き方は invoices.ts の updateInvoiceStatus と同じ形。
+ */
+export async function cancelClientPayment(input: unknown): Promise<ActionResult<{ id: string }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const parsed = clientPaymentCancelSchema.safeParse(input)
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容に誤りがあります" }
+    }
+    const { id, reason } = parsed.data
+
+    const existing = await prisma.payment.findFirst({
+      where: {
+        id,
+        companyId: sess.companyId,
+        deletedAt: null,
+        paymentDirection: PaymentDirection.INCOMING,
+        counterpartType: CounterpartType.CLIENT,
+      },
+      select: {
+        id: true,
+        paymentNumber: true,
+        counterpartId: true,
+        counterpartName: true,
+        actualPaymentDate: true,
+        scheduledDate: true,
+        amount: true,
+        status: true,
+      },
+    })
+    if (!existing) return { ok: false, error: "入金が見つかりません" }
+    // ★UI で隠すだけでなくサーバで判定する（D-2）
+    if (!CANCELLABLE_STATUSES.includes(existing.status)) {
+      return { ok: false, error: `この入金は取消できません（状態: ${existing.status}）` }
+    }
+
+    const paymentDate = toYmd(existing.actualPaymentDate ?? existing.scheduledDate)
+    await prisma.$transaction(
+      async (tx) => {
+        await tx.payment.update({
+          where: { id },
+          data: { status: PaymentStatus.CANCELLED },
+        })
+        await tx.auditLog.create({
+          data: {
+            companyId: sess.companyId,
+            userId: sess.userId,
+            action: "STATUS_CHANGE",
+            entityType: "Payment",
+            entityId: id,
+            beforeData: { status: existing.status },
+            afterData: {
+              status: PaymentStatus.CANCELLED,
+              reason,
+              paymentNumber: existing.paymentNumber,
+              amount: existing.amount.toNumber(),
+              paymentDate,
+            },
+            description: `入金取消: ${existing.counterpartName} ${existing.paymentNumber}: ${existing.status} → CANCELLED（${reason}）`,
+          },
+        })
+      },
+      { timeout: 15000 },
+    )
+
+    revalidatePath(`/clients/${existing.counterpartId}`)
+    revalidatePath("/invoices")
+    revalidatePath("/payments")
+    return { ok: true, data: { id } }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "入金の取消に失敗しました" }
   }
 }

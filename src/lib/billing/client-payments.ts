@@ -30,6 +30,8 @@ export type ClientPaymentRow = {
   counterpartName: string
   /** 記録した日時（ISO 8601）。B-223（D-50）: 請求書の createdAt との前後比較に使う */
   createdAt: string
+  /** B-225: 取消済み（CANCELLED）を一覧で見分ける。集計条件は paymentWhere が持つ */
+  status: PaymentStatus
 }
 
 export type PaymentFilter = {
@@ -37,6 +39,11 @@ export type PaymentFilter = {
   clientId?: string
   /** 片方だけでも効く（gte / lte を個別に組む） */
   window?: { start?: string; end?: string }
+  /**
+   * B-225（D-5）: /payments の状態の絞り込み。省略（undefined）と "active" は従来どおり CANCELLED / FAILED 以外、
+   * "cancelled" は CANCELLED だけ。★請求書側は何も渡さないので集計の結果は変わらない。
+   */
+  status?: "active" | "cancelled"
 }
 
 export function paymentWhere(companyId: string, f: PaymentFilter): Prisma.PaymentWhereInput {
@@ -48,7 +55,10 @@ export function paymentWhere(companyId: string, f: PaymentFilter): Prisma.Paymen
     deletedAt: null,
     paymentDirection: PaymentDirection.INCOMING,
     counterpartType: CounterpartType.CLIENT,
-    status: { notIn: [PaymentStatus.CANCELLED, PaymentStatus.FAILED] },
+    status:
+      f.status === "cancelled"
+        ? PaymentStatus.CANCELLED
+        : { notIn: [PaymentStatus.CANCELLED, PaymentStatus.FAILED] },
     ...(f.clientId ? { counterpartId: f.clientId } : {}),
     ...(Object.keys(dateRange).length > 0 ? { actualPaymentDate: dateRange } : {}),
   }
@@ -65,6 +75,7 @@ const ROW_SELECT = {
   counterpartId: true,
   counterpartName: true,
   createdAt: true,
+  status: true,
 } satisfies Prisma.PaymentSelect
 
 type RowPayload = Prisma.PaymentGetPayload<{ select: typeof ROW_SELECT }>
@@ -80,6 +91,7 @@ function toRow(r: RowPayload): ClientPaymentRow {
     counterpartId: r.counterpartId,
     counterpartName: r.counterpartName,
     createdAt: r.createdAt.toISOString(),
+    status: r.status,
   }
 }
 
