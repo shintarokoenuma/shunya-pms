@@ -70,8 +70,11 @@ export function timestampJst(d: Date): string {
   )
 }
 
+/** B-109 PR-4（P4-D16）: 請求書・納品書の控えも同じ形で保存する（パス規約 {kind}/{番号}/{stamp}.pdf） */
+export type PdfArchiveKind = "purchase-order" | "work-order" | "invoice" | "delivery-note"
+
 export type UploadOrderPdfParams = {
-  kind: "purchase-order" | "work-order"
+  kind: PdfArchiveKind
   orderNumber: string
   buffer: Buffer
   /** JST タイムスタンプ(yyyyMMdd-HHmmss)。DL ファイル名と突合させるため route 側で生成して渡す。

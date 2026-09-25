@@ -1,7 +1,37 @@
 import { auth } from "@/lib/auth"
 import { getOrderPdfData } from "@/lib/pdf/order-data"
-import { renderOrderPdfBuffer } from "@/lib/pdf/render"
-import { uploadOrderPdf, timestampJst } from "@/lib/gcs"
+import { getInvoicePdfData } from "@/lib/pdf/invoice-data"
+import { getDeliveryNotePdfData } from "@/lib/pdf/delivery-note-data"
+import {
+  renderOrderPdfBuffer,
+  renderInvoicePdfBuffer,
+  renderDeliveryNotePdfBuffer,
+} from "@/lib/pdf/render"
+import { uploadOrderPdf, timestampJst, type PdfArchiveKind } from "@/lib/gcs"
+
+/**
+ * B-109 PR-4（P4-D16）: 種類ごとに「番号と PDF の Buffer」を作る。他社・不存在は null。
+ * 発注書（PO/WO）の作り方は変えない。
+ */
+async function buildArchive(
+  kind: PdfArchiveKind,
+  id: string,
+  companyId: string,
+): Promise<{ docNumber: string; buffer: Buffer } | null> {
+  if (kind === "purchase-order" || kind === "work-order") {
+    const data = await getOrderPdfData(kind === "purchase-order" ? "po" : "wo", id, companyId)
+    if (!data) return null
+    return { docNumber: data.docNumber, buffer: await renderOrderPdfBuffer(data) }
+  }
+  if (kind === "invoice") {
+    const data = await getInvoicePdfData(id, companyId)
+    if (!data) return null
+    return { docNumber: data.invoiceNumber, buffer: await renderInvoicePdfBuffer([data]) }
+  }
+  const data = await getDeliveryNotePdfData(id, companyId)
+  if (!data) return null
+  return { docNumber: data.deliveryNumber, buffer: await renderDeliveryNotePdfBuffer([data]) }
+}
 
 /**
  * B-117: DL 名末尾の stamp（`yyyyMMdd-HHmmss`）が渡された場合のみ検証して受け入れる。
@@ -35,9 +65,14 @@ export async function POST(req: Request) {
   }
 
   const body = await req.json().catch(() => null)
-  const kind = body?.kind
+  const kind = body?.kind as PdfArchiveKind
   const ids = body?.ids
-  if (kind !== "purchase-order" && kind !== "work-order") {
+  if (
+    kind !== "purchase-order" &&
+    kind !== "work-order" &&
+    kind !== "invoice" &&
+    kind !== "delivery-note"
+  ) {
     return new Response("kind が不正です", { status: 400 })
   }
   if (
@@ -53,17 +88,15 @@ export async function POST(req: Request) {
     ? body.stamp
     : timestampJst(new Date())
 
-  const type = kind === "purchase-order" ? "po" : "wo"
   let saved = 0
   for (const id of ids) {
     try {
-      const data = await getOrderPdfData(type, id, session.user.companyId)
-      if (!data) continue // 他社伝票 or 存在しない → skip
-      const buffer = await renderOrderPdfBuffer(data)
+      const built = await buildArchive(kind, id, session.user.companyId)
+      if (!built) continue // 他社伝票 or 存在しない → skip
       const result = await uploadOrderPdf({
         kind,
-        orderNumber: data.docNumber,
-        buffer,
+        orderNumber: built.docNumber,
+        buffer: built.buffer,
         timestamp: stamp,
       })
       if (result) saved += 1

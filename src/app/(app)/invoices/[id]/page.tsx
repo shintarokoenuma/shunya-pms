@@ -16,6 +16,7 @@ import {
 import { getInvoice } from "@/lib/actions/invoices"
 import { formatPeriod } from "@/lib/calc/invoice-period"
 import { InvoiceStatusActions } from "../_components/invoice-status-actions"
+import { OrderPdfPreviewButton } from "@/components/pdf/order-pdf-preview-button"
 import { InvoiceAmountsBlock } from "../_components/invoice-amounts-block"
 import {
   INVOICE_STATUS_LABELS,
@@ -28,7 +29,7 @@ import {
 
 type Params = Promise<{ id: string }>
 
-/** addendum v0.9 §2-3: 詳細（★PDF ボタンは PR-4） */
+/** addendum v0.9 §2-3: 詳細。B-109 PR-4: 「請求書 PDF」（プレビュー → 承認後ダウンロード・全状態） */
 export default async function InvoiceDetailPage({ params }: { params: Params }) {
   const session = await auth()
   if (!session?.user) redirect("/login")
@@ -70,12 +71,21 @@ export default async function InvoiceDetailPage({ params }: { params: Params }) 
               </div>
             )}
           </div>
-          <InvoiceStatusActions
-            id={inv.id}
-            invoiceNumber={inv.invoiceNumber}
-            status={inv.status}
-            replacedByInvoiceId={inv.replacedByInvoiceId}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <OrderPdfPreviewButton
+              endpoint="/api/invoices/pdf"
+              kind="invoice"
+              id={inv.id}
+              fallbackName={`${inv.invoiceNumber}.pdf`}
+              label="請求書 PDF"
+            />
+            <InvoiceStatusActions
+              id={inv.id}
+              invoiceNumber={inv.invoiceNumber}
+              status={inv.status}
+              replacedByInvoiceId={inv.replacedByInvoiceId}
+            />
+          </div>
         </div>
       </div>
 

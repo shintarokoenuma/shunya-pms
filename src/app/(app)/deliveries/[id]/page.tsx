@@ -21,6 +21,7 @@ import {
 import { getDeliveryNote } from "@/lib/actions/delivery-notes"
 import { DeliveryNoteStatusControl } from "../_components/delivery-note-status-control"
 import { DeliveryNoteDeleteButton } from "../_components/delivery-note-delete-button"
+import { OrderPdfPreviewButton } from "@/components/pdf/order-pdf-preview-button"
 import {
   DELIVERY_NOTE_STATUS_LABELS,
   DELIVERY_NOTE_STATUS_BADGE_VARIANT,
@@ -82,6 +83,14 @@ export default async function DeliveryNoteDetailPage({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* B-109 PR-4（P4-D17）: 納品書 PDF（プレビュー → 承認後ダウンロード・全状態） */}
+            <OrderPdfPreviewButton
+              endpoint="/api/delivery-notes/pdf"
+              kind="delivery-note"
+              id={dn.id}
+              fallbackName={`${dn.deliveryNumber}.pdf`}
+              label="納品書 PDF"
+            />
             <DeliveryNoteStatusControl id={dn.id} status={dn.status} />
             {isDraft && !isDepositNote && (
               <Button asChild variant="outline" size="sm">

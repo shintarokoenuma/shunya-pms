@@ -15,6 +15,16 @@ export type CompanyProfile = {
   website?: string
   /** 適格請求書発行事業者の登録番号（B-109 D-5・請求書の issuerTaxId に写す） */
   taxId: string
+  /** B-109 PR-4（P4-D3）: 振込先。請求書を作るときに Invoice.bankInfo へスナップショットする（P4-D4） */
+  bank: CompanyBankAccount
+}
+
+export type CompanyBankAccount = {
+  bankName: string
+  branchName: string
+  accountType: string
+  accountNumber: string
+  accountHolder: string
 }
 
 export const COMPANY_PROFILE: CompanyProfile = {
@@ -25,4 +35,11 @@ export const COMPANY_PROFILE: CompanyProfile = {
   fax: "FAX: 03-5459-1181",
   email: "MAIL: info@shunya.cc",
   taxId: "T2011001051698",
+  bank: {
+    bankName: "みずほ銀行",
+    branchName: "渋谷中央支店",
+    accountType: "普通",
+    accountNumber: "1176464",
+    accountHolder: "株式会社shunya",
+  },
 }
