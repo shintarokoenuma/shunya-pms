@@ -1,5 +1,8 @@
 import { redirect } from "next/navigation"
+import { CounterpartType } from "@prisma/client"
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+import { closedPeriodFor, loadClosedPeriods, periodLockMessage } from "@/lib/period-close/lock"
 import { listPayments } from "@/lib/actions/payments"
 import { listActiveClientsForInvoiceSelect } from "@/lib/actions/invoices"
 import { closingDateOf } from "@/lib/calc/invoice-period"
@@ -73,6 +76,19 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
   const { items, total, count, totalPages, page: currentPage } = result.data
   const clientOptions = clients.map((c) => ({ id: c.id, companyName: c.companyName }))
 
+  // B-109 PR-6（P6-D7・§5-3）: 締めた期間の入金は「取消」を無効にする（判定は §3 と同じ部品・1 クエリ）
+  const closedMap = await loadClosedPeriods(
+    prisma,
+    session.user.companyId,
+    CounterpartType.CLIENT,
+    items.map((p) => p.counterpartId),
+  )
+  const lockedById: Record<string, string> = {}
+  for (const p of items) {
+    const closed = closedPeriodFor(closedMap, p.counterpartId, p.paymentDate)
+    if (closed) lockedById[p.id] = periodLockMessage(p.paymentDate, p.counterpartName, closed)
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex items-start justify-between gap-4">
@@ -88,7 +104,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Sea
       </div>
       <PaymentsSearch clients={clientOptions} start={period.start} end={period.end} />
       <div className="min-w-0">
-        <PaymentsTable items={items} total={total} statusFilter={statusFilter} />
+        <PaymentsTable items={items} total={total} statusFilter={statusFilter} lockedById={lockedById} />
       </div>
       <PaymentsPagination page={currentPage} totalPages={totalPages} total={count} />
     </div>

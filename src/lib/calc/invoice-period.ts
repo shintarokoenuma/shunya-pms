@@ -87,3 +87,43 @@ export function defaultPaymentDueDate(
 export function formatPeriod(start: string, end: string): string {
   return `${start.replace(/-/g, "/")}〜${end.replace(/-/g, "/")}`
 }
+
+/**
+ * B-109 PR-6（P6-D4）: 「YYYY-MM の締め」の期間＝期間の終わりがその月に入る期間。
+ * 月末締め（31 または未設定）→ その月の1日〜末日／20 日締め → 前月21日〜当月20日。
+ * defaultInvoicePeriod と同じ計算（today ではなく年月を受ける）。
+ */
+export function closingPeriodForMonth(
+  year: number,
+  month0: number,
+  closingDay: number | null | undefined,
+): { start: string; end: string } {
+  return {
+    start: addDaysYmd(closingDateOf(year, month0 - 1, closingDay), 1),
+    end: closingDateOf(year, month0, closingDay),
+  }
+}
+
+/** "YYYY-MM" → { year, month0 }（形式が違えば null） */
+export function parseYearMonth(s: string): { year: number; month0: number } | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(s)
+  if (!m) return null
+  const year = Number(m[1])
+  const month0 = Number(m[2]) - 1
+  if (month0 < 0 || month0 > 11) return null
+  return { year, month0 }
+}
+
+/** { year, month0 } → "YYYY-MM"（month0 は負や 12 以上でもよい） */
+export function formatYearMonth(year: number, month0: number): string {
+  const d = new Date(Date.UTC(year, month0, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`
+}
+
+/**
+ * B-109 PR-6（§3）: JST の今日（yyyy-MM-dd）。PO / WO の orderDate は @default(now()) で入るため、
+ * 作成時の締めの判定はこの日付で行う。toYmd と同じく文字列で扱い、new Date() の生の比較はしない。
+ */
+export function todayYmdJst(now: Date = new Date()): string {
+  return toYmd(new Date(now.getTime() + 9 * 60 * 60 * 1000))
+}

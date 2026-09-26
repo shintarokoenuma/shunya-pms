@@ -40,6 +40,10 @@ const ACCENT_PREFIXES: { key: SectionAccentKey; prefixes: string[] }[] = [
       "/work-orders",
       "/sales-orders",
       "/deliveries",
+      // B-109 PR-6（P6-D12）: 経理グループ（請求・入金・締め）は trade の帯を流用
+      "/invoices",
+      "/payments",
+      "/closings",
     ],
   },
   {

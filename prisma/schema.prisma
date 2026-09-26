@@ -9839,3 +9839,45 @@ model ProductionEstimateItem {
   @@index([contractorId])
   @@map("production_estimate_items")
 }
+
+// =============================================================================
+// B-109 PR-6（B-123）: 締め＝取引先 × 期間のロック（P6-D1〜D3）
+// - 1回の締め＝1行。解除は同じ行を REOPENED にして解除した人・日時・理由を入れる。締め直しは新しい行
+// - 期間は保存する（後から締め日を変えても締めた行は動かない）
+// - TENANT_MODELS には入れない（companyId / deletedAt を手書きする・AGENTS.md）
+// - User への @relation は張らない（scalar のみ・house style）
+// =============================================================================
+model PeriodClose {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+
+  // CLIENT / SUPPLIER / FACTORY / CONTRACTOR のみ（P6-D2・Payment と同じ enum）
+  counterpartType CounterpartType @map("counterpart_type")
+  counterpartId   String          @map("counterpart_id")
+
+  periodStartDate DateTime @map("period_start_date") @db.Date
+  periodEndDate   DateTime @map("period_end_date") @db.Date
+
+  status         PeriodCloseStatus @default(CLOSED)
+  closedAt       DateTime          @default(now()) @map("closed_at")
+  closedByUserId String            @map("closed_by_user_id")
+  // 締めた時点で残っていた伝票（P6-D10）
+  closeWarnings  Json?             @map("close_warnings")
+
+  reopenedAt       DateTime? @map("reopened_at")
+  reopenedByUserId String?   @map("reopened_by_user_id")
+  reopenReason     String?   @map("reopen_reason") @db.Text
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([companyId, counterpartType, counterpartId, periodEndDate])
+  @@index([companyId, periodEndDate])
+  @@map("period_closes")
+}
+
+enum PeriodCloseStatus {
+  CLOSED // 締め中
+  REOPENED // 解除済み
+}

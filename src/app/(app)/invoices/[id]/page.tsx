@@ -1,7 +1,11 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft } from "lucide-react"
+import { CounterpartType } from "@prisma/client"
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+import { checkPeriodLock } from "@/lib/period-close/lock"
+import { PeriodLockBanner } from "@/components/period-close/period-lock-banner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -39,6 +43,9 @@ export default async function InvoiceDetailPage({ params }: { params: Params }) 
   if (!result.ok) notFound()
   const inv = result.data
   const showReduced8 = inv.taxableAmount8 != null && inv.taxableAmount8 !== 0
+  // B-109 PR-6（P6-D13・§5-3）: 締めた期間（periodEnd）なら帯を出し、送付済み・取消を無効にする
+  const lock = await checkPeriodLock(prisma, session.user.companyId, CounterpartType.CLIENT, inv.clientId, inv.periodEnd)
+  const lockMessage = lock.locked ? lock.error : null
 
   return (
     <div className="space-y-6 p-6">
@@ -84,10 +91,13 @@ export default async function InvoiceDetailPage({ params }: { params: Params }) 
               invoiceNumber={inv.invoiceNumber}
               status={inv.status}
               replacedByInvoiceId={inv.replacedByInvoiceId}
+              lockMessage={lockMessage}
             />
           </div>
         </div>
       </div>
+
+      {lock.locked && <PeriodLockBanner period={lock.period} />}
 
       <Card>
         <CardHeader>

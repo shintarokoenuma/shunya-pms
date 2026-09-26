@@ -20,9 +20,12 @@ import { deletePurchaseOrder } from "@/lib/actions/purchase-orders"
 export function PurchaseOrderDeleteButton({
   id,
   poNumber,
+  lockMessage = null,
 }: {
   id: string
   poNumber: string
+  /** B-109 PR-6（§5-3）: 締めた期間なら無効（title に文） */
+  lockMessage?: string | null
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -45,7 +48,7 @@ export function PurchaseOrderDeleteButton({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" disabled={!!lockMessage} title={lockMessage ?? undefined}>
           <Trash2 className="mr-1 h-4 w-4" />
           削除
         </Button>
