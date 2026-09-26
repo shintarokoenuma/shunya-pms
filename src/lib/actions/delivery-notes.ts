@@ -1,10 +1,12 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
-import { Prisma, DeliveryLineKind, DeliveryNoteStatus, SalesOrderStatus } from "@prisma/client"
+import { CounterpartType, Prisma, DeliveryLineKind, DeliveryNoteStatus, SalesOrderStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { COMPANY_PROFILE } from "@/lib/constants/company-profile"
+import { checkPeriodLock } from "@/lib/period-close/lock"
+import { toYmd } from "@/lib/calc/invoice-period"
 import {
   deliveryNoteInputSchema,
   deliveryNoteListParamsSchema,
@@ -34,7 +36,11 @@ import {
  * - B-114 PR-1: 量産行（受注の SKU・skuId / soId / soItemId）をサーバで検証して保存し、
  *   納品完了（DELIVERED / RECEIVED）のとき SoItem / Sku の納品済み数を算出し直す（D-17）。
  *   ブリーフ: docs/specs/b-114-pr1-implementation-brief-2026-09-22.md §2-5 / §2-6
+ * - B-109 PR-6（B-123・§3）: 締めた期間（CLIENT × deliveryDate）の作成・編集・状態の変更・削除は
+ *   checkPeriodLock（src/lib/period-close/lock.ts）で止める。tx の中で書く action は同じ tx で判定する。
  */
+/** B-109 PR-6（B-123）: 締めの判定に落ちたとき tx を中断するための例外（何も書かない・AuditLog も書かない） */
+class PeriodLockedError extends Error {}
 
 export type ActionResult<T = void> =
   | { ok: true; data: T extends void ? undefined : T }
@@ -743,6 +749,7 @@ async function insertDeliveryNote(
   | { ok: false; error: string }
 > {
   const prefix = deliveryNumberPrefix(new Date().getFullYear())
+  const deliveryYmd = toYmd(p.deliveryDate)
   let created: { id: string; deliveryNumber: string } | null = null
   let lastError: unknown = null
 
@@ -750,6 +757,9 @@ async function insertDeliveryNote(
     try {
       created = await prisma.$transaction(
         async (tx) => {
+          // B-109 PR-6（§3）: 締めた期間の日付の納品書は作らない（同じ tx で判定）
+          const lock = await checkPeriodLock(tx, companyId, CounterpartType.CLIENT, p.clientId, deliveryYmd)
+          if (lock.locked) throw new PeriodLockedError(lock.error)
           const deliveryNumber = await computeNextDeliveryNumber(tx.deliveryNote, companyId, prefix)
           const dn = await tx.deliveryNote.create({
             data: {
@@ -794,6 +804,7 @@ async function insertDeliveryNote(
       if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
         continue // deliveryNumber unique 衝突：再試行
       }
+      if (e instanceof PeriodLockedError) return { ok: false, error: e.message }
       throw e
     }
   }
@@ -885,7 +896,7 @@ export async function updateDeliveryNote(
 
     const existing = await prisma.deliveryNote.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
-      select: { id: true, status: true, deliveryNumber: true },
+      select: { id: true, status: true, deliveryNumber: true, clientId: true, deliveryDate: true },
     })
     if (!existing) return { ok: false, error: "納品書が見つかりません" }
     // DRAFT のみ編集可（§9 の削除・§4-3「発行後は不変」と同じ線）。
@@ -908,6 +919,13 @@ export async function updateDeliveryNote(
 
     await prisma.$transaction(
       async (tx) => {
+        // B-109 PR-6（§3）: 変更前と変更後の両方を判定（締めた月へ移すのも、締めた月から出すのも止める）
+        const before = await checkPeriodLock(
+          tx, sess.companyId, CounterpartType.CLIENT, existing.clientId, toYmd(existing.deliveryDate),
+        )
+        if (before.locked) throw new PeriodLockedError(before.error)
+        const after = await checkPeriodLock(tx, sess.companyId, CounterpartType.CLIENT, p.clientId, toYmd(p.deliveryDate))
+        if (after.locked) throw new PeriodLockedError(after.error)
         await tx.deliveryNote.update({
           where: { id },
           // deliveryNumber / status は更新しない（保存済み番号を保持・DRAFT のまま）。
@@ -995,6 +1013,8 @@ export async function updateDeliveryNoteStatus(
       select: {
         id: true,
         status: true,
+        clientId: true,
+        deliveryDate: true,
         items: { select: { soItemId: true, skuId: true } },
       },
     })
@@ -1006,6 +1026,11 @@ export async function updateDeliveryNoteStatus(
     const skuIds = existing.items.map((it) => it.skuId).filter((v): v is string => !!v)
     await prisma.$transaction(
       async (tx) => {
+        // B-109 PR-6（§3）: 締めた期間の納品書は状態を変えない（すべての変更・同じ tx で判定）
+        const lock = await checkPeriodLock(
+          tx, sess.companyId, CounterpartType.CLIENT, existing.clientId, toYmd(existing.deliveryDate),
+        )
+        if (lock.locked) throw new PeriodLockedError(lock.error)
         await tx.deliveryNote.update({ where: { id }, data: { status } })
         await tx.auditLog.create({
           data: {
@@ -1048,7 +1073,7 @@ export async function softDeleteDeliveryNote(
 
     const existing = await prisma.deliveryNote.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
-      select: { id: true, status: true },
+      select: { id: true, status: true, clientId: true, deliveryDate: true },
     })
     if (!existing) return { ok: false, error: "納品書が見つかりません" }
     // §9: DRAFT 以外の論理削除は不可（発行後は CANCELLED で一覧に残す）。
@@ -1058,6 +1083,11 @@ export async function softDeleteDeliveryNote(
         error: "ドラフト以外は削除できません（発行後はキャンセルで残します）",
       }
     }
+    // B-109 PR-6（§3）: 締めた期間の納品書は削除しない
+    const lock = await checkPeriodLock(
+      prisma, sess.companyId, CounterpartType.CLIENT, existing.clientId, toYmd(existing.deliveryDate),
+    )
+    if (lock.locked) return { ok: false, error: lock.error }
 
     await prisma.deliveryNote.update({
       where: { id },

@@ -14,13 +14,18 @@ import {
 import { updateDeliveryNoteStatus } from "@/lib/actions/delivery-notes"
 import { DELIVERY_NOTE_STATUS_OPTIONS } from "./labels"
 
-/** §8: 選択肢は DRAFT / SHIPPED / DELIVERED / CANCELLED の4値のみ。 */
+/**
+ * §8: 選択肢は DRAFT / SHIPPED / DELIVERED / CANCELLED の4値のみ。
+ * B-109 PR-6（§5-3）: lockMessage があれば無効にし、title に文を出す（サーバ側の判定が正・画面は案内）。
+ */
 export function DeliveryNoteStatusControl({
   id,
   status,
+  lockMessage = null,
 }: {
   id: string
   status: DeliveryNoteStatus
+  lockMessage?: string | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -38,8 +43,8 @@ export function DeliveryNoteStatusControl({
   }
 
   return (
-    <Select value={status} onValueChange={handleChange} disabled={isPending}>
-      <SelectTrigger className="h-8 w-[150px]">
+    <Select value={status} onValueChange={handleChange} disabled={isPending || !!lockMessage}>
+      <SelectTrigger className="h-8 w-[150px]" title={lockMessage ?? undefined}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

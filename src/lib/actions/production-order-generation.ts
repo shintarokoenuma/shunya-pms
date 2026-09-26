@@ -1,12 +1,15 @@
 "use server"
 
 import {
+  CounterpartType,
   WorkOrderType,
   WorkOrderCategory,
   ProgressTaskPhase,
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkPeriodLock } from "@/lib/period-close/lock"
+import { todayYmdJst } from "@/lib/calc/invoice-period"
 import {
   getProductionOrderGenerationContext,
   type ActionResult,
@@ -318,6 +321,31 @@ export async function generateProductionOrders(
         costCategoryId: line.costCategoryId,
       }),
     )
+  }
+
+  // === B-109 PR-6（§3）: 生成の前に全発注先の締めをまとめて判定（途中で止まると半端に作られるため）===
+  {
+    const session = await auth()
+    const companyId = session?.user?.companyId
+    if (!companyId) return { ok: false, error: "認証されていません" }
+    const today = todayYmdJst()
+    const targets: { type: CounterpartType; id: string }[] = []
+    for (const [supplierId, items] of poItemsBySupplier) {
+      if (items.length > 0) targets.push({ type: CounterpartType.SUPPLIER, id: supplierId })
+    }
+    for (const bucket of woByTarget.values()) {
+      if (bucket.items.length === 0) continue
+      targets.push({
+        type: bucket.targetType === "factory" ? CounterpartType.FACTORY : CounterpartType.CONTRACTOR,
+        id: bucket.targetId,
+      })
+    }
+    for (const t of targets) {
+      const lock = await checkPeriodLock(prisma, companyId, t.type, t.id, today)
+      if (lock.locked) {
+        return { ok: false, error: `締め中の発注先があるため生成しません。${lock.error}` }
+      }
+    }
   }
 
   // === 生成実行（非アトミック・失敗時は生成済みを報告して停止）===

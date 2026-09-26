@@ -32,9 +32,12 @@ import { fmtYen, fmtYmd } from "../../invoices/_components/labels"
 export function PaymentCancelDialog({
   paymentId,
   paymentNumber,
+  lockMessage = null,
 }: {
   paymentId: string
   paymentNumber: string
+  /** B-109 PR-6（P6-D7・§5-3）: 締めた期間の入金は「取消」を無効にし title に文 */
+  lockMessage?: string | null
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -77,7 +80,7 @@ export function PaymentCancelDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
-        <Button type="button" variant="outline" size="sm">
+        <Button type="button" variant="outline" size="sm" disabled={!!lockMessage} title={lockMessage ?? undefined}>
           取消
         </Button>
       </DialogTrigger>

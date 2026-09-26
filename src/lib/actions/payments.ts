@@ -9,6 +9,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkPeriodLock } from "@/lib/period-close/lock"
 import { clientPaymentCreateSchema, clientPaymentCancelSchema } from "@/lib/validators/payment"
 import { fromYmd, toYmd } from "@/lib/calc/invoice-period"
 import { findInvoicesCoveringPayment } from "@/lib/calc/uncovered-payments"
@@ -25,7 +26,12 @@ import {
  * - 採番 PAY-{年}-{4桁}（delivery-notes の computeNextDeliveryNumber と同型・deletedAt で絞らない）。
  * - 予定日＝入金日・状態＝CONFIRMED（実績の記録なので予定と実績が同じ）。
  * - ★Payment は TENANT_MODELS に無いため companyId / deletedAt を必ず明示する。
+ * - B-109 PR-6（B-123・P6-D7）: 締めた期間（CLIENT × 入金日）の入金は作成も取消もできない。
+ *   入金日は actualPaymentDate ?? scheduledDate。判定は checkPeriodLock・同じ tx で行う。
  */
+
+/** B-109 PR-6（B-123）: 締めの判定に落ちたとき tx を中断するための例外（何も書かない・AuditLog も書かない） */
+class PeriodLockedError extends Error {}
 
 export type ActionResult<T = void> =
   | { ok: true; data: T extends void ? undefined : T }
@@ -165,6 +171,9 @@ export async function createClientPayment(
       try {
         created = await prisma.$transaction(
           async (tx) => {
+            // B-109 PR-6（P6-D7）: 締めた期間の入金日の入金は作らない（同じ tx で判定）
+            const lock = await checkPeriodLock(tx, sess.companyId, CounterpartType.CLIENT, client.id, data.paymentDate)
+            if (lock.locked) throw new PeriodLockedError(lock.error)
             const paymentNumber = await computeNextPaymentNumber(tx.payment, sess.companyId, prefix)
             const p = await tx.payment.create({
               data: {
@@ -213,6 +222,7 @@ export async function createClientPayment(
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
           continue
         }
+        if (e instanceof PeriodLockedError) return { ok: false, error: e.message }
         throw e
       }
     }
@@ -370,6 +380,9 @@ export async function cancelClientPayment(input: unknown): Promise<ActionResult<
     const paymentDate = toYmd(existing.actualPaymentDate ?? existing.scheduledDate)
     await prisma.$transaction(
       async (tx) => {
+        // B-109 PR-6（P6-D7）: 締めた期間の入金は取消しない（同じ tx で判定）
+        const lock = await checkPeriodLock(tx, sess.companyId, CounterpartType.CLIENT, existing.counterpartId, paymentDate)
+        if (lock.locked) throw new PeriodLockedError(lock.error)
         await tx.payment.update({
           where: { id },
           data: { status: PaymentStatus.CANCELLED },

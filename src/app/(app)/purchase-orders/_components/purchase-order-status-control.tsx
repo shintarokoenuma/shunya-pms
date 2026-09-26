@@ -14,12 +14,15 @@ import {
 import { updatePurchaseOrderStatus } from "@/lib/actions/purchase-orders"
 import { PURCHASE_ORDER_STATUS_OPTIONS } from "./labels"
 
+/** B-109 PR-6（P6-D8・§5-3）: lockMessage があれば CANCELLED だけ選べなくする（進捗の状態は変えられる） */
 export function PurchaseOrderStatusControl({
   id,
   status,
+  lockMessage = null,
 }: {
   id: string
   status: PurchaseOrderStatus
+  lockMessage?: string | null
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -43,7 +46,12 @@ export function PurchaseOrderStatusControl({
       </SelectTrigger>
       <SelectContent>
         {PURCHASE_ORDER_STATUS_OPTIONS.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
+          <SelectItem
+            key={o.value}
+            value={o.value}
+            disabled={!!lockMessage && o.value === "CANCELLED"}
+            title={lockMessage && o.value === "CANCELLED" ? lockMessage : undefined}
+          >
             {o.label}
           </SelectItem>
         ))}

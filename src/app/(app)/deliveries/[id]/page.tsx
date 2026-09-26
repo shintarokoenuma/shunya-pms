@@ -1,7 +1,12 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft, Pencil } from "lucide-react"
+import { CounterpartType } from "@prisma/client"
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+import { checkPeriodLock } from "@/lib/period-close/lock"
+import { toYmd } from "@/lib/calc/invoice-period"
+import { PeriodLockBanner } from "@/components/period-close/period-lock-banner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -57,6 +62,11 @@ export default async function DeliveryNoteDetailPage({
   const isDraft = dn.status === "DRAFT"
   // B-109 PR-3（P3-D9・P3-D10）: 前受金の伝票（DEPOSIT 行を持つ）はバッジを出し、フォームで編集させない
   const isDepositNote = dn.items.some((it) => it.lineKind === "DEPOSIT")
+  // B-109 PR-6（§5-3）: 締めた期間なら帯を出し、止まる操作のボタンを無効にする（判定は §3 と同じ関数）
+  const lock = await checkPeriodLock(
+    prisma, session.user.companyId, CounterpartType.CLIENT, dn.clientId, toYmd(dn.deliveryDate),
+  )
+  const lockMessage = lock.locked ? lock.error : null
 
   return (
     <div className="space-y-6 p-6">
@@ -91,24 +101,34 @@ export default async function DeliveryNoteDetailPage({
               fallbackName={`${dn.deliveryNumber}.pdf`}
               label="納品書 PDF"
             />
-            <DeliveryNoteStatusControl id={dn.id} status={dn.status} />
+            <DeliveryNoteStatusControl id={dn.id} status={dn.status} lockMessage={lockMessage} />
             {isDraft && !isDepositNote && (
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/deliveries/${dn.id}/edit`}>
+              lockMessage ? (
+                <Button variant="outline" size="sm" disabled title={lockMessage}>
                   <Pencil className="mr-1 h-4 w-4" />
                   編集
-                </Link>
-              </Button>
+                </Button>
+              ) : (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/deliveries/${dn.id}/edit`}>
+                    <Pencil className="mr-1 h-4 w-4" />
+                    編集
+                  </Link>
+                </Button>
+              )
             )}
             {isDraft && (
               <DeliveryNoteDeleteButton
                 id={dn.id}
                 deliveryNumber={dn.deliveryNumber}
+                lockMessage={lockMessage}
               />
             )}
           </div>
         </div>
       </div>
+
+      {lock.locked && <PeriodLockBanner period={lock.period} />}
 
       <Card>
         <CardHeader>

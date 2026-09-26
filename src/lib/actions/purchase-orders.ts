@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import {
+  CounterpartType,
   Prisma,
   PurchaseOrderType,
   AllocationType,
@@ -16,6 +17,8 @@ import {
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { EXTERNAL_COST_CATEGORY_ORDER } from "@/lib/constants/cost-category-types"
+import { checkPeriodLock } from "@/lib/period-close/lock"
+import { todayYmdJst, toYmd } from "@/lib/calc/invoice-period"
 import {
   purchaseOrderInputSchema,
   purchaseOrderListParamsSchema,
@@ -47,7 +50,11 @@ async function recomputeLinks(
  *   sampleProductionId があれば SampleProduction.productId を primaryProductId に導出。
  * - ヘッダ金額集計（subtotal/totalAmount 等）は S-4c 送り（null のまま）。配分(SHARED/STOCK)も後続。
  * - house style: @relation traversal/include 不使用・明示クエリ + in 句一括結合。
+ * - B-109 PR-6（B-123・P6-D8）: 締めた期間（SUPPLIER × orderDate）の PO は作成・編集・削除・CANCELLED への変更を止める。
+ *   進捗の状態（CANCELLED 以外）は変えられる。作成時の判定は JST の今日（orderDate は @default(now())）。
  */
+/** B-109 PR-6（B-123）: 締めの判定に落ちたとき tx を中断するための例外（何も書かない・AuditLog も書かない） */
+class PeriodLockedError extends Error {}
 
 // =============================================================================
 // 戻り値の型
@@ -536,6 +543,9 @@ export async function createPurchaseOrder(
     for (let attempt = 0; attempt < CREATE_MAX_RETRIES; attempt++) {
       try {
         created = await prisma.$transaction(async (tx) => {
+          // B-109 PR-6（§3）: 締めた期間（今日）の発注先には作らない（同じ tx で判定）
+          const lock = await checkPeriodLock(tx, sess.companyId, CounterpartType.SUPPLIER, data.supplierId, todayYmdJst())
+          if (lock.locked) throw new PeriodLockedError(lock.error)
           const poNumber = await computeNextPoNumber(
             tx.purchaseOrder,
             sess.companyId,
@@ -575,6 +585,7 @@ export async function createPurchaseOrder(
         ) {
           continue // poNumber unique 衝突：再試行
         }
+        if (e instanceof PeriodLockedError) return { ok: false, error: e.message }
         throw e
       }
     }
@@ -716,6 +727,14 @@ export async function updatePurchaseOrder(
     const itemRows = buildItemRows(data)
 
     const updated = await prisma.$transaction(async (tx) => {
+      // B-109 PR-6（§3）: 変更前の発注先、仕入先を変えるなら変更後も判定（orderDate は変わらない）
+      const orderYmd = toYmd(existing.orderDate)
+      const before = await checkPeriodLock(tx, sess.companyId, CounterpartType.SUPPLIER, existing.supplierId, orderYmd)
+      if (before.locked) throw new PeriodLockedError(before.error)
+      if (existing.supplierId !== data.supplierId) {
+        const after = await checkPeriodLock(tx, sess.companyId, CounterpartType.SUPPLIER, data.supplierId, orderYmd)
+        if (after.locked) throw new PeriodLockedError(after.error)
+      }
       const row = await tx.purchaseOrder.update({
         where: { id },
         data: {
@@ -785,9 +804,17 @@ export async function deletePurchaseOrder(
         poNumber: true,
         sampleProductionId: true,
         progressTaskId: true,
+        supplierId: true,
+        orderDate: true,
       },
     })
     if (!existing) return { ok: false, error: "発注が見つかりません" }
+
+    // B-109 PR-6（§3）: 締めた期間の PO は削除しない
+    const lock = await checkPeriodLock(
+      prisma, sess.companyId, CounterpartType.SUPPLIER, existing.supplierId, toYmd(existing.orderDate),
+    )
+    if (lock.locked) return { ok: false, error: lock.error }
 
     // QE-0d 削除ガード: purchaseOrderId で参照中の BomItem（コスト引き当て元）。
     // markings.ts:deleteMarkingRecord を鏡写し。PO は soft-delete・id 不変のため成立。
@@ -847,10 +874,20 @@ export async function updatePurchaseOrderStatus(
         status: true,
         progressTaskId: true,
         sampleProductionId: true,
+        supplierId: true,
+        orderDate: true,
       },
     })
     if (!existing) return { ok: false, error: "発注が見つかりません" }
     if (existing.status === status) return { ok: true, data: { id } }
+
+    // B-109 PR-6（P6-D8）: 締めた期間でも進捗の状態は変えられる。止めるのは CANCELLED への変更だけ
+    if (status === PurchaseOrderStatus.CANCELLED) {
+      const lock = await checkPeriodLock(
+        prisma, sess.companyId, CounterpartType.SUPPLIER, existing.supplierId, toYmd(existing.orderDate),
+      )
+      if (lock.locked) return { ok: false, error: lock.error }
+    }
 
     await prisma.purchaseOrder.update({ where: { id }, data: { status } })
 

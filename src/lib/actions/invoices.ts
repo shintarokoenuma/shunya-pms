@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 import {
+  CounterpartType,
   Prisma,
   InvoiceStatus,
   InvoiceType,
@@ -12,6 +13,7 @@ import {
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { COMPANY_PROFILE } from "@/lib/constants/company-profile"
+import { checkPeriodLock } from "@/lib/period-close/lock"
 import { DELIVERY_NOTE_DELIVERED_STATUSES } from "@/lib/validators/delivery-note"
 import {
   invoiceCreateSchema,
@@ -45,7 +47,11 @@ import { depositSummaryFor, loadDepositSummaries } from "@/lib/billing/deposits"
  * - ★発行済み（SENT 以降）の請求書の金額を再計算する処理は書かない（D-35）。
  * - ★Invoice / InvoiceItem は TENANT_MODELS に無いため companyId / deletedAt を必ず明示する。
  * - 期間は periodStartDate / periodEndDate に保存する（導出しない。発行済みの期間が後からズレないように）。invoiceDate は請求日（＝締め日）。
+ * - B-109 PR-6（B-123・P6-D13）: 締めた期間（CLIENT × periodEndDate）の請求書は作成も状態の変更もできない。
+ *   判定は checkPeriodLock（src/lib/period-close/lock.ts）・同じ tx で行う。
  */
+/** B-109 PR-6（B-123）: 締めの判定に落ちたとき tx を中断するための例外（何も書かない・AuditLog も書かない） */
+class PeriodLockedError extends Error {}
 
 export type ActionResult<T = void> =
   | { ok: true; data: T extends void ? undefined : T }
@@ -507,6 +513,9 @@ export async function createInvoice(
       try {
         created = await prisma.$transaction(
           async (tx: TxClient) => {
+            // B-109 PR-6（P6-D13）: 締めた期間（periodEnd）の請求書は作らない（同じ tx で判定）
+            const lock = await checkPeriodLock(tx, sess.companyId, CounterpartType.CLIENT, client.id, data.periodEnd)
+            if (lock.locked) throw new PeriodLockedError(lock.error)
             // ★二重請求の防止（サーバ側を正とする）: 取消されていない請求書に既に載っていれば中断
             if (itemIds.length > 0) {
               const dup = await tx.invoiceItem.findFirst({
@@ -623,7 +632,7 @@ export async function createInvoice(
         if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
           continue // invoiceNumber unique 衝突：再試行
         }
-        if (e instanceof DoubleBillingError) {
+        if (e instanceof DoubleBillingError || e instanceof PeriodLockedError) {
           return { ok: false, error: e.message }
         }
         throw e
@@ -916,7 +925,7 @@ export async function updateInvoiceStatus(
 
     const existing = await prisma.invoice.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
-      select: { id: true, status: true, invoiceNumber: true },
+      select: { id: true, status: true, invoiceNumber: true, clientId: true, periodEndDate: true },
     })
     if (!existing) return { ok: false, error: "請求書が見つかりません" }
     if (existing.status === status) return { ok: true, data: { id } }
@@ -928,6 +937,11 @@ export async function updateInvoiceStatus(
 
     await prisma.$transaction(
       async (tx: TxClient) => {
+        // B-109 PR-6（P6-D13）: 締めた期間の請求書は状態を変えない（送付済み・取消とも・同じ tx で判定）
+        const lock = await checkPeriodLock(
+          tx, sess.companyId, CounterpartType.CLIENT, existing.clientId, toYmd(existing.periodEndDate),
+        )
+        if (lock.locked) throw new PeriodLockedError(lock.error)
         await tx.invoice.update({
           where: { id },
           data: {

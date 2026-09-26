@@ -1,7 +1,12 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft, Pencil } from "lucide-react"
+import { CounterpartType } from "@prisma/client"
 import { auth } from "@/lib/auth"
+import { prisma } from "@/lib/prisma"
+import { checkPeriodLock } from "@/lib/period-close/lock"
+import { toYmd } from "@/lib/calc/invoice-period"
+import { PeriodLockBanner } from "@/components/period-close/period-lock-banner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -47,6 +52,16 @@ export default async function WorkOrderDetailPage({
   if (!result.ok) notFound()
   const wo = result.data
 
+  // B-109 PR-6（P6-D8・§5-3）: 締めた期間なら帯を出し、編集・削除・取消を無効にする（進捗の状態と PDF は押せる）
+  const lock = await checkPeriodLock(
+    prisma,
+    session.user.companyId,
+    wo.factoryId ? CounterpartType.FACTORY : CounterpartType.CONTRACTOR,
+    wo.factoryId ?? wo.contractorId,
+    toYmd(wo.orderDate),
+  )
+  const lockMessage = lock.locked ? lock.error : null
+
   const orderTo = wo.factory
     ? `${wo.factory.factoryCode} ${wo.factory.factoryName}（工場）`
     : wo.contractor
@@ -87,15 +102,22 @@ export default async function WorkOrderDetailPage({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <WorkOrderStatusControl id={wo.id} status={wo.status} />
+            <WorkOrderStatusControl id={wo.id} status={wo.status} lockMessage={lockMessage} />
             {/* B-079: DRAFT のみ編集可（production-axis §2-1） */}
             {wo.status === "DRAFT" && (
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/work-orders/${wo.id}/edit`}>
+              lockMessage ? (
+                <Button variant="outline" size="sm" disabled title={lockMessage}>
                   <Pencil className="mr-1 h-4 w-4" />
                   編集
-                </Link>
-              </Button>
+                </Button>
+              ) : (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/work-orders/${wo.id}/edit`}>
+                    <Pencil className="mr-1 h-4 w-4" />
+                    編集
+                  </Link>
+                </Button>
+              )
             )}
             <OrderPdfPreviewButton
               endpoint="/api/work-orders/pdf"
@@ -103,10 +125,12 @@ export default async function WorkOrderDetailPage({
               id={wo.id}
               fallbackName={`${wo.woNumber}.pdf`}
             />
-            <WorkOrderDeleteButton id={wo.id} woNumber={wo.woNumber} />
+            <WorkOrderDeleteButton id={wo.id} woNumber={wo.woNumber} lockMessage={lockMessage} />
           </div>
         </div>
       </div>
+
+      {lock.locked && <PeriodLockBanner period={lock.period} />}
 
       <Card>
         <CardHeader>

@@ -29,11 +29,14 @@ export function InvoiceStatusActions({
   invoiceNumber,
   status,
   replacedByInvoiceId,
+  lockMessage = null,
 }: {
   id: string
   invoiceNumber: string
   status: InvoiceStatus
   replacedByInvoiceId: string | null
+  /** B-109 PR-6（P6-D13・§5-3）: 締めた期間なら送付済み・取消を無効（title に文） */
+  lockMessage?: string | null
 }) {
   const router = useRouter()
   const [openSend, setOpenSend] = useState(false)
@@ -74,7 +77,7 @@ export function InvoiceStatusActions({
       {status === "DRAFT" && (
         <Dialog open={openSend} onOpenChange={setOpenSend}>
           <DialogTrigger asChild>
-            <Button size="sm">
+            <Button size="sm" disabled={!!lockMessage} title={lockMessage ?? undefined}>
               <Send className="mr-1 h-4 w-4" />
               送付済みにする
             </Button>
@@ -100,7 +103,7 @@ export function InvoiceStatusActions({
       )}
       <Dialog open={openCancel} onOpenChange={setOpenCancel}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" disabled={!!lockMessage} title={lockMessage ?? undefined}>
             <XCircle className="mr-1 h-4 w-4" />
             取消
           </Button>

@@ -1,8 +1,12 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft, Pencil } from "lucide-react"
+import { CounterpartType } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { checkPeriodLock } from "@/lib/period-close/lock"
+import { toYmd } from "@/lib/calc/invoice-period"
+import { PeriodLockBanner } from "@/components/period-close/period-lock-banner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -45,6 +49,12 @@ export default async function PurchaseOrderDetailPage({
   const result = await getPurchaseOrder(id)
   if (!result.ok) notFound()
   const po = result.data
+
+  // B-109 PR-6（P6-D8・§5-3）: 締めた期間なら帯を出し、編集・削除・取消を無効にする（進捗の状態と PDF は押せる）
+  const lock = await checkPeriodLock(
+    prisma, session.user.companyId, CounterpartType.SUPPLIER, po.supplierId, toYmd(po.orderDate),
+  )
+  const lockMessage = lock.locked ? lock.error : null
 
   // B-065/(B) Part7: 明細のカラーウェイ名を解決（生成された色別生地行の表示・編集フォームと表記統一）。
   const colorwayIds = [
@@ -98,7 +108,7 @@ export default async function PurchaseOrderDetailPage({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <PurchaseOrderStatusControl id={po.id} status={po.status} />
+            <PurchaseOrderStatusControl id={po.id} status={po.status} lockMessage={lockMessage} />
             <OrderPdfPreviewButton
               endpoint="/api/purchase-orders/pdf"
               kind="purchase-order"
@@ -106,17 +116,26 @@ export default async function PurchaseOrderDetailPage({
               fallbackName={`${po.poNumber}.pdf`}
             />
             {po.status === "DRAFT" && (
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/purchase-orders/${id}/edit`}>
+              lockMessage ? (
+                <Button variant="outline" size="sm" disabled title={lockMessage}>
                   <Pencil className="mr-1 h-4 w-4" />
                   編集
-                </Link>
-              </Button>
+                </Button>
+              ) : (
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/purchase-orders/${id}/edit`}>
+                    <Pencil className="mr-1 h-4 w-4" />
+                    編集
+                  </Link>
+                </Button>
+              )
             )}
-            <PurchaseOrderDeleteButton id={po.id} poNumber={po.poNumber} />
+            <PurchaseOrderDeleteButton id={po.id} poNumber={po.poNumber} lockMessage={lockMessage} />
           </div>
         </div>
       </div>
+
+      {lock.locked && <PeriodLockBanner period={lock.period} />}
 
       <Card>
         <CardHeader>

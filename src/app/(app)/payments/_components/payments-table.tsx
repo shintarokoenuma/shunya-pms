@@ -23,10 +23,13 @@ export function PaymentsTable({
   items,
   total,
   statusFilter = "active",
+  lockedById = {},
 }: {
   items: ClientPaymentRow[]
   total: number
   statusFilter?: "active" | "cancelled"
+  /** B-109 PR-6（§5-3）: 締めた期間の入金 id → 案内の文（取消を無効にする） */
+  lockedById?: Record<string, string>
 }) {
   if (items.length === 0) {
     return (
@@ -67,7 +70,11 @@ export function PaymentsTable({
                   {p.status === "CANCELLED" ? (
                     <Badge variant="destructive">取消済み</Badge>
                   ) : p.status === "CONFIRMED" ? (
-                    <PaymentCancelDialog paymentId={p.id} paymentNumber={p.paymentNumber} />
+                    <PaymentCancelDialog
+                      paymentId={p.id}
+                      paymentNumber={p.paymentNumber}
+                      lockMessage={lockedById[p.id] ?? null}
+                    />
                   ) : null}
                 </TableCell>
               </TableRow>
