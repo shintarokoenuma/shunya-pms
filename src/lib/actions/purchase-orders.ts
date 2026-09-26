@@ -18,7 +18,7 @@ import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { EXTERNAL_COST_CATEGORY_ORDER } from "@/lib/constants/cost-category-types"
 import { checkPeriodLock } from "@/lib/period-close/lock"
-import { todayYmdJst, toYmd } from "@/lib/calc/invoice-period"
+import { fromYmd, todayYmdJst, toYmd } from "@/lib/calc/invoice-period"
 import {
   purchaseOrderInputSchema,
   purchaseOrderListParamsSchema,
@@ -536,6 +536,9 @@ export async function createPurchaseOrder(
       : null
     const itemRows = buildItemRows(data)
     const prefix = poNumberPrefix(new Date().getFullYear())
+    // B-109 PR-6（P6-D16）: 発注日は JST の今日。@default(now()) は UTC の日付になり JST 0〜9 時に前日になるため明示する。
+    // 締めの判定と保存に同じ値を使う
+    const orderYmd = todayYmdJst()
 
     let created: { id: string; poNumber: string } | null = null
     let lastError: unknown = null
@@ -544,7 +547,7 @@ export async function createPurchaseOrder(
       try {
         created = await prisma.$transaction(async (tx) => {
           // B-109 PR-6（§3）: 締めた期間（今日）の発注先には作らない（同じ tx で判定）
-          const lock = await checkPeriodLock(tx, sess.companyId, CounterpartType.SUPPLIER, data.supplierId, todayYmdJst())
+          const lock = await checkPeriodLock(tx, sess.companyId, CounterpartType.SUPPLIER, data.supplierId, orderYmd)
           if (lock.locked) throw new PeriodLockedError(lock.error)
           const poNumber = await computeNextPoNumber(
             tx.purchaseOrder,
@@ -565,6 +568,7 @@ export async function createPurchaseOrder(
               description: data.description || null,
               currency: data.currency,
               expectedDeliveryDate: deliveryDate,
+              orderDate: fromYmd(orderYmd),
               status: PurchaseOrderStatus.DRAFT,
               createdByUserId: sess.userId,
             },

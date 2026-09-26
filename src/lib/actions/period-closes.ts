@@ -193,7 +193,7 @@ async function computeCloseWarnings(
       })
     }
 
-    // 納品完了以降の明細のうち、取消されていない請求書に載っていないもの（invoices.ts の候補と同じ条件）
+    // 納品完了以降の明細のうち、取消されていない請求書に載っていないもの（invoices.ts の候補と同じ条件・P6-D15）
     const delivered = await prisma.deliveryNote.findMany({
       where: {
         companyId,
@@ -225,7 +225,7 @@ async function computeCloseWarnings(
         }
       }
       if (count > 0) {
-        out.push({ kind: "DN_UNBILLED", label: "未請求の納品明細", count, numbers: pickNumbers(numbers) })
+        out.push({ kind: "DN_UNBILLED", label: "納品完了・請求書にまだ載っていない明細", count, numbers: pickNumbers(numbers) })
       }
     }
 

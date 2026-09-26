@@ -14,14 +14,15 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { closePeriod, type CloseWarning } from "@/lib/actions/period-closes"
+import { closePeriod, getCloseWarnings, type CloseWarning } from "@/lib/actions/period-closes"
 import type { PERIOD_CLOSE_COUNTERPART_VALUES } from "@/lib/validators/period-close"
 import { fmtMonthPeriod } from "./labels"
 
 /**
  * B-109 PR-6（§5-2）: 「締める」「締め直す」の確認ダイアログ（参考画面の文言）。
- * - 残っている伝票（P6-D10）があれば件数と番号を出す。残っていても締められる。
- * - 仕入先・工場・外注先は 3 行目の文言が違う（P6-D8）。
+ * - P6-D14: 開くたびに getCloseWarnings（期間は props の periodStart / periodEnd）で残っている伝票を数え直す。
+ *   読み込み中は「残っている伝票を確認しています…」。取得に失敗したら props の warnings（一覧を開いた時点の件数）を出す。
+ * - 残っていても締められる（P6-D10）。仕入先・工場・外注先は 3 行目の文言が違う（P6-D8）。
  */
 export function ClosePeriodDialog({
   label,
@@ -40,12 +41,29 @@ export function ClosePeriodDialog({
   month: string
   periodStart: string
   periodEnd: string
+  /** 一覧を開いた時点の件数（取得に失敗したときの代わり） */
   warnings: CloseWarning[]
 }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [isLoading, startLoading] = useTransition()
+  const [fresh, setFresh] = useState<CloseWarning[] | null>(null)
   const isClient = counterpartType === "CLIENT"
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next)
+    if (next) {
+      setFresh(null)
+      startLoading(async () => {
+        const r = await getCloseWarnings(counterpartType, counterpartId, periodStart, periodEnd)
+        // 取得に失敗したら props の warnings を出す（P6-D14）
+        setFresh(r.ok ? r.data : warnings)
+      })
+    }
+  }
+
+  const shown = fresh ?? warnings
 
   const submit = () => {
     startTransition(async () => {
@@ -61,7 +79,7 @@ export function ClosePeriodDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button type="button" size="sm" variant={label === "締める" ? "default" : "outline"}>
           <Lock className="mr-1 h-4 w-4" />
@@ -80,13 +98,18 @@ export function ClosePeriodDialog({
           </DialogDescription>
         </DialogHeader>
 
-        {warnings.length > 0 && (
+        {isLoading ? (
+          <p className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            残っている伝票を確認しています…
+          </p>
+        ) : shown.length > 0 ? (
           <div className="flex gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
             <div className="space-y-1">
               <p>この期間に、まだ処理が済んでいない伝票があります。</p>
               <ul className="list-none space-y-0.5">
-                {warnings.map((w) => (
+                {shown.map((w) => (
                   <li key={w.kind}>
                     ・{w.label}　{w.count}
                     {w.numbers.length > 0 && (
@@ -100,13 +123,13 @@ export function ClosePeriodDialog({
               </ul>
             </div>
           </div>
-        )}
+        ) : null}
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
             やめる
           </Button>
-          <Button type="button" onClick={submit} disabled={isPending}>
+          <Button type="button" onClick={submit} disabled={isPending || isLoading}>
             {isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
             このまま締める
           </Button>

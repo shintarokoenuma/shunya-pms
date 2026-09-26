@@ -649,16 +649,17 @@ export function FactoryForm(props: Props) {
                       <FormItem>
                         <FormLabel>締め日 *</FormLabel>
                         <FormControl>
+                          {/* B-235（P6-D17）: デポジット比率と同じ直し方。入力中は文字列のまま持ち、数値にするのは送信時（zod）。打鍵ごとに Number() に直すと途中の入力が打ち直せない */}
                           <Input
                             type="number"
                             min={1}
                             max={31}
+                            step={1}
+                            inputMode="numeric"
                             placeholder="31"
-                            value={typeof field.value === "number" ? field.value : ""}
+                            value={typeof field.value === "number" || typeof field.value === "string" ? field.value : ""}
                             onChange={(e) =>
-                              field.onChange(
-                                e.target.value === "" ? null : Number(e.target.value)
-                              )
+                              field.onChange(e.target.value === "" ? null : e.target.value)
                             }
                           />
                         </FormControl>
@@ -707,16 +708,17 @@ export function FactoryForm(props: Props) {
                       <FormItem>
                         <FormLabel>支払日 *</FormLabel>
                         <FormControl>
+                          {/* B-235（P6-D17）: デポジット比率と同じ直し方。入力中は文字列のまま持ち、数値にするのは送信時（zod）。打鍵ごとに Number() に直すと途中の入力が打ち直せない */}
                           <Input
                             type="number"
                             min={1}
                             max={31}
+                            step={1}
+                            inputMode="numeric"
                             placeholder="31"
-                            value={typeof field.value === "number" ? field.value : ""}
+                            value={typeof field.value === "number" || typeof field.value === "string" ? field.value : ""}
                             onChange={(e) =>
-                              field.onChange(
-                                e.target.value === "" ? null : Number(e.target.value)
-                              )
+                              field.onChange(e.target.value === "" ? null : e.target.value)
                             }
                           />
                         </FormControl>

@@ -17,7 +17,7 @@ import {
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { checkPeriodLock } from "@/lib/period-close/lock"
-import { todayYmdJst, toYmd } from "@/lib/calc/invoice-period"
+import { fromYmd, todayYmdJst, toYmd } from "@/lib/calc/invoice-period"
 import {
   workOrderInputSchema,
   workOrderListParamsSchema,
@@ -738,6 +738,9 @@ export async function createWorkOrder(
       : null
     const itemRows = buildItemRows(data)
     const prefix = woNumberPrefix(new Date().getFullYear())
+    // B-109 PR-6（P6-D16）: 発注日は JST の今日。@default(now()) は UTC の日付になり JST 0〜9 時に前日になるため明示する。
+    // 締めの判定と保存に同じ値を使う
+    const orderYmd = todayYmdJst()
 
     let created: { id: string; woNumber: string } | null = null
     let lastError: unknown = null
@@ -748,7 +751,7 @@ export async function createWorkOrder(
           async (tx) => {
             // B-109 PR-6（§3）: 締めた期間（今日）の発注先には作らない（同じ tx で判定）
             const cp = woCounterpart(data)
-            const lock = await checkPeriodLock(tx, sess.companyId, cp.type, cp.id, todayYmdJst())
+            const lock = await checkPeriodLock(tx, sess.companyId, cp.type, cp.id, orderYmd)
             if (lock.locked) throw new PeriodLockedError(lock.error)
             const woNumber = await computeNextWoNumber(
               tx.workOrder,
@@ -772,6 +775,7 @@ export async function createWorkOrder(
                 currency: data.currency,
                 plannedStartDate,
                 expectedDeliveryDate: deliveryDate,
+                orderDate: fromYmd(orderYmd),
                 status: WorkOrderStatus.DRAFT,
                 createdByUserId: sess.userId,
               },
