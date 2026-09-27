@@ -17,9 +17,4 @@ export const MEMO_UI_PREFERENCES_DEFAULT: MemoUiPreferences = {
   showEditedMark: true,
 }
 
-/** 会社の既定を更新できる role（管理者相当）。UserRole の実値 OWNER / ADMIN（2026-09-18 実測）。 */
-export const COMPANY_SETTING_MANAGER_ROLES = ["OWNER", "ADMIN"] as const
-
-export function canManageCompanySettings(role: string | null | undefined): boolean {
-  return (COMPANY_SETTING_MANAGER_ROLES as readonly string[]).includes(role ?? "")
-}
+// B-205 PR-2（P2-D5）: 「オーナー・管理者か」の判定は src/lib/permissions.ts の canManageCompany に一本化した

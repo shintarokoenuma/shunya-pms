@@ -5,9 +5,9 @@ import type { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { COMPANY_SETTING_REQUIRED_JSON_DEFAULTS } from "@/lib/company-setting-defaults"
+import { canManageCompany } from "@/lib/permissions"
 import {
   MEMO_UI_PREFERENCES_DEFAULT,
-  canManageCompanySettings,
   type MemoUiPreferences,
 } from "@/lib/types/ui-preferences"
 import {
@@ -75,7 +75,7 @@ export async function getMemoUiPreferences(): Promise<
       ok: true,
       data: {
         prefs: readMemoUiPreferences(row?.uiPreferences ?? null),
-        canManage: canManageCompanySettings(sess.role),
+        canManage: canManageCompany(sess.role),
       },
     }
   } catch (e) {
@@ -92,7 +92,7 @@ export async function updateMemoUiPreferences(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
-    if (sess.role === "EXTERNAL" || !canManageCompanySettings(sess.role)) {
+    if (sess.role === "EXTERNAL" || !canManageCompany(sess.role)) {
       return { ok: false, error: "表示設定を変更できるのは管理者（OWNER / ADMIN）だけです" }
     }
 
