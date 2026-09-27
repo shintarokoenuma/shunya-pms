@@ -6,6 +6,7 @@ import {
   resolveUnitPriceJpy,
   resolveInitialCostPresentedJpy,
 } from "@/lib/rough-estimate/calc"
+import { getCompanyIssuer, type CompanyIssuer } from "@/lib/company-issuer"
 
 /**
  * QE-1R 見積書 PDF（道A・2セクション＋総合計）用に RoughEstimate を正規化した型。
@@ -43,6 +44,8 @@ export type QuotationPdfNoteRow = {
 }
 
 export type QuotationPdfData = {
+  /** B-205 PR-1（P1-D5）: 発行者（そのテナントの Company） */
+  issuer: CompanyIssuer
   issuedAt: Date
   clientName: string
   productRows: QuotationPdfProductRow[]
@@ -227,7 +230,9 @@ export async function getQuotationPdfData(
   const taxJpy = Math.floor(subtotalExTaxJpy * TAX_RATE) // 消費税＝円未満切り捨て。
   const totalIncTaxJpy = subtotalExTaxJpy + taxJpy
 
+  const issuer = await getCompanyIssuer(companyId)
   return {
+    issuer,
     issuedAt: new Date(),
     clientName,
     productRows,

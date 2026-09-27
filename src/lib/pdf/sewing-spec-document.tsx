@@ -1,6 +1,6 @@
 import { Document, Image, Page, StyleSheet, Text, View } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
-import { COMPANY_PROFILE } from "@/lib/constants/company-profile"
+import { issuerAddressLine, issuerTelFaxLine, joinFullWidth, labelMail } from "@/lib/company-issuer"
 import type {
   SewingSpecAccessoryRow,
   SewingSpecPage,
@@ -435,12 +435,12 @@ function HeaderBlock({
         </View>
         <View style={styles.box}>
           <View style={styles.ourRow1}>
-            <Text style={styles.ourName}>{COMPANY_PROFILE.name}</Text>
+            <Text style={styles.ourName}>{data.issuer.name}</Text>
             <Text style={styles.ourStaff}>{`弊社担当 ${data.assignedToName}`}</Text>
           </View>
-          <Text style={styles.small}>{`${COMPANY_PROFILE.postalCode} ${COMPANY_PROFILE.address}`}</Text>
+          <Text style={styles.small}>{issuerAddressLine(data.issuer)}</Text>
           <Text style={styles.small}>
-            {`${COMPANY_PROFILE.tel}　${COMPANY_PROFILE.fax}　${COMPANY_PROFILE.email}`}
+            {joinFullWidth(issuerTelFaxLine(data.issuer), labelMail(data.issuer.email))}
           </Text>
         </View>
       </View>

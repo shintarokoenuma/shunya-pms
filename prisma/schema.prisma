@@ -54,6 +54,10 @@ model Company {
   phone      String? @db.VarChar(50)
   email      String? @db.VarChar(255)
   website    String? @db.VarChar(255)
+  // B-205 PR-1（spec v1.0 D-2・D-15）: FAX は番号だけ（「FAX:」は帳票側で付ける）
+  fax        String? @db.VarChar(50)
+  // B-205 PR-1（D-2）: 振込先 { bankName, branchName, accountType, accountNumber, accountHolder }（Invoice.bankInfo と同じ5キー）
+  bankAccount Json? @map("bank_account")
 
   // 設定
   defaultLanguage Language @default(JA) @map("default_language")
@@ -6292,6 +6296,8 @@ model Invoice {
   issuerAddress     String  @map("issuer_address") @db.Text
   issuerPhone       String? @map("issuer_phone") @db.VarChar(50)
   issuerEmail       String? @map("issuer_email") @db.VarChar(255)
+  // B-205 PR-1（D-21）: 作る時に Company.fax を写す（番号だけ）
+  issuerFax         String? @map("issuer_fax") @db.VarChar(50)
 
   // インボイス制度対応（必須）
   issuerTaxId String @map("issuer_tax_id") @db.VarChar(50) // 適格請求書発行事業者番号

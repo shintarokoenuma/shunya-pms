@@ -1,6 +1,7 @@
 import { Prisma, Currency } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { primaryProductCode } from "@/lib/utils/product-code"
+import { getCompanyIssuer, type CompanyIssuer } from "@/lib/company-issuer"
 
 /**
  * S-4c-2: 発注書 PDF 用に PO/WO を正規化した型。
@@ -25,6 +26,8 @@ export type OrderPdfTarget = {
 }
 
 export type OrderPdfData = {
+  /** B-205 PR-1（P1-D5）: 発注元（そのテナントの Company）。document は data.issuer だけを読む */
+  issuer: CompanyIssuer
   docKind: "PO" | "WO"
   docNumber: string
   orderDate: Date
@@ -99,6 +102,7 @@ export async function getOrderPdfData(
   id: string,
   companyId: string,
 ): Promise<OrderPdfData | null> {
+  const issuer = await getCompanyIssuer(companyId)
   if (type === "po") {
     const po = await prisma.purchaseOrder.findFirst({
       where: { id, companyId, deletedAt: null },
@@ -144,6 +148,7 @@ export async function getOrderPdfData(
     }
 
     return finalize({
+      issuer,
       docKind: "PO",
       docNumber: po.poNumber,
       orderDate: po.orderDate,
@@ -204,6 +209,7 @@ export async function getOrderPdfData(
   ])
 
   return finalize({
+    issuer,
     docKind: "WO",
     docNumber: wo.woNumber,
     orderDate: wo.orderDate,
