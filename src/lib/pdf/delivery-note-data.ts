@@ -2,6 +2,7 @@ import type { DeliveryLineKind, DeliveryNoteStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { toYmd } from "@/lib/calc/invoice-period"
 import { pdfText } from "./invoice-rows"
+import { getCompanyIssuer, type CompanyIssuer } from "@/lib/company-issuer"
 
 /**
  * B-109 PR-4（P4-D12〜D14）: 納品書 PDF 用のデータ組み立て（companyId・deletedAt で絞る）。
@@ -23,6 +24,8 @@ export type DeliveryNotePdfItem = {
 }
 
 export type DeliveryNotePdfData = {
+  /** B-205 PR-1（P1-D5）: 発行者（そのテナントの Company）。document は data.issuer だけを読む */
+  issuer: CompanyIssuer
   deliveryNumber: string
   status: DeliveryNoteStatus
   /** yyyy-MM-dd */
@@ -73,7 +76,9 @@ export async function getDeliveryNotePdfData(
       })
     : []
 
+  const issuer = await getCompanyIssuer(companyId)
   return {
+    issuer,
     deliveryNumber: row.deliveryNumber,
     status: row.status,
     deliveryDate: toYmd(row.deliveryDate),

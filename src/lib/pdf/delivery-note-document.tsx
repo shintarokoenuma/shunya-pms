@@ -1,6 +1,6 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
-import { COMPANY_PROFILE } from "@/lib/constants/company-profile"
+import { issuerAddressLine, issuerTelFaxLine, labelMail } from "@/lib/company-issuer"
 import type { DeliveryNotePdfData } from "./delivery-note-data"
 import { NO_BREAK, NO_HYPHEN_BREAK, numText, yenText, ymdSlash } from "./invoice-rows"
 
@@ -11,7 +11,7 @@ registerPdfFonts()
  * - 消費税・税込合計は出さない（D-40・P4-D12）。showAmounts が false なら 単価・金額・小計 を出さない
  * - 前受金・充当の行は品名の横に小さく「前受金」「前受金充当」。数量合計は totalQuantity（前受金の行を含まない）
  * - 右下に受領印の欄（受領日・受領印の枠）。取消は「取消」（P4-D13）
- * - 発行者は COMPANY_PROFILE（登録番号は載せない）
+ * - 発行者はそのテナントの Company（data.issuer・B-205 PR-1）。登録番号は載せない
  */
 const STAMP_BOX_PT = 57 // 約 20mm
 
@@ -91,14 +91,10 @@ function DeliveryNotePage({ data }: { data: DeliveryNotePdfData }) {
           <Text style={styles.shipToLine}>下記のとおり納品いたします。</Text>
         </View>
         <View style={styles.issuer}>
-          <Text style={styles.issuerName}>{COMPANY_PROFILE.name}</Text>
-          <Text style={styles.small}>
-            {COMPANY_PROFILE.postalCode} {COMPANY_PROFILE.address}
-          </Text>
-          <Text style={styles.small}>
-            {COMPANY_PROFILE.tel}　{COMPANY_PROFILE.fax}
-          </Text>
-          <Text style={styles.small}>{COMPANY_PROFILE.email}</Text>
+          <Text style={styles.issuerName}>{data.issuer.name}</Text>
+          <Text style={styles.small}>{issuerAddressLine(data.issuer)}</Text>
+          <Text style={styles.small}>{issuerTelFaxLine(data.issuer)}</Text>
+          <Text style={styles.small}>{labelMail(data.issuer.email)}</Text>
         </View>
       </View>
 

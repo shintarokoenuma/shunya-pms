@@ -19,6 +19,7 @@ import {
 import { PATTERN_WORK_TYPE_LABELS } from "@/lib/types/pattern-version"
 import { WORK_ORDER_TYPE_LABELS } from "@/lib/constants/work-order-types"
 import type { ProductSketch } from "@/lib/types/product-sketch"
+import { getCompanyIssuer, type CompanyIssuer } from "@/lib/company-issuer"
 
 /**
  * B-054 PR-4a/4b: 縫製仕様書 PDF のデータ取得（order-data.ts と同じく server action は呼ばず prisma を直接引く）。
@@ -99,6 +100,8 @@ export type SewingSpecPage = {
 }
 
 export type SewingSpecPdfData = {
+  /** B-205 PR-1（P1-D5）: 弊社欄（そのテナントの Company） */
+  issuer: CompanyIssuer
   productCode: string
   productName: string
   brandName: string
@@ -473,9 +476,11 @@ export async function getSewingSpecPdfData(
     })
   }
 
+  const issuer = await getCompanyIssuer(companyId)
   return {
     ok: true,
     data: {
+      issuer,
       productCode: product.productCode,
       productName: product.productName || DASH,
       brandName: brand?.brandName || DASH,

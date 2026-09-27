@@ -1,6 +1,7 @@
 import { InvoiceStatus, type PaymentMethod } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
-import { COMPANY_PROFILE, type CompanyBankAccount } from "@/lib/constants/company-profile"
+import type { CompanyBankAccount } from "@/lib/constants/company-profile"
+import { getCompanyIssuer, isBankAccount, issuerAddressLine, labelFax, labelMail, labelTel } from "@/lib/company-issuer"
 import { toYmd } from "@/lib/calc/invoice-period"
 import { listClientPayments } from "@/lib/billing/client-payments"
 import {
@@ -13,8 +14,9 @@ import {
 /**
  * B-109 PR-4: 請求書 PDF 用のデータ組み立て（companyId・deletedAt で絞る）。
  * - 6枠と税の内訳は保存した列をそのまま出す（D-35・PDF 側で計算し直さない）
- * - 発行者欄はスナップショット列（P4-D5）。FAX・MAIL はスナップショットが無いので COMPANY_PROFILE
- * - 振込先は bankInfo（P4-D4）。null（本 PR より前の請求書）なら COMPANY_PROFILE.bank
+ * - 発行者欄はスナップショット列（P4-D5）。写しが空の項目はそのテナントの今の Company（B-205 D-22）
+ * - FAX も写し（issuerFax・D-21）。振込先は bankInfo（P4-D4）。null なら今の Company の振込先（無ければ空欄）
+ * - 「TEL: 」などの頭の文字は PDF 側で付ける。写しが既に付いていれば二重にしない（D-23）
  * - 明細は納品の行＋入金の行を日付順に（P4-D7・P4-D8 は invoice-rows の純関数）
  */
 export type InvoicePdfData = {
@@ -46,7 +48,8 @@ export type InvoicePdfData = {
   taxableAmount8: number | null
   taxAmount8: number | null
   nonTaxableAmount: number
-  bank: CompanyBankAccount
+  /** 振込先。写しも今の Company も無ければ null（空欄で出す・D-3） */
+  bank: CompanyBankAccount | null
   rows: InvoicePdfRow[]
 }
 
@@ -61,14 +64,6 @@ const PAYMENT_METHOD_PDF: Record<PaymentMethod, string> = {
   PAYPAL: "PayPal",
   WISE: "Wise",
   OTHER: "その他",
-}
-
-function isBankAccount(v: unknown): v is CompanyBankAccount {
-  if (!v || typeof v !== "object") return false
-  const o = v as Record<string, unknown>
-  return ["bankName", "branchName", "accountType", "accountNumber", "accountHolder"].every(
-    (k) => typeof o[k] === "string",
-  )
 }
 
 export async function getInvoicePdfData(
@@ -132,6 +127,9 @@ export async function getInvoicePdfData(
       subtotal: it.subtotal.toNumber(),
     }
   })
+  // B-205 PR-1（D-22）: 写しが空の項目の予備は、そのテナントの今の Company
+  const issuer = await getCompanyIssuer(companyId)
+
   const nonTaxableAmount = row.items
     .filter((it) => it.taxClassification !== "STANDARD_10" && it.taxClassification !== "REDUCED_8")
     .reduce((a, it) => a + it.subtotal.toNumber(), 0)
@@ -146,12 +144,12 @@ export async function getInvoicePdfData(
     replacesInvoiceNumber: replaces?.invoiceNumber ?? null,
     billToName: pdfText(row.billToName),
     billToAddress: pdfText(row.billToAddress),
-    issuerName: pdfText(row.issuerName),
-    issuerAddress: pdfText(row.issuerAddress),
-    issuerPhone: pdfText(row.issuerPhone) || COMPANY_PROFILE.tel,
-    issuerFax: COMPANY_PROFILE.fax,
-    issuerEmail: pdfText(row.issuerEmail) || COMPANY_PROFILE.email,
-    issuerTaxId: row.issuerTaxId,
+    issuerName: pdfText(row.issuerName) || issuer.name,
+    issuerAddress: pdfText(row.issuerAddress) || issuerAddressLine(issuer),
+    issuerPhone: labelTel(pdfText(row.issuerPhone) || issuer.phone),
+    issuerFax: labelFax(pdfText(row.issuerFax) || issuer.fax),
+    issuerEmail: labelMail(pdfText(row.issuerEmail) || issuer.email),
+    issuerTaxId: row.issuerTaxId || issuer.taxId || "",
     previousBalanceAmount: row.previousBalanceAmount?.toNumber() ?? 0,
     paymentReceivedAmount: row.paymentReceivedAmount?.toNumber() ?? 0,
     carriedForwardAmount: row.carriedForwardAmount?.toNumber() ?? 0,
@@ -163,7 +161,7 @@ export async function getInvoicePdfData(
     taxableAmount8: row.taxableAmount8?.toNumber() ?? null,
     taxAmount8: row.taxAmount8?.toNumber() ?? null,
     nonTaxableAmount,
-    bank: isBankAccount(row.bankInfo) ? row.bankInfo : COMPANY_PROFILE.bank,
+    bank: isBankAccount(row.bankInfo) ? row.bankInfo : issuer.bank,
     rows: buildInvoiceRows(lines, paymentRows),
   }
 }

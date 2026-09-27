@@ -6,7 +6,7 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
-import { COMPANY_PROFILE } from "@/lib/constants/company-profile"
+import { issuerTelFaxLine, labelMail, labelPostal } from "@/lib/company-issuer"
 import type { OrderPdfData } from "./order-data"
 
 registerPdfFonts()
@@ -133,13 +133,12 @@ function OrderPage({ data }: { data: OrderPdfData }) {
             {data.title ? <Text style={styles.orderToHint}>{data.title}</Text> : null}
           </View>
           <View style={styles.orderFrom}>
-            <Text style={styles.orderFromName}>{COMPANY_PROFILE.name}</Text>
-            <Text style={styles.small}>{COMPANY_PROFILE.postalCode}</Text>
-            <Text style={styles.small}>{COMPANY_PROFILE.address}</Text>
-            <Text style={styles.small}>
-              {COMPANY_PROFILE.tel}　{COMPANY_PROFILE.fax}
-            </Text>
-            <Text style={styles.small}>{COMPANY_PROFILE.email}</Text>
+            {/* B-205 PR-1: 自社情報はそのテナントの Company（data.issuer）。空は空欄（D-3）・頭の文字は帳票側で付ける（D-15） */}
+            <Text style={styles.orderFromName}>{data.issuer.name}</Text>
+            <Text style={styles.small}>{labelPostal(data.issuer.postalCode)}</Text>
+            <Text style={styles.small}>{data.issuer.address ?? ""}</Text>
+            <Text style={styles.small}>{issuerTelFaxLine(data.issuer)}</Text>
+            <Text style={styles.small}>{labelMail(data.issuer.email)}</Text>
           </View>
         </View>
 

@@ -127,7 +127,8 @@ export const NAV_SECTIONS: NavSection[] = [
   },
   {
     items: [
-      { label: "設定", href: "/settings", icon: Settings, enabled: false },
+      // B-205 PR-1: 設定ページ（自社情報・振込先・表示設定）
+      { label: "設定", href: "/settings", icon: Settings, enabled: true },
     ],
   },
 ]

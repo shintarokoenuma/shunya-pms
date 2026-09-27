@@ -1,6 +1,7 @@
 import { Prisma, InitialCostBillingMode } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { primaryProductCode } from "@/lib/utils/product-code"
+import { getCompanyIssuer, type CompanyIssuer } from "@/lib/company-issuer"
 
 /**
  * B-085 量産見積 見積書 PDF（QE-1R 道A 同型・2セクション＋総合計）用に
@@ -42,6 +43,8 @@ export type PeQuotationNoteRow = {
 }
 
 export type PeQuotationPdfData = {
+  /** B-205 PR-1（P1-D5）: 発行者（そのテナントの Company） */
+  issuer: CompanyIssuer
   issuedAt: Date
   clientName: string
   productRows: PeQuotationProductRow[]
@@ -282,7 +285,9 @@ export async function getPeQuotationPdfData(
     separateRows,
   )
 
+  const issuer = await getCompanyIssuer(companyId)
   return {
+    issuer,
     issuedAt: new Date(),
     clientName,
     productRows,

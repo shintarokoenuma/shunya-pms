@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache"
 import { CounterpartType, Prisma, DeliveryLineKind, DeliveryNoteStatus, SalesOrderStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { COMPANY_PROFILE } from "@/lib/constants/company-profile"
+import { getCompanyIssuer, issuerAddressLine } from "@/lib/company-issuer"
 import { checkPeriodLock } from "@/lib/period-close/lock"
 import { toYmd } from "@/lib/calc/invoice-period"
 import {
@@ -206,8 +206,6 @@ function composeAddress(p: AddressParts): string {
   if (line) parts.push(line)
   return parts.join(" ")
 }
-
-const SHIP_FROM_ADDRESS = `${COMPANY_PROFILE.postalCode} ${COMPANY_PROFILE.address}`
 
 // =============================================================================
 // 一覧（§9: 既定は deletedAt IS NULL・CANCELLED は残す）
@@ -750,6 +748,8 @@ async function insertDeliveryNote(
 > {
   const prefix = deliveryNumberPrefix(new Date().getFullYear())
   const deliveryYmd = toYmd(p.deliveryDate)
+  // B-205 PR-1（D-2）: 発送元はそのテナントの Company（空なら空欄・D-3）
+  const issuer = await getCompanyIssuer(companyId)
   let created: { id: string; deliveryNumber: string } | null = null
   let lastError: unknown = null
 
@@ -769,8 +769,8 @@ async function insertDeliveryNote(
               clientId: p.clientId,
               buyerId: p.buyerId,
               deliveryDestinationId: p.deliveryDestinationId,
-              shipFromAddress: SHIP_FROM_ADDRESS,
-              shipFromContact: COMPANY_PROFILE.name,
+              shipFromAddress: issuerAddressLine(issuer),
+              shipFromContact: issuer.name,
               shipToAddress: p.shipToAddress,
               shipToContact: p.shipToContact,
               shipToPhone: p.shipToPhone,
@@ -916,6 +916,8 @@ export async function updateDeliveryNote(
     const prep = await prepareDeliveryNote(sess.companyId, data, { excludeDeliveryNoteId: id })
     if (!prep.ok) return prep
     const p = prep.prepared
+    // B-205 PR-1（D-2）: 発送元はそのテナントの Company
+    const issuer = await getCompanyIssuer(sess.companyId)
 
     await prisma.$transaction(
       async (tx) => {
@@ -933,8 +935,8 @@ export async function updateDeliveryNote(
             clientId: p.clientId,
             buyerId: p.buyerId,
             deliveryDestinationId: p.deliveryDestinationId,
-            shipFromAddress: SHIP_FROM_ADDRESS,
-            shipFromContact: COMPANY_PROFILE.name,
+            shipFromAddress: issuerAddressLine(issuer),
+            shipFromContact: issuer.name,
             shipToAddress: p.shipToAddress,
             shipToContact: p.shipToContact,
             shipToPhone: p.shipToPhone,

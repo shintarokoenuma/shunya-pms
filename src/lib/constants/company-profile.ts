@@ -1,45 +1,13 @@
 /**
- * 発注元（自社）情報 — 発注書 PDF のヘッダ社判ブロック用（S-4c-2・H3）。
- *
- * Company テーブルには postalCode/address/phone/email 列は存在するが FAX 列が無く、
- * dev/本番の company レコードも未入力のため、当面は本定数を発注元情報の正とする。
- * 将来的な設定画面化（DB 化）は別タスク（B 起票）。
+ * B-205 PR-1（spec v1.0 D-2）: 自社情報はテナントごとに Company（DB）に持つ。
+ * 以前ここにあった全テナント共通の固定値（定数の自社情報）は廃止した。
+ * 帳票の自社情報は src/lib/company-issuer.ts の getCompanyIssuer で読む。設定は /settings/company・/settings/bank。
+ * 型 CompanyBankAccount だけをここに残す（Invoice.bankInfo / Company.bankAccount の Json の形・5 キー）。
  */
-export type CompanyProfile = {
-  name: string
-  postalCode: string
-  address: string
-  tel: string
-  fax: string
-  email: string
-  website?: string
-  /** 適格請求書発行事業者の登録番号（B-109 D-5・請求書の issuerTaxId に写す） */
-  taxId: string
-  /** B-109 PR-4（P4-D3）: 振込先。請求書を作るときに Invoice.bankInfo へスナップショットする（P4-D4） */
-  bank: CompanyBankAccount
-}
-
 export type CompanyBankAccount = {
   bankName: string
   branchName: string
   accountType: string
   accountNumber: string
   accountHolder: string
-}
-
-export const COMPANY_PROFILE: CompanyProfile = {
-  name: "株式会社shunya",
-  postalCode: "〒150-0043",
-  address: "東京都渋谷区道玄坂1-22-10 見真ビル1F",
-  tel: "TEL: 03-5459-1177",
-  fax: "FAX: 03-5459-1181",
-  email: "MAIL: info@shunya.cc",
-  taxId: "T2011001051698",
-  bank: {
-    bankName: "みずほ銀行",
-    branchName: "渋谷中央支店",
-    accountType: "普通",
-    accountNumber: "1176464",
-    accountHolder: "株式会社shunya",
-  },
 }

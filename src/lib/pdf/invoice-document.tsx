@@ -165,10 +165,11 @@ function InvoicePage({ data }: { data: InvoicePdfData }) {
       <View style={styles.bottomRow} wrap={false}>
         <View style={styles.bankBox}>
           <Text style={styles.bankTitle}>お振込先</Text>
+          {/* B-205 PR-1（D-3）: 振込先が無ければ空欄（枠と文言は残す） */}
           <Text hyphenationCallback={NO_HYPHEN_BREAK}>
-            {data.bank.bankName}　{data.bank.branchName}　{data.bank.accountType}　{data.bank.accountNumber}
+            {data.bank ? `${data.bank.bankName}　${data.bank.branchName}　${data.bank.accountType}　${data.bank.accountNumber}` : ""}
           </Text>
-          <Text hyphenationCallback={NO_HYPHEN_BREAK}>口座名義　{data.bank.accountHolder}</Text>
+          <Text hyphenationCallback={NO_HYPHEN_BREAK}>口座名義　{data.bank?.accountHolder ?? ""}</Text>
           <Text style={styles.small}>恐れ入りますが振込手数料はご負担ください。</Text>
         </View>
         <View style={styles.taxBox}>

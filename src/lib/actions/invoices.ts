@@ -12,7 +12,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { COMPANY_PROFILE } from "@/lib/constants/company-profile"
+import { getCompanyIssuer, issuerAddressLine } from "@/lib/company-issuer"
 import { checkPeriodLock } from "@/lib/period-close/lock"
 import { DELIVERY_NOTE_DELIVERED_STATUSES } from "@/lib/validators/delivery-note"
 import {
@@ -157,8 +157,6 @@ function composeAddress(p: AddressParts): string {
   if (line) parts.push(line)
   return parts.join(" ")
 }
-
-const ISSUER_ADDRESS = `${COMPANY_PROFILE.postalCode} ${COMPANY_PROFILE.address}`
 
 // =============================================================================
 // 候補（新規フォーム）
@@ -505,6 +503,10 @@ export async function createInvoice(
     const itemIds = rows.map((r) => r.c.deliveryNoteItemId)
     const D = (n: number) => new Prisma.Decimal(n)
 
+    // B-205 PR-1（D-2・D-21）: 発行者欄と振込先はそのテナントの Company を写す（番号だけ・頭の文字は付けない）。
+    // issuerAddress / issuerTaxId は NOT NULL なので空なら ""（D-3・本番は D-24 でマージ直後に入れる）
+    const issuer = await getCompanyIssuer(sess.companyId)
+
     const prefix = invoiceNumberPrefix(new Date().getFullYear())
     let created: { id: string; invoiceNumber: string } | null = null
     let lastError: unknown = null
@@ -545,17 +547,19 @@ export async function createInvoice(
                 periodEndDate: fromYmd(data.periodEnd),
                 invoiceDate: fromYmd(data.periodEnd),
                 paymentDueDate: fromYmd(data.paymentDueDate),
-                issuerName: COMPANY_PROFILE.name,
-                issuerAddress: ISSUER_ADDRESS,
-                issuerPhone: COMPANY_PROFILE.tel,
-                issuerEmail: COMPANY_PROFILE.email,
-                issuerTaxId: COMPANY_PROFILE.taxId,
+                issuerName: issuer.name,
+                issuerLegalEntity: issuer.legalEntity,
+                issuerAddress: issuerAddressLine(issuer),
+                issuerPhone: issuer.phone,
+                issuerFax: issuer.fax,
+                issuerEmail: issuer.email,
+                issuerTaxId: issuer.taxId ?? "",
                 billToName: client.companyName,
                 billToLegalEntity: client.legalEntity,
                 billToAddress,
                 billToTaxId: client.taxId,
-                // B-109 PR-4（P4-D4）: 振込先を発行時にスナップショット（発行者欄と同じ考え・D-35）
-                bankInfo: COMPANY_PROFILE.bank,
+                // B-109 PR-4（P4-D4）: 振込先を発行時にスナップショット（発行者欄と同じ考え・D-35）。無ければ null（B-205 D-3）
+                bankInfo: issuer.bank ?? Prisma.DbNull,
                 currency: "JPY",
                 subtotal: D(amounts.subtotal),
                 taxableAmount10: D(amounts.taxableAmount10),
