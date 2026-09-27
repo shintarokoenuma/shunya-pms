@@ -116,7 +116,7 @@ export function UsersTable({
             </Link>
           </Button>
         </div>
-        <div className="rounded-md border">
+        <div className="overflow-x-auto rounded-md border">
           <Table>
             <TableHeader>
               <TableRow>
@@ -125,7 +125,7 @@ export function UsersTable({
                 <TableHead className="w-[170px]">役割</TableHead>
                 <TableHead className="w-[100px]">状態</TableHead>
                 {canManage && <TableHead className="w-[150px]">最終ログイン</TableHead>}
-                <TableHead className="w-[200px] text-right" />
+                <TableHead className="text-right" />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -169,7 +169,7 @@ export function UsersTable({
                         {u.isSelf ? (
                           <span className="text-xs text-muted-foreground">自分</span>
                         ) : (
-                          <div className="flex justify-end gap-1">
+                          <div className="flex justify-end gap-1 whitespace-nowrap">
                             {actions.map((a) => (
                               <Button
                                 key={a}
