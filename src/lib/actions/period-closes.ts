@@ -24,7 +24,8 @@ import {
   parseYearMonth,
   toYmd,
 } from "@/lib/calc/invoice-period"
-import { canReopenPeriod, type PeriodCloseCounterpartType } from "@/lib/period-close/lock"
+import { type PeriodCloseCounterpartType } from "@/lib/period-close/lock"
+import { canManageCompany } from "@/lib/permissions"
 
 /**
  * B-109 PR-6（B-123）: 締め（PeriodClose）Server Actions。
@@ -516,7 +517,7 @@ export async function reopenPeriod(input: unknown): Promise<ActionResult<{ id: s
     if (!sess.ok) return sess
     if (sess.role === "EXTERNAL") return { ok: false, error: EXTERNAL_DENIED }
     // ★UI で隠すだけでなくサーバで判定する
-    if (!canReopenPeriod(sess.role)) return { ok: false, error: REOPEN_DENIED }
+    if (!canManageCompany(sess.role)) return { ok: false, error: REOPEN_DENIED }
 
     const parsed = reopenPeriodSchema.safeParse(input)
     if (!parsed.success) {

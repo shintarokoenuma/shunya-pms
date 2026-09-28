@@ -1,4 +1,4 @@
-import { CounterpartType, PeriodCloseStatus, type UserRole } from "@prisma/client"
+import { CounterpartType, PeriodCloseStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { formatPeriod, fromYmd, toYmd } from "@/lib/calc/invoice-period"
 
@@ -36,12 +36,7 @@ export const PERIOD_CLOSE_COUNTERPART_TYPES = [
 
 export type PeriodCloseCounterpartType = (typeof PERIOD_CLOSE_COUNTERPART_TYPES)[number]
 
-/** 解除できる role（P6-D9）。画面の出し分けとサーバの判定の両方がこれを使う */
-export const PERIOD_REOPEN_ROLES: readonly UserRole[] = ["OWNER", "ADMIN"]
-
-export function canReopenPeriod(role: UserRole | null | undefined): boolean {
-  return !!role && PERIOD_REOPEN_ROLES.includes(role)
-}
+// B-205 PR-2（P2-D5）: 解除できる role（P6-D9・OWNER / ADMIN）の判定は src/lib/permissions.ts の canManageCompany に一本化した
 
 export const COUNTERPART_TYPE_LABELS: Record<PeriodCloseCounterpartType, string> = {
   CLIENT: "クライアント",

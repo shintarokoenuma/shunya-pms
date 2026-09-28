@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
-import { canManageCompanySettings } from "@/lib/types/ui-preferences"
+import { canManageCompany } from "@/lib/permissions"
+import { canSeeSettingsSection, type SettingsSection } from "@/lib/settings-visibility"
+import { getRolePermissions } from "@/lib/settings-visibility-db"
 import { isBankAccount } from "@/lib/company-issuer"
 import {
   companyBankAccountSchema,
@@ -16,7 +18,8 @@ import {
 /**
  * B-205 PR-1（spec v1.0 D-2・D-3・D-11・D-24）: 設定ページ「自社情報」「振込先」の Server Actions。
  * company-settings.ts の骨格を写す（requireSession → 読み → 書き → AuditLog → revalidatePath）。
- * - 読みは誰でも（EXTERNAL は拒否）。更新は OWNER / ADMIN だけ（canManageCompanySettings）。画面だけで止めず action 側でも拒否する
+ * - 読みは誰でも（EXTERNAL は拒否）。更新は OWNER / ADMIN だけ（canManageCompany）。画面だけで止めず action 側でも拒否する
+ * - B-205 PR-2（P2-D8）: 読みは「自社情報」「振込先」のどちらの項目として読むかを受け、その役割に隠されていれば拒否する
  * - Company は companyId 列を持たない（自分のテナントの行を id で更新する）。TENANT_MODELS の対象外
  * - 帳票は getCompanyIssuer（src/lib/company-issuer.ts）で同じ行を読む。発行済みの請求書・納品書の写しは書き換えない
  */
@@ -27,6 +30,7 @@ export type ActionResult<T = void> =
 
 const EXTERNAL_DENIED = "外部ユーザーは設定を扱えません"
 const MANAGER_DENIED = "自社情報を変更できるのは管理者（OWNER / ADMIN）だけです"
+const SECTION_HIDDEN = "この項目はあなたの役割では表示されません"
 
 async function requireSession() {
   const session = await auth()
@@ -75,13 +79,15 @@ function toView(row: ProfileRow): CompanyProfileView {
 // =============================================================================
 // 1. 読み（自社情報・振込先・変更できるか）
 // =============================================================================
-export async function getCompanyProfile(): Promise<
-  ActionResult<{ profile: CompanyProfileView; bank: CompanyBankAccountView | null; canManage: boolean }>
-> {
+export async function getCompanyProfile(
+  section: Extract<SettingsSection, "company" | "bank"> = "company",
+): Promise<ActionResult<{ profile: CompanyProfileView; bank: CompanyBankAccountView | null; canManage: boolean }>> {
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
     if (sess.role === "EXTERNAL") return { ok: false, error: EXTERNAL_DENIED }
+    const perms = await getRolePermissions(sess.companyId)
+    if (!canSeeSettingsSection(perms, sess.role, section)) return { ok: false, error: SECTION_HIDDEN }
 
     const row = await prisma.company.findFirst({
       where: { id: sess.companyId, deletedAt: null },
@@ -93,7 +99,7 @@ export async function getCompanyProfile(): Promise<
       data: {
         profile: toView(row),
         bank: isBankAccount(row.bankAccount) ? row.bankAccount : null,
-        canManage: canManageCompanySettings(sess.role),
+        canManage: canManageCompany(sess.role),
       },
     }
   } catch (e) {
@@ -109,7 +115,7 @@ export async function updateCompanyProfile(input: unknown): Promise<ActionResult
     const sess = await requireSession()
     if (!sess.ok) return sess
     if (sess.role === "EXTERNAL") return { ok: false, error: EXTERNAL_DENIED }
-    if (!canManageCompanySettings(sess.role)) return { ok: false, error: MANAGER_DENIED }
+    if (!canManageCompany(sess.role)) return { ok: false, error: MANAGER_DENIED }
 
     const parsed = companyProfileSchema.safeParse(input)
     if (!parsed.success) {
@@ -168,7 +174,7 @@ export async function updateCompanyBankAccount(
     const sess = await requireSession()
     if (!sess.ok) return sess
     if (sess.role === "EXTERNAL") return { ok: false, error: EXTERNAL_DENIED }
-    if (!canManageCompanySettings(sess.role)) return { ok: false, error: MANAGER_DENIED }
+    if (!canManageCompany(sess.role)) return { ok: false, error: MANAGER_DENIED }
 
     const parsed = companyBankAccountSchema.safeParse(input)
     if (!parsed.success) {

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { listPeriodCloses } from "@/lib/actions/period-closes"
-import { canReopenPeriod } from "@/lib/period-close/lock"
+import { canManageCompany } from "@/lib/permissions"
 import { formatYearMonth, parseYearMonth, todayYmdJst } from "@/lib/calc/invoice-period"
 import {
   PERIOD_CLOSE_COUNTERPART_VALUES,
@@ -44,7 +44,7 @@ export default async function ClosingsPage({ searchParams }: { searchParams: Sea
     : null
 
   const result = await listPeriodCloses({ month, counterpartType, state: state ?? undefined })
-  const canReopen = canReopenPeriod(session.user.role)
+  const canReopen = canManageCompany(session.user.role)
 
   return (
     <div className="space-y-6 p-6">
