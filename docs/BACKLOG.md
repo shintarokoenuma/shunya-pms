@@ -110,7 +110,7 @@
 | B-083 | 完了 | 明細行の調達区分procurementRoute（会社手配/支給等・PR #112） | — |
 | B-084 | 未着手 | PE明細行のドラッグ&ドロップ並び替え | — |
 | B-085 | 完了 | 量産見積 見積書PDF出力（PR #108） | docs/specs/b-085-pe-quotation-pdf-spec-confirmation-v0_1-2026-07-20.md |
-| B-086 | 完了 | PDFプレビュー統一（全ページプレビュー→承認後DL・PR #122） | docs/specs/b-086-pdf-preview-spec-confirmation-v1_0-2026-08-05.md |
+| B-086 | 完了 | PDFプレビュー統一（全ページプレビュー→承認後DL・PR #122） ★2026-09-29 追記: 仕様確認書 §99「旧 GET [id]/pdf をいつ削除するか」は慎太郎さんの判断（2026-09-28・案A）で削除。PR #175（squash f0009d6）。ブリーフ docs/specs/b-086-legacy-get-removal-implementation-brief-2026-09-28.md | docs/specs/b-086-pdf-preview-spec-confirmation-v1_0-2026-08-05.md |
 | B-087 | 未着手 | BOM素材SelectのSearchableSelect化 | — |
 | B-088 | 進行中 | チェックボックスのクリック範囲修正（PR #114・マージ待ち） | — |
 | B-089 | 未着手 | PO/WO update actionのDRAFTガード（直リクエスト対策） | — |
@@ -357,6 +357,7 @@ products / bom-section 等の25ファイル。
 | B-245 | 未着手 | 1回の画面表示で auth() が proxy・layout・page・action から複数回呼ばれ、そのたびに jwt callback が User を主キーで1行読む（B-205 PR-2 の D-6・src/lib/auth.ts）。今の人数では問題にしない。ユーザーやテナントが増えたら React の cache などで1リクエスト1回にまとめる。横断（基盤・性能） | docs/specs/b-205-pr2-implementation-brief-2026-09-27.md（§9） |
 | B-246 | 未着手 | prisma/seed.ts がオーナー shin@shunya.jp をパスワードの固定値で作り、最後にその値を console.log で出す（seed.ts:27・136）。★2026-09-28 に本番のオーナーがその値のままで、本番のログイン画面にも表示されていた（アドレスとパスワードは同日に本番で変更・AUTH_SECRET も入れ替え・ログイン画面の表示は PR #174 で本番では出さない）。seed のパスワードを環境変数から読む形にし、値を出力しない。dev の確認用ユーザーのスクリプト（scripts/dev-create-test-users.ts）は既に env から読む。横断（基盤・セキュリティ） | prisma/seed.ts |
 | B-247 | 未着手 | shunya-pms を Shopify（INSONNIA PROJECTS・SwTRAS のストア）と連動させ、saagara の Web 受注システム（saagara-v2）とも連動させる。そこまで作ってから、機能を切り分けて外部に販売する（SaaS）。慎太郎さん 2026-09-28「shopifyとの連動、saagara Web受注システムとの連動、ここまでして、切り分けて販売していくのがいいよね。」関係: B-149（受注の流入経路・saagara-v2 連携）・B-242（運営者と shunya の分離）・B-172（社外ユーザー）。方針のメモで着手順は未定。横断 | 慎太郎さん確認 2026-09-28（ナレッジ claude/MEMO_INBOX-append-2026-09-28.md） |
+| B-248 | 未着手 | 発注書・作業発注の PDF で C# が「C/#c/#12」「C/#C/#31」のように二重に出る（本番 PO-2026-0007・PO-2026-0011 で目視・2026-09-28）。原因は src/lib/pdf/order-document.tsx:161 が色番の前に「C/#」を付けるが、元の値（colorCode）に既に「c/#」「C/#」が入っているものがあること（dev には「09」のように頭の無い値もある）。★慎太郎さんの判断（2026-09-29）: 案B＝元の値をそろえる（入力のときに頭の c/# を取り除く）。過去のデータは本番の件数を read-only で測ってから、数件なら画面で保存し直し・多ければ UPDATE（慎太郎さん「手で直すか、そのまま放置でもいい」）。★値がどこで入るか（発注の画面の手入力か・BOM の調達カラーからの写しか・B-065）は未調査。ライフサイクル 8（量産発注） | docs/specs/s-4c-2-order-pdf-spec-confirmation-v1_0-2026-06-11.md |
 
 ### B-125 の補足（慎太郎さん確認 2026-08-09）
 
