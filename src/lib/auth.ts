@@ -1,4 +1,4 @@
-import NextAuth from "next-auth"
+import NextAuth, { CredentialsSignin } from "next-auth"
 import Credentials from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
@@ -23,6 +23,15 @@ declare module "next-auth" {
     tenantType: TenantType
     role: UserRole
   }
+}
+
+/**
+ * B-205 PR-2（慎太郎さん 2026-09-28）: 停止・アーカイブ・削除済みの人が正しいパスワードでログインしたとき、
+ * ログイン画面に「停止されています」と出すための code 付きエラー。
+ * ★パスワードが違うときは投げない（メールだけで在籍や停止が他人に分からないように・null のまま）。
+ */
+class AccountSuspendedError extends CredentialsSignin {
+  code = "account_suspended"
 }
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
@@ -52,10 +61,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           return null
         }
 
-        if (user.status !== "ACTIVE") {
-          throw new Error("Account is not active")
-        }
-
+        // 順番は「パスワード照合 → 状態の確認」。パスワードが違えば状態に関わらず null（失敗回数+1 も今までどおり）
         const isValid = await bcrypt.compare(
           credentials.password as string,
           user.passwordHash
@@ -68,6 +74,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             data: { failedLoginAttempts: { increment: 1 } },
           })
           return null
+        }
+
+        // パスワードは正しいが、停止・アーカイブ・削除済み → code 付きで止める（成功扱いにしない）
+        if (user.deletedAt || user.status !== "ACTIVE") {
+          throw new AccountSuspendedError()
         }
 
         // ログイン成功：失敗カウントをリセット、最終ログイン更新

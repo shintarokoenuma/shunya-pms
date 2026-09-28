@@ -24,7 +24,12 @@ export default function LoginPage() {
       })
 
       if (result?.error) {
-        setError("メールアドレスまたはパスワードが正しくありません")
+        // B-205 PR-2: 停止・アーカイブの人が正しいパスワードで来たときだけ code が account_suspended（auth.ts）
+        setError(
+          result.code === "account_suspended"
+            ? "このアカウントは停止されています。管理者にお問い合わせください。"
+            : "メールアドレスまたはパスワードが正しくありません",
+        )
         setIsLoading(false)
         return
       }
