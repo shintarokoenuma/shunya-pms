@@ -143,10 +143,13 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-xs text-slate-500 mt-6 text-center">
-            開発環境用テストアカウント:<br />
-            <code className="bg-slate-100 px-1.5 py-0.5 rounded">shin@shunya.jp</code> / <code className="bg-slate-100 px-1.5 py-0.5 rounded">shunya2026!</code>
-          </p>
+          {/* B-205 PR-2（2026-09-28）: 開発環境用テストアカウントの案内は本番では出さない（本番の画面に出ていたのを確認） */}
+          {process.env.NODE_ENV !== "production" && (
+            <p className="text-xs text-slate-500 mt-6 text-center">
+              開発環境用テストアカウント:<br />
+              <code className="bg-slate-100 px-1.5 py-0.5 rounded">shin@shunya.jp</code> / <code className="bg-slate-100 px-1.5 py-0.5 rounded">shunya2026!</code>
+            </p>
+          )}
         </div>
 
         <p className="text-center text-sm text-slate-500 mt-6">
