@@ -7,7 +7,7 @@ import { timestampJst } from "@/lib/gcs"
  * B-086: 発注書 PDF（PO）プレビュー用。POST {ids} で複数を1PDFに縦積み（発注ごと改ページ・案B）。
  * - 宛先（仕入先）の混在は許可する（各ページが独立した正式発注書のため）。
  * - GCS 控えはここでは保存しない（DL 押下時に /api/order-pdf-archive で保存する）。
- * - 既存 GET /api/purchase-orders/[id]/pdf は残す（本 PR では削除しない）。
+ * - 旧 GET /api/purchase-orders/[id]/pdf は 2026-09-28 に削除（B-086 §99・慎太郎さんの判断）。
  */
 export async function POST(req: Request) {
   const session = await auth()
