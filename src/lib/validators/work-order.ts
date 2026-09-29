@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { normalizeSupplierColorCode } from "@/lib/color-code"
 import {
   Currency,
   BillingClassification,
@@ -63,7 +64,8 @@ export const woItemInputSchema = z.object({
     .trim()
     .min(1, "作業内容は必須です")
     .max(500, "500文字以内で入力してください"),
-  colorCode: optionalString(50),
+  // B-248: 頭の C/# を取って番号だけ保存（色名はそのまま・空は空のまま）
+  colorCode: optionalString(50).transform(normalizeSupplierColorCode),
   size: optionalString(20),
   quantity: quantityField,
   unit: z.string().trim().min(1, "単位は必須です").max(20, "20文字以内"),

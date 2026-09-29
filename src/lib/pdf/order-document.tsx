@@ -7,6 +7,7 @@ import {
 } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import { issuerTelFaxLine, labelMail, labelPostal } from "@/lib/company-issuer"
+import { formatColorCode } from "@/lib/color-code"
 import type { OrderPdfData } from "./order-data"
 
 registerPdfFonts()
@@ -158,7 +159,7 @@ function OrderPage({ data }: { data: OrderPdfData }) {
               <Text style={styles.cName}>{it.itemName}</Text>
               <Text style={[styles.cCode, styles.mono]}>{it.itemCode ?? "—"}</Text>
               <Text style={styles.cColor}>
-                {it.colorCode ? `C/#${it.colorCode}` : "—"}
+                {formatColorCode(it.colorCode) ?? "—"}
               </Text>
               <Text style={styles.cQty}>{it.quantity.toLocaleString("ja-JP")}</Text>
               <Text style={styles.cUnit}>{it.unit}</Text>

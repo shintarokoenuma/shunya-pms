@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { checkPeriodLock } from "@/lib/period-close/lock"
 import { toYmd } from "@/lib/calc/invoice-period"
+import { formatColorCode } from "@/lib/color-code"
 import { PeriodLockBanner } from "@/components/period-close/period-lock-banner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -234,7 +235,7 @@ export default async function PurchaseOrderDetailPage({
                 <Cell
                   label="カラー"
                   value={
-                    cw ? `${cw.name}（${cw.code}）` : it.colorCode ?? "—"
+                    cw ? `${cw.name}（${cw.code}）` : formatColorCode(it.colorCode) ?? "—"
                   }
                 />
                 <Cell

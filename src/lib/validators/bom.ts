@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { normalizeSupplierColorCode } from "@/lib/color-code"
 import {
   BomItemCategory,
   FabricProcurementMode,
@@ -83,7 +84,8 @@ export const bomItemInputSchema = z
     //   手入力での更新時も既存値を保持する＝引き当て済み行を MANUAL に戻さない）
     costSource: z.enum(["MANUAL", "PURCHASE_ORDER"]).default("MANUAL"),
     purchaseOrderId: z.string().nullish(),
-    colorCode: optionalString(50),
+    // B-248: 頭の C/# を取って番号だけ保存（空は空のまま）
+    colorCode: optionalString(50).transform(normalizeSupplierColorCode),
     colorName: optionalString(100),
     notes: optionalString(10000),
   })

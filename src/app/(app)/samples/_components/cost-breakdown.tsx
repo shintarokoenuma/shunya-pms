@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
+import { formatColorCode } from "@/lib/color-code"
 import type {
   CostBreakdownSection,
   CostBreakdownExcludeReason,
@@ -65,9 +66,9 @@ export function CostBreakdown({
                     </span>
                   )}
                   <span className="font-medium">{r.itemName}</span>
-                  {r.colorCode && (
+                  {formatColorCode(r.colorCode) && (
                     <span className="text-muted-foreground">
-                      C/#{r.colorCode}
+                      {formatColorCode(r.colorCode)}
                     </span>
                   )}
                   <span className="tabular-nums">

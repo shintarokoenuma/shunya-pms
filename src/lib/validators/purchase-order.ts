@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { normalizeSupplierColorCode } from "@/lib/color-code"
 import { Currency, BillingClassification, PurchaseOrderStatus } from "@prisma/client"
 
 /**
@@ -74,7 +75,8 @@ export const poItemInputSchema = z
       .nullable()
       .optional()
       .transform((v) => v ?? null),
-    colorCode: optionalString(50),
+    // B-248: 頭の C/# を取って番号だけ保存（空は空のまま）
+    colorCode: optionalString(50).transform(normalizeSupplierColorCode),
     specification: optionalString(10000),
     notes: optionalString(10000),
     quantity: quantityField,

@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { checkPeriodLock } from "@/lib/period-close/lock"
 import { toYmd } from "@/lib/calc/invoice-period"
+import { formatColorCode } from "@/lib/color-code"
 import { PeriodLockBanner } from "@/components/period-close/period-lock-banner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -224,7 +225,7 @@ export default async function WorkOrderDetailPage({
                       : `${fmt(it.subtotal)} ${it.currency}`
                   }
                 />
-                <Cell label="カラー" value={it.colorCode ?? "—"} />
+                <Cell label="カラー" value={formatColorCode(it.colorCode) ?? "—"} />
                 <Cell
                   label="費目"
                   value={
