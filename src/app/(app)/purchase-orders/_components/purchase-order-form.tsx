@@ -647,7 +647,7 @@ function ItemRow({
             <FormItem>
               <FormLabel>カラー番号</FormLabel>
               <FormControl>
-                <Input placeholder="例：C#100" {...field} />
+                <Input placeholder="例：100" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { normalizeSupplierColorCode } from "@/lib/color-code"
 
 /**
  * B-062 β 次PR: 資材×カラーウェイの調達カラー（BomItemColorway）バリデータ。
@@ -8,23 +9,8 @@ import { z } from "zod"
  * - supplierColorName は任意メモ。
  */
 
-/**
- * 先方カラー品番の "C/#" 接頭辞を剥がして番号だけにする正規化。
- * "c/#099" "C/#099" "Ｃ／＃099" "#099" "# 099" "C/099" → "099"。
- * - 全角 Ｃ／＃ を半角化したのち、先頭の C/# マーカー（/ か # を必ず含む）と前後空白を除去。
- * - マーカーを含まない場合（"C99" など英字混じり番号）は中身を触らない＝接頭辞だけ除去。
- * - 冪等: 既に正規化済み（"099"）に再適用しても同じ結果。サーバ側を最終防衛線とする。
- */
-export function normalizeSupplierColorCode(raw: string): string {
-  const halfWidth = raw
-    .replace(/Ｃ/g, "C")
-    .replace(/ｃ/g, "c")
-    .replace(/／/g, "/")
-    .replace(/＃/g, "#")
-    .trim()
-  // 先頭: 任意の C → 任意空白 → ( "/" + 任意"#" | "#" ) → 任意空白 を除去（/ か # が必須）
-  return halfWidth.replace(/^[cC]?\s*(?:\/\s*#?|#)\s*/, "").trim()
-}
+// B-248: 本体は src/lib/color-code.ts に移した。既存の import を壊さないよう同名で再 export する。
+export { normalizeSupplierColorCode }
 
 export const bomItemColorwayInputSchema = z.object({
   bomItemId: z.string().min(1, "資材明細 ID は必須です"),

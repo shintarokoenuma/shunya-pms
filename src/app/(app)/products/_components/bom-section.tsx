@@ -32,6 +32,7 @@ import {
 import { type ColorwayRow } from "@/lib/actions/product-colorways"
 import { upsertBomItemColorway } from "@/lib/actions/bom-item-colorways"
 import { normalizeSupplierColorCode } from "@/lib/validators/bom-item-colorway"
+import { formatColorCode } from "@/lib/color-code"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -269,7 +270,7 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                       )}
                       {(it.colorCode || it.colorName) && (
                         <div className="text-xs text-muted-foreground">
-                          {it.colorCode ? `C/#${it.colorCode}` : ""} {it.colorName ?? ""}
+                          {formatColorCode(it.colorCode) ?? ""} {it.colorName ?? ""}
                         </div>
                       )}
                       {it.supplierLabel && (
@@ -1190,7 +1191,7 @@ function PoImportDialog({
                             {it.supplierItemCode ?? "—"}
                           </TableCell>
                           <TableCell className="text-xs">
-                            {it.colorCode ? `C/#${it.colorCode} ` : ""}
+                            {formatColorCode(it.colorCode) ? `${formatColorCode(it.colorCode)} ` : ""}
                             {it.color ?? ""}
                             {!it.colorCode && !it.color ? "—" : ""}
                           </TableCell>

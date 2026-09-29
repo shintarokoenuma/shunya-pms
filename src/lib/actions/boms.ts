@@ -14,6 +14,7 @@ import {
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
 import { bomItemInputSchema, type BomItemInput } from "@/lib/validators/bom"
+import { normalizeSupplierColorCode } from "@/lib/color-code"
 
 /**
  * QE-0b: BOM（資材表）Server Actions。
@@ -680,7 +681,8 @@ export async function importPoItemsToBom(input: {
             sizeValue: i.sizeValue,
             sizeUnit: i.sizeUnit,
             specification: i.specification,
-            colorCode: i.colorCode,
+            // B-248: 発注から写すときも頭の C/# を取る
+            colorCode: i.colorCode ? normalizeSupplierColorCode(i.colorCode) || null : null,
             colorName: i.color,
             // 用尺軸は取り込まない
             usagePerUnit: null,
