@@ -1,9 +1,33 @@
+/**
+ * 初期データの投入（★dev 専用・本番には流さない）。B-246（2026-09-30）
+ *
+ * 使い方: SEED_OWNER_PASSWORD='…' npx prisma db seed
+ * - DATABASE_URL のホスト:ポートが hopper.proxy.rlwy.net:12921（dev）でなければ、何も書かずに exit 1
+ * - オーナー（shin@shunya.jp）のパスワードは環境変数 SEED_OWNER_PASSWORD から取る。無ければ exit 1。値は出力しない
+ * - オーナーは email で upsert（update: {}）なので、既にいる人のパスワードは変わらない
+ */
+import "dotenv/config"
 import { PrismaClient, TenantType, UserRole, UserStatus, Language, Currency } from "@prisma/client"
 import bcrypt from "bcryptjs"
+
+const EXPECTED_DEV_HOST = "hopper.proxy.rlwy.net:12921"
 
 const prisma = new PrismaClient()
 
 async function main() {
+  // B-246（2026-09-30）: 本番で流すと info@shunya.cc とは別に shin@shunya.jp のオーナーが作られるため dev 以外では止める。パスワードは env から読み、出力しない
+  const url = process.env.DATABASE_URL ?? ""
+  const host = url.replace(/^.*@/, "").replace(/\/.*$/, "")
+  if (host !== EXPECTED_DEV_HOST) {
+    console.error(`STOP: DATABASE_URL の接続先が dev（${EXPECTED_DEV_HOST}）ではありません: ${host || "(不明)"}。本番で seed は流しません（B-246）`)
+    process.exit(1)
+  }
+  const ownerPassword = process.env.SEED_OWNER_PASSWORD
+  if (!ownerPassword) {
+    console.error("STOP: 環境変数 SEED_OWNER_PASSWORD を指定してください（B-246）")
+    process.exit(1)
+  }
+
   console.log("🌱 Seeding database...")
 
   // ===== shunya マスター管理者テナント =====
@@ -24,7 +48,7 @@ async function main() {
   console.log("✅ shunya テナント作成:", shunyaCompany.id)
 
   // ===== Shin (オーナーユーザー) - 必須フィールドのみ =====
-  const hashedPassword = await bcrypt.hash("shunya2026!", 12)
+  const hashedPassword = await bcrypt.hash(ownerPassword, 12)
   const shinUser = await prisma.user.upsert({
     where: { email: "shin@shunya.jp" },
     update: {},
@@ -133,7 +157,7 @@ async function main() {
   console.log("\n🎉 Seeding completed successfully!")
   console.log("\n📊 Created data summary:")
   console.log(`   - shunya tenant: 1 (MASTER_ADMIN)`)
-  console.log(`   - Owner user: shin@shunya.jp / shunya2026!`)
+  console.log(`   - Owner user: shin@shunya.jp（パスワードは SEED_OWNER_PASSWORD）`)
   console.log(`   - Business terms: ${terms.length}`)
   console.log(`   - HS codes: ${hsCodes.length}`)
   console.log(`   - FTA rules: ${ftaRules.length}`)
