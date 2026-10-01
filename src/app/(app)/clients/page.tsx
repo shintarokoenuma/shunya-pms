@@ -4,6 +4,7 @@ import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { listClients } from "@/lib/actions/clients"
 import { ClientsTable } from "./_components/clients-table"
+import { clientMissingFields } from "@/lib/master-completeness"
 import { auth } from "@/lib/auth"
 import { ClientsSearch } from "./_components/clients-search"
 import { ClientsPagination } from "./_components/clients-pagination"
@@ -62,7 +63,11 @@ export default async function ClientsListPage({
 
       <ClientsSearch />
 
-      <ClientsTable items={result.items} isMasterAdmin={isMasterAdmin} />
+      {/* B-252（D-7）: 未入力の項目数を一覧に出す */}
+      <ClientsTable
+        items={result.items.map((c) => ({ ...c, missingFields: clientMissingFields({ ...c, hasPrimaryContact: c.contacts.length > 0 }) }))}
+        isMasterAdmin={isMasterAdmin}
+      />
 
       <ClientsPagination
         page={result.page}

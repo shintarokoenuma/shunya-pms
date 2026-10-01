@@ -168,10 +168,8 @@ export function ContractorForm(props: Props) {
 
   const paymentTermType = form.watch("paymentTermType")
   const country = form.watch("country")
-  const isJP = country === "JP"
   const isIndividual = form.watch("isIndividual")
   const contractType = form.watch("contractType")
-  const isQualifiedInvoiceIssuer = form.watch("isQualifiedInvoiceIssuer")
   const packageFee = form.watch("packageFee")
   const hourlyRate = form.watch("hourlyRate")
   const monthlyFee = form.watch("monthlyFee")
@@ -750,15 +748,12 @@ export function ContractorForm(props: Props) {
                 <FormItem>
                   <FormLabel>
                     適格請求書発行事業者番号
-                    {isJP && isQualifiedInvoiceIssuer && " *"}
                   </FormLabel>
                   <FormControl>
                     <Input placeholder="T1234567890123" {...field} />
                   </FormControl>
                   <FormDescription>
-                    {isJP && isQualifiedInvoiceIssuer
-                      ? "国内かつ適格請求書発行事業者の場合は必須。T + 13桁の数字"
-                      : "T + 13桁の数字(任意)"}
+                    {"T + 13桁の数字。分からなければ空で保存し、あとから入力できます"}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -967,7 +962,7 @@ export function ContractorForm(props: Props) {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-sm text-muted-foreground">
-                法人の場合、主担当者の <strong>姓・名</strong> は必須です
+                法人の場合は主担当者の姓・名を入れてください（あとからでも入力できます）
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
@@ -975,7 +970,7 @@ export function ContractorForm(props: Props) {
                   name="primaryContact.lastName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>姓 *</FormLabel>
+                      <FormLabel>姓</FormLabel>
                       <FormControl>
                         <Input placeholder="山田" {...field} />
                       </FormControl>
@@ -988,7 +983,7 @@ export function ContractorForm(props: Props) {
                   name="primaryContact.firstName"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>名 *</FormLabel>
+                      <FormLabel>名</FormLabel>
                       <FormControl>
                         <Input placeholder="太郎" {...field} />
                       </FormControl>

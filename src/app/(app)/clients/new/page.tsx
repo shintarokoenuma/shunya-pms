@@ -20,6 +20,10 @@ export default async function NewClientPage() {
         <p className="text-sm text-muted-foreground mt-1">
           新規取引先の情報を登録します。先方主担当者の連絡先も同時に登録できます。
         </p>
+        {/* B-252（D-8） */}
+        <p className="text-sm text-muted-foreground mt-1">
+          分からない項目は空のまま保存し、あとから編集できます
+        </p>
       </div>
 
       <ClientForm mode="create" assignableUsers={assignableUsers} />

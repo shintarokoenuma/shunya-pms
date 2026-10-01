@@ -4,6 +4,8 @@ import { ChevronLeft, Pencil } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { MissingFieldsNotice } from "@/components/master/missing-fields-notice"
+import { clientMissingFields } from "@/lib/master-completeness"
 import {
   Card,
   CardContent,
@@ -129,6 +131,8 @@ export default async function ClientDetailPage({
     : null
 
   const contact = client.contacts[0]
+  // B-252（D-6・D-7）: 未入力の項目
+  const missing = clientMissingFields({ ...client, hasPrimaryContact: !!contact })
   const masterAddress = formatAddress({
     postalCode: client.postalCode,
     prefecture: client.prefecture,
@@ -182,6 +186,8 @@ export default async function ClientDetailPage({
           <ClientActions id={id} name={client.companyName} status={client.status} isMasterAdmin={isMasterAdmin} variant="menu" />
         </div>
       </div>
+
+      <MissingFieldsNotice fields={missing} editHref={`/clients/${id}/edit`} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* 基本情報 */}

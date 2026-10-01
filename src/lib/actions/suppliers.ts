@@ -192,23 +192,27 @@ export async function createSupplier(
         },
       })
 
+      // B-252（D-4）: 姓か名のどちらかがあるときだけ主担当を作る
       const contact = data.primaryContact
-      const displayName = `${contact.lastName} ${contact.firstName}`.trim()
-      await tx.supplierContact.create({
-        data: {
-          companyId,
-          supplierId: s.id,
-          firstName: contact.firstName,
-          lastName: contact.lastName,
-          displayName,
-          jobTitle: contact.jobTitle || null,
-          department: contact.department || null,
-          email: contact.email || null,
-          phone: contact.phone || null,
-          mobile: contact.mobile || null,
-          isPrimary: true,
-        },
-      })
+      const hasContactName = contact.firstName.trim() !== "" || contact.lastName.trim() !== ""
+      if (hasContactName) {
+        const displayName = `${contact.lastName} ${contact.firstName}`.trim()
+        await tx.supplierContact.create({
+          data: {
+            companyId,
+            supplierId: s.id,
+            firstName: contact.firstName,
+            lastName: contact.lastName,
+            displayName,
+            jobTitle: contact.jobTitle || null,
+            department: contact.department || null,
+            email: contact.email || null,
+            phone: contact.phone || null,
+            mobile: contact.mobile || null,
+            isPrimary: true,
+          },
+        })
+      }
 
       await tx.auditLog.create({
         data: {
@@ -324,10 +328,19 @@ export async function updateSupplier(
       // 主担当者の更新（既存 isPrimary を更新、無ければ作成）
       const contact = data.primaryContact
       const displayName = `${contact.lastName} ${contact.firstName}`.trim()
+      const hasContactName = contact.firstName.trim() !== "" || contact.lastName.trim() !== ""
       const primary = await tx.supplierContact.findFirst({
         where: { supplierId: id, isPrimary: true, deletedAt: null },
       })
-      if (primary) {
+      if (!hasContactName) {
+        // B-252（D-4）: 姓も名も空にしたら既存の主担当を論理削除（contractors.ts と同じ形）
+        if (primary) {
+          await tx.supplierContact.update({
+            where: { id: primary.id },
+            data: { deletedAt: new Date(), isPrimary: false },
+          })
+        }
+      } else if (primary) {
         await tx.supplierContact.update({
           where: { id: primary.id },
           data: {

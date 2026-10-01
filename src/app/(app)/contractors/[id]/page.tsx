@@ -4,6 +4,8 @@ import { ChevronLeft, Pencil } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { MissingFieldsNotice } from "@/components/master/missing-fields-notice"
+import { contractorMissingFields } from "@/lib/master-completeness"
 import {
   Card,
   CardContent,
@@ -81,6 +83,8 @@ export default async function ContractorDetailPage({
   if (!contractor) notFound()
 
   const primary = contractor.contacts.find((c) => c.isPrimary)
+  // B-252（D-6・D-7）: 未入力の項目
+  const missing = contractorMissingFields({ ...contractor, hasPrimaryContact: !!primary })
   const contractType = contractor.contractType
 
   // 料金体系の表示制御（フォームと同じロジック）
@@ -134,6 +138,8 @@ export default async function ContractorDetailPage({
           />
         </div>
       </div>
+
+      <MissingFieldsNotice fields={missing} editHref={`/contractors/${id}/edit`} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* 基本情報 */}
@@ -327,8 +333,8 @@ export default async function ContractorDetailPage({
           </CardContent>
         </Card>
 
-        {/* 先方担当者(法人かつ存在する場合のみ) */}
-        {primary && (
+        {/* 先方担当者(法人のときだけ出す。B-252 D-9: 主担当が無くても落とさず「—」で出す) */}
+        {!contractor.isIndividual && (
           <Card className="md:col-span-2">
             <CardHeader>
               <CardTitle className="text-base">先方担当者(主担当)</CardTitle>
@@ -337,14 +343,14 @@ export default async function ContractorDetailPage({
               <Dl>
                 <Item
                   label="氏名"
-                  value={`${primary.lastName} ${primary.firstName}`}
+                  value={primary ? `${primary.lastName} ${primary.firstName}`.trim() : null}
                 />
-                <Item label="役職" value={primary.jobTitle} />
-                <Item label="部署" value={primary.department} />
+                <Item label="役職" value={primary?.jobTitle ?? null} />
+                <Item label="部署" value={primary?.department ?? null} />
                 <Item
                   label="メール"
                   value={
-                    primary.email ? (
+                    primary?.email ? (
                       <a
                         href={`mailto:${primary.email}`}
                         className="text-primary underline"
@@ -354,8 +360,8 @@ export default async function ContractorDetailPage({
                     ) : null
                   }
                 />
-                <Item label="電話" value={primary.phone} />
-                <Item label="携帯" value={primary.mobile} />
+                <Item label="電話" value={primary?.phone ?? null} />
+                <Item label="携帯" value={primary?.mobile ?? null} />
               </Dl>
             </CardContent>
           </Card>

@@ -25,17 +25,6 @@ const requiredString = (max: number, label: string) =>
 const optionalString = (max: number) =>
   z.string().max(max, `${max}文字以内で入力してください`).default("")
 
-/** 必須メールアドレス。 */
-const requiredEmail = z
-  .string()
-  .trim()
-  .min(1, "メールアドレスは必須です")
-  .max(255, "255文字以内で入力してください")
-  .refine(
-    (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v),
-    "メールアドレスの形式が正しくありません"
-  )
-
 /** 任意メールアドレス。 */
 const optionalEmail = z
   .string()
@@ -64,16 +53,6 @@ const optionalUrl = z
   )
   .default("")
 
-/** 郵便番号（日本：7桁、ハイフン有無いずれも許容）。 */
-const requiredPostalCodeJp = z
-  .string()
-  .trim()
-  .min(1, "郵便番号は必須です")
-  .refine(
-    (v) => /^\d{3}-?\d{4}$/.test(v),
-    "郵便番号は7桁（例：150-0043）で入力してください"
-  )
-
 const optionalPostalCode = z
   .string()
   .max(20)
@@ -87,11 +66,13 @@ const optionalPostalCode = z
 // 先方担当者（主担当）スキーマ
 // =============================================================================
 
+// B-252（D-2・D-4）: 先方担当者は任意。姓か名のどちらかがあれば主担当の行を作る（action）。
+// 姓も名も空で他の項目だけあるときは superRefine で弾く
 export const primaryContactSchema = z.object({
-  firstName: requiredString(100, "担当者の姓"),
-  lastName: requiredString(100, "担当者の名"),
-  email: requiredEmail,
-  phone: requiredString(50, "担当者の電話番号"),
+  firstName: optionalString(100),
+  lastName: optionalString(100),
+  email: optionalEmail,
+  phone: optionalString(50),
   jobTitle: optionalString(255),
   department: optionalString(255),
 })
@@ -128,15 +109,16 @@ export const clientBaseSchema = z
       .length(2, "ISO 3166-1 alpha-2 の2文字で入力してください")
       .toUpperCase()
       .default("JP"),
-    phone: requiredString(50, "電話番号"),
-    email: requiredEmail,
+    // B-252（D-2）: 電話・メール・住所は任意（未入力は一覧・詳細に出す）
+    phone: optionalString(50),
+    email: optionalEmail,
     website: optionalUrl,
 
-    // マスター住所（必須）
+    // マスター住所（任意・JP のとき郵便番号は入力したときだけ形式を見る）
     postalCode: optionalPostalCode,
     prefecture: optionalString(50),
-    city: requiredString(100, "市区町村"),
-    address: requiredString(500, "住所1"),
+    city: optionalString(100),
+    address: optionalString(500),
     addressLine2: optionalString(255),
 
     // 請求書発送先（マスターと別の場合のみ入力、すべて任意）
@@ -196,11 +178,8 @@ export const clientBaseSchema = z
     isQualifiedInvoiceIssuer: z.boolean().default(true),
     taxId: optionalString(50),
 
-    // 担当者
-    assignedToUserId: z
-      .string()
-      .trim()
-      .min(1, "自社担当者は必須です"),
+    // 担当者（B-252 D-5: 自社担当者は任意。空は action で null）
+    assignedToUserId: z.string().trim().default(""),
     primaryContact: primaryContactSchema,
 
     // 運用
@@ -209,28 +188,28 @@ export const clientBaseSchema = z
   })
   // 別住所チェックボックス ON のとき各フィールド必須
   .superRefine((data, ctx) => {
-    // メイン住所: country === "JP" のときのみ郵便番号・都道府県を必須・形式チェック
+    // メイン住所: country === "JP" のとき、郵便番号は入力したときだけ形式を見る（B-252 D-3。必須にはしない）
     if (data.country === "JP") {
-      if (!data.postalCode) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["postalCode"],
-          message: "郵便番号は必須です",
-        })
-      } else if (!/^\d{3}-?\d{4}$/.test(data.postalCode)) {
+      if (data.postalCode && !/^\d{3}-?\d{4}$/.test(data.postalCode)) {
         ctx.addIssue({
           code: "custom",
           path: ["postalCode"],
           message: "郵便番号は7桁（例：150-0043）で入力してください",
         })
       }
-      if (!data.prefecture) {
-        ctx.addIssue({
-          code: "custom",
-          path: ["prefecture"],
-          message: "都道府県は必須です",
-        })
-      }
+    }
+    // B-252（D-4）: 姓も名も空なのに他の項目があるときは弾く
+    const pc = data.primaryContact
+    if (
+      pc.firstName.trim() === "" &&
+      pc.lastName.trim() === "" &&
+      [pc.email, pc.phone, pc.jobTitle, pc.department].some((v) => (v ?? "").trim() !== "")
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["primaryContact", "lastName"],
+        message: "担当者の姓か名を入れてください",
+      })
     }
 
     if (data.useSeparateBillingAddress) {

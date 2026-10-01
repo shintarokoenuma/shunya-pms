@@ -21,6 +21,10 @@ export default async function NewFactoryPage() {
         <p className="text-sm text-muted-foreground mt-1">
           縫製・ニット・加工等の工場を登録します。海外工場にも対応しています。
         </p>
+        {/* B-252（D-8） */}
+        <p className="text-sm text-muted-foreground mt-1">
+          分からない項目は空のまま保存し、あとから編集できます
+        </p>
       </div>
       <FactoryForm mode="create" assignableUsers={assignableUsers} />
     </div>

@@ -13,7 +13,7 @@ import {
  *
  * 設計方針:
  * - Supplier/Client/Brand と同じパターン（archive / restore / permanent delete 分離）
- * - taxId は国内工場（country === "JP"）のみ必須
+ * - taxId は国内工場（country === "JP"）で入力したときだけ T+13桁の形式を見る（B-252 で必須は外した）
  * - 取引条件は paymentMonthOffset + paymentDay（プリセット運用）
  * - FactoryType（縫製/ニット等）は複数選択可（最低1件必須）
  * - FactoryContractType（CMT/フルパッケージ等）は複数選択可（0件許容）
@@ -56,15 +56,10 @@ const optionalPositiveInt = z
   .nullable()
 
 // 主担当（FactoryContact）スキーマ - Supplier と同じ7フィールド
+// B-252（D-2・D-4）: 姓・名は任意。姓か名のどちらかがあれば主担当の行を作る（action）
 const primaryContactSchema = z.object({
-  firstName: z
-    .string()
-    .min(1, "名は必須です")
-    .max(100, "100文字以内で入力してください"),
-  lastName: z
-    .string()
-    .min(1, "姓は必須です")
-    .max(100, "100文字以内で入力してください"),
+  firstName: optionalString(100),
+  lastName: optionalString(100),
   jobTitle: optionalString(255),
   department: optionalString(255),
   email: optionalEmail,
@@ -134,15 +129,9 @@ export const factoryInputSchema = z
     primaryContact: primaryContactSchema,
   })
   .superRefine((data, ctx) => {
-    // country === "JP" のときの追加バリデーション
+    // country === "JP" のときの形式チェック（B-252 D-2・D-3: 郵便番号・都道府県・登録番号は必須にせず、入力したときだけ形式を見る）
     if (data.country === "JP") {
-      if (data.postalCode === "") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "郵便番号は必須です",
-          path: ["postalCode"],
-        })
-      } else if (!/^\d{3}-?\d{4}$/.test(data.postalCode)) {
+      if (data.postalCode !== "" && !/^\d{3}-?\d{4}$/.test(data.postalCode)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "郵便番号は7桁(例:150-0043)で入力してください",
@@ -150,25 +139,26 @@ export const factoryInputSchema = z
         })
       }
 
-      if (data.prefecture === "") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "都道府県は必須です",
-          path: ["prefecture"],
-        })
-      }
-
-      if (data.taxId === "") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "国内工場は適格請求書発行事業者番号が必須です",
-          path: ["taxId"],
-        })
-      } else if (!/^T\d{13}$/.test(data.taxId)) {
+      if (data.taxId !== "" && !/^T\d{13}$/.test(data.taxId)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "T で始まる13桁の番号を入力してください(例:T1234567890123)",
           path: ["taxId"],
+        })
+      }
+    }
+    // B-252（D-4）: 姓も名も空なのに他の項目があるときは弾く
+    {
+      const pc = data.primaryContact
+      if (
+        pc.firstName.trim() === "" &&
+        pc.lastName.trim() === "" &&
+        [pc.email, pc.phone, pc.mobile, pc.jobTitle, pc.department].some((v) => (v ?? "").trim() !== "")
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "担当者の姓か名を入れてください",
+          path: ["primaryContact", "lastName"],
         })
       }
     }

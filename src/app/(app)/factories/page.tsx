@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { listFactories } from "@/lib/actions/factories"
 import { auth } from "@/lib/auth"
 import { FactoriesTable } from "./_components/factories-table"
+import { factoryMissingFields } from "@/lib/master-completeness"
 import { FactoriesSearch } from "./_components/factories-search"
 import { FactoriesPagination } from "./_components/factories-pagination"
 import { FactoryStatus, FactoryType } from "@prisma/client"
@@ -46,7 +47,11 @@ export default async function FactoriesPage({
         </Button>
       </div>
       <FactoriesSearch />
-      <FactoriesTable items={result.factories} isMasterAdmin={isMasterAdmin} />
+      {/* B-252（D-7）: 未入力の項目数を一覧に出す */}
+      <FactoriesTable
+        items={result.factories.map((f) => ({ ...f, missingFields: factoryMissingFields({ ...f, hasPrimaryContact: f.contacts.length > 0 }) }))}
+        isMasterAdmin={isMasterAdmin}
+      />
       <FactoriesPagination
         page={result.page}
         totalPages={result.totalPages}

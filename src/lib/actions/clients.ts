@@ -7,9 +7,11 @@ import { withTenantContext } from "@/lib/with-tenant"
 import { requireTenantContext, runWithoutTenantContext } from "@/lib/tenant-context"
 import { writeAuditLog } from "@/lib/audit-log"
 import { getEffectiveCompanyId } from "@/lib/tenant-context"
+import type { z } from "zod"
 import {
   createClientSchema,
   listClientsQuerySchema,
+  primaryContactSchema,
   updateClientSchema,
   type CreateClientInput,
   type ListClientsQuery,
@@ -42,6 +44,11 @@ function normalizeForDb<T extends Record<string, unknown>>(data: T): T {
     "referrer",
     "notes",
     "taxId", // B-109 PR-2a: 空欄は null で保存（列は nullable）
+    // B-252: 必須を外した項目も空欄は null で保存
+    "postalCode",
+    "prefecture",
+    "city",
+    "assignedToUserId", // D-5: 空は null（FK なので "" は入れない）
   ] as const
   for (const f of stringFields) {
     const v = result[f]
@@ -53,17 +60,23 @@ function normalizeForDb<T extends Record<string, unknown>>(data: T): T {
   return result as T
 }
 
-function normalizeContactForDb(
-  c: NonNullable<CreateClientInput["primaryContact"]>
-) {
+type PrimaryContactParsed = z.output<typeof primaryContactSchema>
+
+/** B-252（D-4）: 姓か名のどちらかがあれば主担当の行を作る。両方空なら作らない（編集では既存を論理削除） */
+function hasContactName(c: PrimaryContactParsed): boolean {
+  return c.firstName.trim() !== "" || c.lastName.trim() !== ""
+}
+
+function normalizeContactForDb(c: PrimaryContactParsed) {
+  const nz = (v: string | undefined) => ((v ?? "").trim() === "" ? null : (v ?? "").trim())
   return {
     firstName: c.firstName.trim(),
     lastName: c.lastName.trim(),
-    displayName: `${c.lastName.trim()} ${c.firstName.trim()}`,
-    email: c.email.trim() === "" ? null : c.email.trim(),
-    phone: c.phone.trim() === "" ? null : c.phone.trim(),
-    jobTitle: (c.jobTitle ?? "").trim() === "" ? null : (c.jobTitle ?? "").trim(),
-    department: (c.department ?? "").trim() === "" ? null : (c.department ?? "").trim(),
+    displayName: `${c.lastName.trim()} ${c.firstName.trim()}`.trim(),
+    email: nz(c.email),
+    phone: nz(c.phone),
+    jobTitle: nz(c.jobTitle),
+    department: nz(c.department),
     isPrimary: true,
   }
 }
@@ -94,12 +107,21 @@ export async function listClients(rawQuery: ListClientsQuery = {}) {
         ],
       }),
     }
+    const cid = getEffectiveCompanyId()
     const [items, total] = await Promise.all([
       prisma.client.findMany({
         where,
         orderBy: { [sort]: order },
         skip: (page - 1) * perPage,
         take: perPage,
+        // B-252（D-7）: 一覧で「未入力」を出すために主担当の有無を取る（companyId・deletedAt: null を手書き）
+        include: {
+          contacts: {
+            where: { companyId: cid, isPrimary: true, deletedAt: null },
+            select: { id: true },
+            take: 1,
+          },
+        },
       }),
       prisma.client.count({ where }),
     ])
@@ -184,18 +206,21 @@ export async function createClient(
         data: data as unknown as Prisma.ClientUncheckedCreateInput,
       })
 
-      const contact = await prisma.clientContact.create({
-        data: {
-          ...contactData,
-          companyId: cid,
-          clientId: created.id,
-        } as Prisma.ClientContactUncheckedCreateInput,
-      })
+      // B-252（D-4）: 姓も名も空なら主担当は作らない
+      if (hasContactName(primaryContact)) {
+        const contact = await prisma.clientContact.create({
+          data: {
+            ...contactData,
+            companyId: cid,
+            clientId: created.id,
+          } as Prisma.ClientContactUncheckedCreateInput,
+        })
 
-      await prisma.client.update({
-        where: { id: created.id },
-        data: { primaryContactId: contact.id },
-      })
+        await prisma.client.update({
+          where: { id: created.id },
+          data: { primaryContactId: contact.id },
+        })
+      }
 
       await writeAuditLog({
         action: "CREATE",
@@ -301,8 +326,17 @@ export async function updateClient(
       })
 
       const existingContact = before.contacts[0]
-      let contactId: string
-      if (existingContact) {
+      let contactId: string | null
+      if (!hasContactName(primaryContact)) {
+        // B-252（D-4）: 姓も名も空にしたら既存の主担当を論理削除し、primaryContactId を外す
+        if (existingContact) {
+          await prisma.clientContact.update({
+            where: { id: existingContact.id },
+            data: { deletedAt: new Date(), isPrimary: false },
+          })
+        }
+        contactId = null
+      } else if (existingContact) {
         const updatedContact = await prisma.clientContact.update({
           where: { id: existingContact.id },
           data: contactData,
