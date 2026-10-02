@@ -23,6 +23,10 @@ export default async function NewSupplierPage() {
         <p className="text-sm text-muted-foreground mt-1">
           生地・付属・糸などの仕入先を登録します。海外仕入先にも対応しています。
         </p>
+        {/* B-252（D-8） */}
+        <p className="text-sm text-muted-foreground mt-1">
+          分からない項目は空のまま保存し、あとから編集できます
+        </p>
       </div>
 
       <SupplierForm mode="create" assignableUsers={assignableUsers} />

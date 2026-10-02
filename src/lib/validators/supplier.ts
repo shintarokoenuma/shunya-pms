@@ -12,7 +12,7 @@ import {
  *
  * 設計方針:
  * - Client/Brand と同じパターン（archive / restore / permanent delete 分離）
- * - taxId は国内仕入先（country === "JP"）のみ必須
+ * - taxId は入力したときだけ T+13桁の形式を見る（B-252 で国内の必須は外した。未入力は一覧・詳細に出す）
  * - 取引条件は paymentMonthOffset + paymentDay（プリセット運用）
  * - SupplierType は複数選択可（最低1件必須）
  */
@@ -54,15 +54,10 @@ const taxIdPattern = /^T\d{13}$/
 /**
  * Supplier 主担当者
  */
+// B-252（D-2・D-4）: 姓・名は任意。姓か名のどちらかがあれば主担当の行を作る（action）
 export const supplierPrimaryContactSchema = z.object({
-  firstName: z
-    .string()
-    .min(1, "名は必須です")
-    .max(100, "100文字以内で入力してください"),
-  lastName: z
-    .string()
-    .min(1, "姓は必須です")
-    .max(100, "100文字以内で入力してください"),
+  firstName: optionalString(100),
+  lastName: optionalString(100),
   jobTitle: optionalString(255),
   department: optionalString(255),
   email: optionalEmail,
@@ -156,7 +151,7 @@ export const supplierInputSchema = z
     notes: optionalString(5000),
   })
   .superRefine((data, ctx) => {
-    // 国内仕入先（country === "JP"）のみ必須・形式チェック
+    // 国内仕入先（country === "JP"）のみ形式チェック（B-252 D-2・D-3: 都道府県・登録番号は必須にしない）
     if (data.country === "JP") {
       // 郵便番号
       if (data.postalCode && !/^\d{3}-?\d{4}$/.test(data.postalCode)) {
@@ -166,20 +161,19 @@ export const supplierInputSchema = z
           message: "郵便番号は7桁（例：150-0043）で入力してください",
         })
       }
-      // 都道府県
-      if (!data.prefecture || data.prefecture === "") {
+    }
+    // B-252（D-4）: 姓も名も空なのに他の項目があるときは弾く
+    {
+      const pc = data.primaryContact
+      if (
+        pc.firstName.trim() === "" &&
+        pc.lastName.trim() === "" &&
+        [pc.email, pc.phone, pc.mobile, pc.jobTitle, pc.department].some((v) => (v ?? "").trim() !== "")
+      ) {
         ctx.addIssue({
           code: "custom",
-          path: ["prefecture"],
-          message: "国内仕入先は都道府県が必須です",
-        })
-      }
-      // taxId（既存）
-      if (!data.taxId || data.taxId === "") {
-        ctx.addIssue({
-          code: "custom",
-          path: ["taxId"],
-          message: "国内仕入先は適格請求書発行事業者番号が必須です",
+          path: ["primaryContact", "lastName"],
+          message: "担当者の姓か名を入れてください",
         })
       }
     }
@@ -211,15 +205,7 @@ export const supplierInputSchema = z
         })
       }
     }
-
-    // 担当者: 自社担当 必須
-    if (!data.assignedToUserId || data.assignedToUserId === "") {
-      ctx.addIssue({
-        code: "custom",
-        path: ["assignedToUserId"],
-        message: "自社担当者は必須です",
-      })
-    }
+    // 自社担当者の必須は B-252 で外した（空は action で null）
   })
 
 export type SupplierInput = z.infer<typeof supplierInputSchema>

@@ -10,6 +10,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
+import { MissingFieldsBadge } from "@/components/master/missing-fields-badge"
 import { Button } from "@/components/ui/button"
 import { Pencil } from "lucide-react"
 
@@ -21,7 +22,8 @@ import {
 import { ClientActions } from "./client-delete-button"
 
 type Props = {
-  items: Client[]
+  // B-252（D-7）: missingFields は一覧側で clientMissingFields から計算して渡す
+  items: (Client & { missingFields?: string[] })[]
   isMasterAdmin: boolean
 }
 
@@ -57,6 +59,7 @@ export function ClientsTable({ items, isMasterAdmin }: Props) {
                 >
                   {c.companyName}
                 </Link>
+                <MissingFieldsBadge fields={c.missingFields ?? []} />
               </TableCell>
               <TableCell className="font-mono text-xs">
                 <Link

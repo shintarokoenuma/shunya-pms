@@ -341,7 +341,7 @@ export function ClientForm(props: Props) {
               name="phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>電話番号 *</FormLabel>
+                  <FormLabel>電話番号</FormLabel>
                   <FormControl>
                     <Input placeholder="03-1234-5678" {...field} />
                   </FormControl>
@@ -354,7 +354,7 @@ export function ClientForm(props: Props) {
               name="email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>メールアドレス *</FormLabel>
+                  <FormLabel>メールアドレス</FormLabel>
                   <FormControl>
                     <Input type="email" placeholder="info@example.com" {...field} />
                   </FormControl>
@@ -671,7 +671,7 @@ export function ClientForm(props: Props) {
               name="assignedToUserId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>担当者 *</FormLabel>
+                  <FormLabel>担当者</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value || ""}>
                     <FormControl>
                       <SelectTrigger><SelectValue placeholder="担当者を選択" /></SelectTrigger>
@@ -700,7 +700,7 @@ export function ClientForm(props: Props) {
               name="primaryContact.lastName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>姓 *</FormLabel>
+                  <FormLabel>姓</FormLabel>
                   <FormControl><Input placeholder="山田" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -711,7 +711,7 @@ export function ClientForm(props: Props) {
               name="primaryContact.firstName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>名 *</FormLabel>
+                  <FormLabel>名</FormLabel>
                   <FormControl><Input placeholder="太郎" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -722,7 +722,7 @@ export function ClientForm(props: Props) {
               name="primaryContact.email"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>メール *</FormLabel>
+                  <FormLabel>メール</FormLabel>
                   <FormControl><Input type="email" placeholder="t.yamada@example.com" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -733,7 +733,7 @@ export function ClientForm(props: Props) {
               name="primaryContact.phone"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>電話 *</FormLabel>
+                  <FormLabel>電話</FormLabel>
                   <FormControl><Input placeholder="03-1234-5678" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>

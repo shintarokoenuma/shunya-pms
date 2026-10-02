@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { listContractors } from "@/lib/actions/contractors"
 import { auth } from "@/lib/auth"
 import { ContractorsTable } from "./_components/contractors-table"
+import { contractorMissingFields } from "@/lib/master-completeness"
 import { ContractorsSearch } from "./_components/contractors-search"
 import { ContractorsPagination } from "./_components/contractors-pagination"
 import {
@@ -60,8 +61,9 @@ export default async function ContractorsPage({
         </Button>
       </div>
       <ContractorsSearch />
+      {/* B-252（D-7）: 未入力の項目数を一覧に出す */}
       <ContractorsTable
-        items={result.contractors}
+        items={result.contractors.map((c) => ({ ...c, missingFields: contractorMissingFields({ ...c, hasPrimaryContact: c.contacts.length > 0 }) }))}
         isMasterAdmin={isMasterAdmin}
       />
       <ContractorsPagination

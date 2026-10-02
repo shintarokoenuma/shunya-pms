@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { listSuppliers } from "@/lib/actions/suppliers"
 import { auth } from "@/lib/auth"
 import { SuppliersTable } from "./_components/suppliers-table"
+import { supplierMissingFields } from "@/lib/master-completeness"
 import { SuppliersSearch } from "./_components/suppliers-search"
 import { SuppliersPagination } from "./_components/suppliers-pagination"
 import { SupplierStatus, SupplierType } from "@prisma/client"
@@ -50,7 +51,11 @@ export default async function SuppliersPage({
 
       <SuppliersSearch />
 
-      <SuppliersTable items={result.suppliers} isMasterAdmin={isMasterAdmin} />
+      {/* B-252（D-7）: 未入力の項目数を一覧に出す */}
+      <SuppliersTable
+        items={result.suppliers.map((s) => ({ ...s, missingFields: supplierMissingFields({ ...s, hasPrimaryContact: s.contacts.length > 0 }) }))}
+        isMasterAdmin={isMasterAdmin}
+      />
 
       <SuppliersPagination
         page={result.page}

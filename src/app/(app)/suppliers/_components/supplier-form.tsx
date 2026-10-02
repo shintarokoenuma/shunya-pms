@@ -138,7 +138,6 @@ export function SupplierForm(props: Props) {
 
   const paymentTermType = form.watch("paymentTermType")
   const country = form.watch("country")
-  const isJP = country === "JP"
 
   const onSubmit: SubmitHandler<SupplierInput> = (values) => {
     setServerError(null)
@@ -510,14 +509,12 @@ export function SupplierForm(props: Props) {
               name="taxId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>適格請求書発行事業者番号{isJP && " *"}</FormLabel>
+                  <FormLabel>適格請求書発行事業者番号</FormLabel>
                   <FormControl>
                     <Input placeholder="T1234567890123" {...field} />
                   </FormControl>
                   <FormDescription>
-                    {isJP
-                      ? "国内仕入先は必須。T + 13桁の数字"
-                      : "海外仕入先は任意。T + 13桁の数字"}
+                    {"T + 13桁の数字。分からなければ空で保存し、あとから入力できます"}
                   </FormDescription>
                   <FormMessage />
                 </FormItem>
@@ -717,7 +714,7 @@ export function SupplierForm(props: Props) {
               name="assignedToUserId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>担当者 *</FormLabel>
+                  <FormLabel>担当者</FormLabel>
                   <FormControl>
                     <Select value={field.value} onValueChange={field.onChange}>
                       <SelectTrigger className="md:w-[400px]">
@@ -751,7 +748,7 @@ export function SupplierForm(props: Props) {
                 name="primaryContact.lastName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>姓 *</FormLabel>
+                    <FormLabel>姓</FormLabel>
                     <FormControl>
                       <Input placeholder="山田" {...field} />
                     </FormControl>
@@ -764,7 +761,7 @@ export function SupplierForm(props: Props) {
                 name="primaryContact.firstName"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>名 *</FormLabel>
+                    <FormLabel>名</FormLabel>
                     <FormControl>
                       <Input placeholder="太郎" {...field} />
                     </FormControl>

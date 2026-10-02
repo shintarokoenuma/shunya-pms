@@ -220,12 +220,11 @@ export async function createContractor(
         },
       })
 
-      // 主担当作成は法人（isIndividual === false）かつ姓名入力ありのときのみ
+      // 主担当作成は法人（isIndividual === false）かつ姓か名の入力ありのときのみ（B-252 D-4: 片方だけでも作る）
       const contact = data.primaryContact
       const shouldCreateContact =
         data.isIndividual === false &&
-        contact.firstName !== "" &&
-        contact.lastName !== ""
+        (contact.firstName.trim() !== "" || contact.lastName.trim() !== "")
       if (shouldCreateContact) {
         const displayName = `${contact.lastName} ${contact.firstName}`.trim()
         await tx.contractorContact.create({
@@ -362,15 +361,16 @@ export async function updateContractor(
 
       // 主担当の更新ロジック
       // - isIndividual === true: 既存の主担当があれば論理削除（個人事業主は主担当不要）
-      // - isIndividual === false かつ姓名入力あり: 主担当を upsert（既存があれば更新、なければ作成）
-      // - isIndividual === false かつ姓名入力なし: validator で弾かれるのでここには来ない
+      // - isIndividual === false かつ姓か名の入力あり: 主担当を upsert（既存があれば更新、なければ作成）
+      // - isIndividual === false かつ姓も名も空: 既存の主担当があれば論理削除（B-252 D-4。validator は弾かなくなった）
       const contact = data.primaryContact
+      const hasContactName = contact.firstName.trim() !== "" || contact.lastName.trim() !== ""
       const primary = await tx.contractorContact.findFirst({
         where: { contractorId: id, isPrimary: true, deletedAt: null },
       })
 
-      if (data.isIndividual === true) {
-        // 個人事業主に切り替えた場合は既存主担当を論理削除
+      if (data.isIndividual === true || !hasContactName) {
+        // 個人事業主に切り替えた場合・姓名を空にした場合は既存主担当を論理削除
         if (primary) {
           await tx.contractorContact.update({
             where: { id: primary.id },

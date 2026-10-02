@@ -15,12 +15,12 @@ import {
  * - Factory/Supplier と同じパターン（archive / restore / permanent delete 分離）
  * - 個人事業主 / 法人の区分（isIndividual）あり
  *   - true: 主担当者は本人=個人なので任意
- *   - false: 主担当者の姓名は必須
+ *   - false: 主担当者を持てる（B-252 で姓名の必須は外した）
  * - 専門分野（ContractorSpecialty）は複数選択可（最低1件必須）
  * - 契約形態（ContractorContractType）は単数の必須 enum
  * - 料金体系: packageFee / hourlyRate / monthlyFee はフォーム受け取り
  *   - unitFees (JSON) は DB 列のみ、Phase 2 で UI 化
- * - taxId は「国内 (JP) かつ 適格請求書発行事業者」のときのみ必須（個人事業主免税対応）
+ * - taxId は「国内 (JP) かつ 適格請求書発行事業者」のとき入力したら形式を見る（B-252 で必須は外した・個人事業主免税対応）
  * - 取引条件は paymentMonthOffset + paymentDay（プリセット運用）
  *
  * 仕様確定:
@@ -28,8 +28,8 @@ import {
  * - Q2=B: ロイヤリティ 5項目 は DB 列のみ、フォーム非表示（Phase 2）
  * - Q3=B: 著作権・所有権 2項目 は DB 列のみ、フォーム非表示（Phase 2）
  * - Q4=A: invitedUserId は DB 列のみ、フォーム非表示（Phase 2）
- * - primaryContact=A: isIndividual=false の時のみ姓名必須化
- * - Q5=B: taxId は country=JP かつ isQualifiedInvoiceIssuer=true のとき必須
+ * - primaryContact=A: isIndividual=false の時のみ主担当を持つ（B-252 で姓名の必須は外した。姓か名があれば行を作る）
+ * - Q5=B: taxId の形式チェックは country=JP かつ isQualifiedInvoiceIssuer=true のとき
  */
 
 // ヘルパー: 任意文字列
@@ -76,7 +76,7 @@ const optionalPositiveDecimal = z
   .nullable()
 
 // 主担当（ContractorContact）スキーマ
-// 個人事業主の場合は全フィールド optional 扱い、法人の場合のみ姓名必須化を superRefine で実施
+// 全フィールド optional。法人のとき、姓も名も空なのに他の項目があれば superRefine で弾く（B-252 D-4）
 const primaryContactSchema = z.object({
   firstName: optionalString(100),
   lastName: optionalString(100),
@@ -150,19 +150,13 @@ export const contractorInputSchema = z
     status: z.nativeEnum(ContractorStatus).default(ContractorStatus.ACTIVE),
     notes: optionalString(5000),
 
-    // 主担当（isIndividual=false のときのみ必須化）
+    // 主担当（isIndividual=false のときだけ行を持つ・姓名は任意）
     primaryContact: primaryContactSchema,
   })
   .superRefine((data, ctx) => {
-    // country === "JP" のときの追加バリデーション
+    // country === "JP" のときの形式チェック（B-252 D-2・D-3: 郵便番号・都道府県・登録番号は必須にせず、入力したときだけ形式を見る）
     if (data.country === "JP") {
-      if (data.postalCode === "") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "郵便番号は必須です",
-          path: ["postalCode"],
-        })
-      } else if (!/^\d{3}-?\d{4}$/.test(data.postalCode)) {
+      if (data.postalCode !== "" && !/^\d{3}-?\d{4}$/.test(data.postalCode)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           message: "郵便番号は7桁(例:150-0043)で入力してください",
@@ -170,29 +164,13 @@ export const contractorInputSchema = z
         })
       }
 
-      if (data.prefecture === "") {
+      // Q5=B の形式チェックだけ残す（国内かつ適格のときの「必須」は B-252 で外した。未入力は一覧・詳細に出す）
+      if (data.isQualifiedInvoiceIssuer === true && data.taxId !== "" && !/^T\d{13}$/.test(data.taxId)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "都道府県は必須です",
-          path: ["prefecture"],
+          message: "T で始まる13桁の番号を入力してください(例:T1234567890123)",
+          path: ["taxId"],
         })
-      }
-
-      // Q5=B: taxId は国内かつ適格請求書発行事業者のときのみ必須
-      if (data.isQualifiedInvoiceIssuer === true) {
-        if (data.taxId === "") {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "適格請求書発行事業者番号が必須です",
-            path: ["taxId"],
-          })
-        } else if (!/^T\d{13}$/.test(data.taxId)) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: "T で始まる13桁の番号を入力してください(例:T1234567890123)",
-            path: ["taxId"],
-          })
-        }
       }
     }
 
@@ -235,19 +213,17 @@ export const contractorInputSchema = z
       }
     }
 
-    // 主担当者の必須化チェック（法人の場合のみ）
+    // B-252（D-2・D-4）: 法人でも姓・名は必須にしない。姓も名も空なのに他の項目があるときだけ弾く（法人のとき）
     if (data.isIndividual === false) {
-      if (data.primaryContact.firstName === "") {
+      const pc = data.primaryContact
+      if (
+        pc.firstName.trim() === "" &&
+        pc.lastName.trim() === "" &&
+        [pc.email, pc.phone, pc.mobile, pc.jobTitle, pc.department].some((v) => (v ?? "").trim() !== "")
+      ) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: "法人の場合、主担当者の名は必須です",
-          path: ["primaryContact", "firstName"],
-        })
-      }
-      if (data.primaryContact.lastName === "") {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: "法人の場合、主担当者の姓は必須です",
+          message: "担当者の姓か名を入れてください",
           path: ["primaryContact", "lastName"],
         })
       }

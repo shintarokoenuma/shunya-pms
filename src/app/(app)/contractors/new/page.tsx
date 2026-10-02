@@ -22,6 +22,10 @@ export default async function NewContractorPage() {
           パタンナー・グレーダー・デザイナー等の専門業者を登録します。
           個人事業主・法人どちらにも対応しています。
         </p>
+        {/* B-252（D-8） */}
+        <p className="text-sm text-muted-foreground mt-1">
+          分からない項目は空のまま保存し、あとから編集できます
+        </p>
       </div>
       <ContractorForm mode="create" assignableUsers={assignableUsers} />
     </div>

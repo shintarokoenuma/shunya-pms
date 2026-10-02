@@ -1,6 +1,7 @@
 import Link from "next/link"
 import { Pencil } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
+import { MissingFieldsBadge } from "@/components/master/missing-fields-badge"
 import { Button } from "@/components/ui/button"
 import {
   Table,
@@ -26,6 +27,8 @@ type SupplierRow = {
   supplierType: SupplierType[]
   country: string
   status: SupplierStatus
+  /** B-252（D-7）: 一覧側で supplierMissingFields から計算して渡す */
+  missingFields?: string[]
 }
 
 export function SuppliersTable({
@@ -66,6 +69,7 @@ export function SuppliersTable({
                 >
                   {s.companyName}
                 </Link>
+                <MissingFieldsBadge fields={s.missingFields ?? []} />
                 {s.companyNameEn && (
                   <div className="text-xs text-muted-foreground">
                     {s.companyNameEn}
