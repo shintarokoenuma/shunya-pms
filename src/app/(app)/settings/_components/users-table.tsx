@@ -198,7 +198,7 @@ export function UsersTable({
               <TableRow>
                 <TableHead>名前</TableHead>
                 {canManage && <TableHead>メール</TableHead>}
-                <TableHead className="w-[170px]">役割</TableHead>
+                <TableHead className="w-[150px]">役割</TableHead>
                 <TableHead className="w-[140px]">状態</TableHead>
                 {canManage && <TableHead className="w-[150px]">最終ログイン</TableHead>}
                 <TableHead className="text-right" />
@@ -219,12 +219,17 @@ export function UsersTable({
                   return (
                     <TableRow key={u.id}>
                       <TableCell className="text-sm">{u.name}</TableCell>
-                      {canManage && <TableCell className="text-sm">{u.email ?? "—"}</TableCell>}
+                      {canManage && (
+                        <TableCell className="max-w-[220px] truncate text-sm" title={u.email ?? undefined}>
+                          {u.email ?? "—"}
+                        </TableCell>
+                      )}
                       <TableCell className="text-sm">
                         {editable ? (
                           <Select value={u.role} onValueChange={(v) => changeRole(u, v)} disabled={isPending}>
-                            <SelectTrigger className="h-8 w-[150px]" aria-label={`${u.name} の役割`}>
-                              <SelectValue />
+                            {/* B-253 追加: 表示する文字を直接渡す（hydration のずれで Radix の自動表示が空欄になるため・拡張機能 Feedly で再現） */}
+                            <SelectTrigger className="h-8 w-[130px]" aria-label={`${u.name} の役割`}>
+                              <SelectValue>{ROLE_LABELS[u.role]}</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               {roleOptions.map((r) => (
@@ -259,16 +264,16 @@ export function UsersTable({
                         {u.isSelf ? (
                           <span className="text-xs text-muted-foreground">自分</span>
                         ) : (
-                          <div className="flex justify-end gap-1 whitespace-nowrap">
+                          <div className="flex justify-end gap-1">
                             {canResend && (
-                              <>
-                                <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => resend(u)}>
+                              <div className="flex flex-col items-end gap-1">
+                                <Button type="button" size="sm" variant="outline" className="w-[120px]" disabled={isPending} onClick={() => resend(u)}>
                                   招待を再送
                                 </Button>
-                                <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => setCancelTarget(u)}>
+                                <Button type="button" size="sm" variant="outline" className="w-[120px]" disabled={isPending} onClick={() => setCancelTarget(u)}>
                                   招待を取り消す
                                 </Button>
-                              </>
+                              </div>
                             )}
                             {actions.map((a) => (
                               <Button
@@ -406,7 +411,7 @@ export function UsersTable({
               <Label htmlFor="invite-role">役割</Label>
               <Select value={invite.role} onValueChange={(v) => setInvite({ ...invite, role: v })} disabled={isPending}>
                 <SelectTrigger id="invite-role" className="w-full">
-                  <SelectValue />
+                  <SelectValue>{invite.role ? ROLE_LABELS[invite.role as UserRole] : undefined}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {roleOptions.map((r) => (
