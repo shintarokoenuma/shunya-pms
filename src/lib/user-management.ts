@@ -109,3 +109,21 @@ export function isLastOwnerViolation(args: {
 }
 
 export const LAST_OWNER_ERROR = "最後のオーナーは変更できません"
+
+/**
+ * B-253（C-D4）: 招待のときの、同じメールの既存の行の分類。
+ * - new: 行が無い → 今までどおり新しく作る
+ * - revive: 同じ会社・INVITED・deletedAt あり（取り消した招待）→ その行を起こし直す
+ * - pending: 同じ会社・INVITED・deletedAt なし → 止める（「招待を再送」を使ってもらう）
+ * - in_use: それ以外（有効・停止・アーカイブ・他社・削除済みの有効な人）→ 止める
+ */
+export type InviteEmailClass = "new" | "revive" | "pending" | "in_use"
+
+export function classifyInviteEmail(
+  existing: { companyId: string; status: UserStatus; deletedAt: Date | null } | null,
+  companyId: string,
+): InviteEmailClass {
+  if (!existing) return "new"
+  if (existing.companyId !== companyId || existing.status !== "INVITED") return "in_use"
+  return existing.deletedAt ? "revive" : "pending"
+}

@@ -45,6 +45,11 @@ export const resendInvitationSchema = z.object({
   userId: z.string().min(1, "ユーザーが指定されていません"),
 })
 
+/** B-253（C-D3）: 招待の取り消し。userId だけ */
+export const cancelInvitationSchema = z.object({
+  userId: z.string().min(1, "ユーザーが指定されていません"),
+})
+
 /** P3-D8: 8文字以上・72バイト以下（bcrypt が 72 バイトを超えた分を無視するため）。強度の決まりは B-199 */
 const passwordField = z
   .string()
