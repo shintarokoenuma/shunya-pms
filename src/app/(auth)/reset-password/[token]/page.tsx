@@ -1,5 +1,6 @@
 import Link from "next/link"
-import { RESET_EXPIRED_MESSAGE, RESET_INVALID_MESSAGE, lookupPasswordResetToken } from "@/lib/actions/password-reset"
+import { lookupPasswordResetToken } from "@/lib/actions/password-reset"
+import { RESET_EXPIRED_MESSAGE, RESET_INVALID_MESSAGE } from "@/lib/auth-messages"
 import { AuthCard } from "../../_components/auth-card"
 import { SetPasswordForm } from "../../_components/set-password-form"
 

@@ -8,6 +8,7 @@ import { sendMail } from "@/lib/mail/send"
 import { buildPasswordResetMail } from "@/lib/mail/templates"
 import { findValidToken, issueUserToken } from "@/lib/user-tokens"
 import { requestPasswordResetSchema, resetPasswordSchema } from "@/lib/validators/user-management"
+import { RESET_EXPIRED_MESSAGE, RESET_INVALID_MESSAGE } from "@/lib/auth-messages"
 
 /**
  * B-205 PR-3（P3-D6〜P3-D8・P3-D12・P3-D17・P3-D18）: パスワード再設定（ログイン不要）。
@@ -16,9 +17,6 @@ import { requestPasswordResetSchema, resetPasswordSchema } from "@/lib/validator
  * - 再設定: 同じトランザクションで passwordHash・failedLoginAttempts=0・lockedUntil=null・passwordChangedAt・トークンの usedAt を書く（P3-D12）
  * ★生のトークンはログ・AuditLog・戻り値に出さない。User は TENANT_MODELS に無い。companyId を必ず手書きする
  */
-
-export const RESET_EXPIRED_MESSAGE = "この再設定リンクの有効期限が切れています。もう一度、再設定のメールを送ってください。"
-export const RESET_INVALID_MESSAGE = "この再設定リンクは使えません。"
 
 const RESEND_COOLDOWN_MS = 2 * 60 * 1000
 

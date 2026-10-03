@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
 import { findValidToken } from "@/lib/user-tokens"
 import { acceptInvitationSchema } from "@/lib/validators/user-management"
+import { INVITE_EXPIRED_MESSAGE, INVITE_INVALID_MESSAGE } from "@/lib/auth-messages"
 
 /**
  * B-205 PR-3（P3-D11・P3-D17・P3-D18）: 招待を受ける（ログイン不要）。
@@ -14,9 +15,6 @@ import { acceptInvitationSchema } from "@/lib/validators/user-management"
  * ★ログインしている人が開いても使える。生のトークンはログ・AuditLog・戻り値に出さない
  * ★User は TENANT_MODELS に無い。companyId を必ず手書きする
  */
-
-export const INVITE_EXPIRED_MESSAGE = "この招待リンクの有効期限が切れています。招待した人に再送を頼んでください。"
-export const INVITE_INVALID_MESSAGE = "この招待リンクは使えません。"
 
 type ActionResult<T = void> =
   | { ok: true; data: T extends void ? undefined : T }
