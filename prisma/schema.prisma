@@ -222,6 +222,34 @@ model Session {
   @@map("sessions")
 }
 
+// B-205 PR-3（D-5・P3-D3〜P3-D5）: 招待とパスワード再設定で共用するトークン。
+// - 生のトークンは保存しない（SHA-256 の16進だけ・P3-D4）
+// - 使い終わり＝usedAt・無効＝revokedAt。deletedAt は持たない（物理削除もしない・P3-D5）
+// - 有効期限は作った時点の値を expiresAt に焼き込む（P3-D3）
+enum UserTokenPurpose {
+  INVITE // 招待
+  PASSWORD_RESET // パスワード再設定
+}
+
+model UserToken {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+  userId    String @map("user_id")
+
+  purpose   UserTokenPurpose
+  tokenHash String    @unique @map("token_hash") @db.VarChar(64) // SHA-256 の16進
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  revokedAt DateTime? @map("revoked_at")
+  // 招待した人。再設定は null
+  createdByUserId String? @map("created_by_user_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([companyId, userId, purpose])
+  @@map("user_tokens")
+}
+
 // =====================================================
 // 監査ログ
 // =====================================================

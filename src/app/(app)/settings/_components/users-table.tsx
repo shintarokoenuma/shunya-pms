@@ -4,7 +4,7 @@ import { useState, useTransition } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { AlertTriangle, Loader2 } from "lucide-react"
+import { AlertTriangle, Loader2, UserPlus } from "lucide-react"
 import type { UserRole, UserStatus } from "@prisma/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,9 +17,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { changeUserStatus, updateUserRole, type CompanyUserRow } from "@/lib/actions/users"
+import { changeUserStatus, inviteUser, resendInvitation, updateUserRole, type CompanyUserRow } from "@/lib/actions/users"
 import { ROLE_LABELS, STATUS_LABELS } from "@/lib/constants/user-roles"
 import { isOwner } from "@/lib/permissions"
 import {
@@ -34,8 +36,10 @@ import {
  * B-205 PR-2（spec v1.0 §3-2・§4-6・§4-7）: ユーザーの一覧。文言はモック案B の原文＋R-10 で決めた名前。
  * - 列: 名前／メール／役割／状態／最終ログイン／（操作）。見るだけの人にはメール・最終ログインの列を出さない（D-19）
  * - 役割: 変更できる行はその場のプルダウン（変えた時点で保存・P2-D11）。管理者が見るときは「オーナー」を出さない（P2-D3）
- * - 操作: 有効「停止」／停止「再開」「アーカイブ」／アーカイブ「停止に戻す」／招待中は無し／自分の行は「自分」／管理者から見たオーナーは無し
- * - 「停止」「アーカイブ」は確認を挟む。「＋ ユーザーを招待」「招待を再送」は PR-3（出さない・P2-D12）
+ * - 操作: 有効「停止」／停止「再開」「アーカイブ」／アーカイブ「停止に戻す」／自分の行は「自分」／管理者から見たオーナーは無し
+ * - 「停止」「アーカイブ」は確認を挟む
+ * B-205 PR-3（§4-4・P2-D12・P3-D15）: 「＋ ユーザーを招待」（オーナー・管理者だけ・ダイアログ）と、招待中の行の「招待を再送」（確認は挟まない）。
+ * 招待中の行には最後に送った日時と期限を小さく出す。招待の取り消しは作らない（§9）
  */
 const STATUS_BADGE: Record<UserStatus, "default" | "secondary" | "destructive" | "outline"> = {
   ACTIVE: "default",
@@ -51,6 +55,18 @@ function fmtDateTime(iso: string | null | undefined): string {
   return `${d.getFullYear()}/${p(d.getMonth() + 1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`
 }
 
+/** 招待の期限の見せ方: 「3日後まで有効」「5時間後まで有効」「期限切れ」 */
+function fmtInviteExpiry(expiresAtIso: string, now: Date): string {
+  const ms = new Date(expiresAtIso).getTime() - now.getTime()
+  if (ms <= 0) return "期限切れ"
+  const hours = Math.ceil(ms / (60 * 60 * 1000))
+  if (hours < 24) return `${hours}時間後まで有効`
+  return `${Math.ceil(hours / 24)}日後まで有効`
+}
+
+type InviteForm = { lastName: string; firstName: string; email: string; role: string }
+const EMPTY_INVITE: InviteForm = { lastName: "", firstName: "", email: "", role: "STAFF" }
+
 export function UsersTable({
   users,
   canManage,
@@ -65,7 +81,11 @@ export function UsersTable({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [confirm, setConfirm] = useState<{ user: CompanyUserRow; action: UserStatusAction } | null>(null)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [invite, setInvite] = useState<InviteForm>(EMPTY_INVITE)
+  const [inviteError, setInviteError] = useState<string | null>(null)
   const roleOptions = assignableRolesFor(actorRole)
+  const now = new Date()
 
   const canEditRow = (u: CompanyUserRow) =>
     canManage && !u.isSelf && u.role !== "EXTERNAL" && !(u.role === "OWNER" && !isOwner(actorRole))
@@ -100,13 +120,53 @@ export function UsersTable({
     else runStatus(u, action)
   }
 
+  // B-205 PR-3: 招待
+  const submitInvite = (e: React.FormEvent) => {
+    e.preventDefault()
+    setInviteError(null)
+    startTransition(async () => {
+      const r = await inviteUser(invite)
+      if (!r.ok) {
+        setInviteError(r.error)
+        return
+      }
+      toast.success(`${invite.lastName} ${invite.firstName} に招待メールを送りました`)
+      setInviteOpen(false)
+      setInvite(EMPTY_INVITE)
+      router.refresh()
+    })
+  }
+
+  // B-205 PR-3: 招待の再送（確認は挟まない）
+  const resend = (u: CompanyUserRow) => {
+    startTransition(async () => {
+      const r = await resendInvitation({ userId: u.id })
+      if (!r.ok) {
+        toast.error(r.error)
+        return
+      }
+      toast.success("招待メールを送り直しました")
+      router.refresh()
+    })
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">ユーザー</CardTitle>
-        <CardDescription>
-          役割のプルダウン：オーナー・管理者・生産管理・経理・営業・デザイナー・一般スタッフ（社外ユーザーは出しません）
-        </CardDescription>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-base">ユーザー</CardTitle>
+            <CardDescription>
+              役割のプルダウン：オーナー・管理者・生産管理・経理・営業・デザイナー・一般スタッフ（社外ユーザーは出しません）
+            </CardDescription>
+          </div>
+          {canManage && (
+            <Button type="button" size="sm" onClick={() => setInviteOpen(true)} disabled={isPending}>
+              <UserPlus className="mr-1 h-4 w-4" />
+              ユーザーを招待
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex items-center justify-end">
@@ -123,7 +183,7 @@ export function UsersTable({
                 <TableHead>名前</TableHead>
                 {canManage && <TableHead>メール</TableHead>}
                 <TableHead className="w-[170px]">役割</TableHead>
-                <TableHead className="w-[100px]">状態</TableHead>
+                <TableHead className="w-[140px]">状態</TableHead>
                 {canManage && <TableHead className="w-[150px]">最終ログイン</TableHead>}
                 <TableHead className="text-right" />
               </TableRow>
@@ -139,6 +199,7 @@ export function UsersTable({
                 users.map((u) => {
                   const editable = canEditRow(u)
                   const actions = editable ? availableStatusActions(u.status) : []
+                  const canResend = editable && u.status === "INVITED"
                   return (
                     <TableRow key={u.id}>
                       <TableCell className="text-sm">{u.name}</TableCell>
@@ -163,6 +224,19 @@ export function UsersTable({
                       </TableCell>
                       <TableCell>
                         <Badge variant={STATUS_BADGE[u.status]}>{STATUS_LABELS[u.status]}</Badge>
+                        {u.status === "INVITED" && canManage && (
+                          <div className="mt-1 text-[11px] leading-tight text-muted-foreground" title={u.invite ? `期限: ${fmtDateTime(u.invite.expiresAt)}` : undefined}>
+                            {u.invite ? (
+                              <>
+                                送信 {fmtDateTime(u.invite.sentAt)}
+                                <br />
+                                {fmtInviteExpiry(u.invite.expiresAt, now)}
+                              </>
+                            ) : (
+                              "有効な招待なし"
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                       {canManage && <TableCell className="text-sm tabular-nums">{fmtDateTime(u.lastLoginAt)}</TableCell>}
                       <TableCell className="text-right">
@@ -170,6 +244,11 @@ export function UsersTable({
                           <span className="text-xs text-muted-foreground">自分</span>
                         ) : (
                           <div className="flex justify-end gap-1 whitespace-nowrap">
+                            {canResend && (
+                              <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => resend(u)}>
+                                招待を再送
+                              </Button>
+                            )}
                             {actions.map((a) => (
                               <Button
                                 key={a}
@@ -218,6 +297,88 @@ export function UsersTable({
               {confirm ? USER_STATUS_ACTION_LABELS[confirm.action] : ""}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* B-205 PR-3（§4-4）: 招待のダイアログ。役割は assignableRolesFor（管理者には「オーナー」を出さない・P2-D3） */}
+      <Dialog
+        open={inviteOpen}
+        onOpenChange={(open) => {
+          if (!open && !isPending) {
+            setInviteOpen(false)
+            setInviteError(null)
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <form onSubmit={submitInvite} className="space-y-4">
+            <DialogHeader>
+              <DialogTitle>ユーザーを招待</DialogTitle>
+              <DialogDescription>招待メールのリンクから、本人がパスワードを決めて有効になります。</DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label htmlFor="invite-lastName">姓</Label>
+                <Input
+                  id="invite-lastName"
+                  value={invite.lastName}
+                  onChange={(e) => setInvite({ ...invite, lastName: e.target.value })}
+                  required
+                  maxLength={100}
+                  disabled={isPending}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="invite-firstName">名</Label>
+                <Input
+                  id="invite-firstName"
+                  value={invite.firstName}
+                  onChange={(e) => setInvite({ ...invite, firstName: e.target.value })}
+                  required
+                  maxLength={100}
+                  disabled={isPending}
+                />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="invite-email">メールアドレス</Label>
+              <Input
+                id="invite-email"
+                type="email"
+                value={invite.email}
+                onChange={(e) => setInvite({ ...invite, email: e.target.value })}
+                required
+                maxLength={255}
+                disabled={isPending}
+                autoComplete="off"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="invite-role">役割</Label>
+              <Select value={invite.role} onValueChange={(v) => setInvite({ ...invite, role: v })} disabled={isPending}>
+                <SelectTrigger id="invite-role" className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {roleOptions.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {ROLE_LABELS[r]}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {inviteError && <p className="text-sm text-destructive">{inviteError}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" disabled={isPending} onClick={() => setInviteOpen(false)}>
+                やめる
+              </Button>
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+                招待メールを送る
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </Card>
