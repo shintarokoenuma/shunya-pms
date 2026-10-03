@@ -218,9 +218,11 @@ export function UsersTable({
                   const canResend = editable && u.status === "INVITED"
                   return (
                     <TableRow key={u.id}>
-                      <TableCell className="text-sm">{u.name}</TableCell>
+                      <TableCell className="max-w-[150px] truncate text-sm" title={u.name}>
+                        {u.name}
+                      </TableCell>
                       {canManage && (
-                        <TableCell className="max-w-[220px] truncate text-sm" title={u.email ?? undefined}>
+                        <TableCell className="max-w-[180px] truncate text-sm" title={u.email ?? undefined}>
                           {u.email ?? "—"}
                         </TableCell>
                       )}
