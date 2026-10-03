@@ -9,17 +9,19 @@ import { canManageCompany, isOwner } from "@/lib/permissions"
 import { MailConfigError, getAppBaseUrl, getMailConfig } from "@/lib/mail/config"
 import { MAIL_NOT_CONFIGURED_MESSAGE, sendMail } from "@/lib/mail/send"
 import { buildInviteMail } from "@/lib/mail/templates"
-import { generateToken, issueUserToken } from "@/lib/user-tokens"
+import { generateToken, issueUserToken, revokeUnusedUserTokens } from "@/lib/user-tokens"
 import { STATUS_ORDER } from "@/lib/constants/user-roles"
 import { canSeeSettingsSection } from "@/lib/settings-visibility"
 import { getRolePermissions } from "@/lib/settings-visibility-db"
 import {
   LAST_OWNER_ERROR,
   checkActorCanTouch,
+  classifyInviteEmail,
   isLastOwnerViolation,
   nextUserStatus,
 } from "@/lib/user-management"
 import {
+  cancelInvitationSchema,
   changeUserStatusSchema,
   inviteUserSchema,
   resendInvitationSchema,
@@ -35,7 +37,9 @@ import {
  * B-205 PR-3（P3-D9〜P3-D15・P3-D18）: 招待（inviteUser）と招待の再送（resendInvitation）。
  * - User を INVITED で作り、トークンを発行し、AuditLog を書き、最後にメールを送る。送信に失敗したらトランザクションを戻す（P3-D14）
  * - 一覧の招待中の行には、最後に送った日時と期限を OWNER / ADMIN にだけ返す
- * ★User は TENANT_MODELS に無い。companyId を必ず手書きする
+ * B-253（C-D1〜C-D7）: 招待の取り消し（cancelInvitation＝未使用の招待トークンを無効にして行に deletedAt）と、
+ * 取り消した招待と同じ会社・同じアドレスを招待し直したときの行の使い回し（inviteUser の revive）
+ * ★User は TENANT_MODELS に無い。companyId を必ず手書きする（deletedAt ありの行も findUnique で返る）
  */
 
 export type ActionResult<T = void> =
@@ -68,6 +72,7 @@ class MailSendError extends Error {
 }
 
 const EMAIL_IN_USE = "このメールアドレスは既に使われています"
+const INVITE_PENDING = "このアドレスには招待中です。「招待を再送」を使ってください"
 const INVITE_SEND_FAILED = "招待メールを送れませんでした。時間をおいてもう一度試してください"
 const OWNER_INVITE_ONLY = "役割「オーナー」で招待できるのはオーナーだけです"
 
@@ -335,9 +340,16 @@ export async function inviteUser(input: unknown): Promise<ActionResult<{ id: str
     const appBaseUrl = getAppBaseUrl()
     const inviteTtlMs = getMailConfig().inviteTtlHours * 60 * 60 * 1000
 
-    // P3-D9: email は全体で @unique。どの会社でも居れば止める
-    const dup = await prisma.user.findUnique({ where: { email }, select: { id: true } })
-    if (dup) return { ok: false, error: EMAIL_IN_USE }
+    // P3-D9: email は全体で @unique。B-253（C-D4）: 同じメールの既存の行を4通りに分ける
+    // （User は TENANT_MODELS に無いので、取り消した招待＝deletedAt ありの行も findUnique で返る・§2 ①で実測）
+    const existing = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true, companyId: true, status: true, deletedAt: true },
+    })
+    const emailClass = classifyInviteEmail(existing, sess.companyId)
+    if (emailClass === "in_use") return { ok: false, error: EMAIL_IN_USE }
+    if (emailClass === "pending") return { ok: false, error: INVITE_PENDING }
+    const reviveId = emailClass === "revive" && existing ? existing.id : null
 
     const [actor, company] = await Promise.all([
       prisma.user.findFirst({
@@ -354,25 +366,46 @@ export async function inviteUser(input: unknown): Promise<ActionResult<{ id: str
 
     const result = await prisma.$transaction(
       async (tx: TxClient) => {
-        const created = await tx.user.create({
-          data: {
-            companyId: sess.companyId,
-            email,
-            firstName,
-            lastName,
-            // authorize は displayName を session の name にする（auth.ts）。無いとダッシュボードの挨拶が空・右上がメールの @ の前になる。
-            // dev の確認用ユーザー（dev-create-test-users.ts）と同じ「姓 名」の形で入れる
-            displayName: inviteeName,
-            role,
-            status: UserStatus.INVITED,
-            passwordHash: placeholderHash,
-            isExternalUser: false,
-          },
-          select: { id: true },
-        })
+        let userId: string
+        if (reviveId) {
+          // B-253（C-D5）: 取り消した招待の行を起こし直す。where で状態を確かめ、count が 1 でなければ戻す
+          const revived = await tx.user.updateMany({
+            where: { id: reviveId, companyId: sess.companyId, status: UserStatus.INVITED, deletedAt: { not: null } },
+            data: {
+              firstName,
+              lastName,
+              displayName: inviteeName,
+              role,
+              passwordHash: placeholderHash,
+              deletedAt: null,
+              failedLoginAttempts: 0,
+              lockedUntil: null,
+            },
+          })
+          if (revived.count !== 1) throw new UserActionError(EMAIL_IN_USE)
+          userId = reviveId
+        } else {
+          const created = await tx.user.create({
+            data: {
+              companyId: sess.companyId,
+              email,
+              firstName,
+              lastName,
+              // authorize は displayName を session の name にする（auth.ts）。無いとダッシュボードの挨拶が空・右上がメールの @ の前になる。
+              // dev の確認用ユーザー（dev-create-test-users.ts）と同じ「姓 名」の形で入れる
+              displayName: inviteeName,
+              role,
+              status: UserStatus.INVITED,
+              passwordHash: placeholderHash,
+              isExternalUser: false,
+            },
+            select: { id: true },
+          })
+          userId = created.id
+        }
         const issued = await issueUserToken(tx, {
           companyId: sess.companyId,
-          userId: created.id,
+          userId,
           purpose: "INVITE",
           ttlMs: inviteTtlMs,
           createdByUserId: sess.userId,
@@ -381,11 +414,13 @@ export async function inviteUser(input: unknown): Promise<ActionResult<{ id: str
           data: {
             companyId: sess.companyId,
             userId: sess.userId,
-            action: "CREATE",
+            action: reviveId ? "UPDATE" : "CREATE",
             entityType: "User",
-            entityId: created.id,
-            afterData: { email, role, status: UserStatus.INVITED },
-            description: `ユーザーを招待: ${inviteeName}（${email}）${role}`,
+            entityId: userId,
+            afterData: { email, role, status: UserStatus.INVITED, ...(reviveId ? { revived: true } : {}) },
+            description: reviveId
+              ? `ユーザーを再招待（取り消した招待を使い直し）: ${inviteeName}（${email}）${role}`
+              : `ユーザーを招待: ${inviteeName}（${email}）${role}`,
           },
         })
         // P3-D14: 送信は最後。失敗したら throw して全体を戻す
@@ -399,7 +434,7 @@ export async function inviteUser(input: unknown): Promise<ActionResult<{ id: str
         })
         const sent = await sendMail({ to: email, ...mail })
         if (!sent.ok) throw new MailSendError(sent.reason)
-        return { id: created.id }
+        return { id: userId }
       },
       { timeout: 30000 },
     )
@@ -498,5 +533,65 @@ export async function resendInvitation(input: unknown): Promise<ActionResult<{ i
     if (e instanceof MailConfigError) return { ok: false, error: MAIL_NOT_CONFIGURED_MESSAGE }
     if (e instanceof UserActionError) return { ok: false, error: e.message }
     return { ok: false, error: e instanceof Error ? e.message : "招待の再送に失敗しました" }
+  }
+}
+
+// =============================================================================
+// 6. 招待の取り消し（B-253・C-D1〜C-D3・C-D6）
+// =============================================================================
+export async function cancelInvitation(input: unknown): Promise<ActionResult<{ id: string }>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+    if (sess.role === "EXTERNAL") return { ok: false, error: EXTERNAL_DENIED }
+    if (!canManageCompany(sess.role)) return { ok: false, error: "招待を取り消せるのはオーナーと管理者だけです" }
+
+    const parsed = cancelInvitationSchema.safeParse(input)
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容に誤りがあります" }
+    }
+    const { userId } = parsed.data
+
+    const result = await prisma.$transaction(
+      async (tx: TxClient) => {
+        // C-D3: 条件は「招待を再送」と同じ
+        const target = await tx.user.findFirst({
+          where: { id: userId, companyId: sess.companyId, deletedAt: null, isExternalUser: false },
+          select: { id: true, role: true, status: true, email: true, displayName: true, lastName: true, firstName: true },
+        })
+        if (!target) throw new UserActionError("ユーザーが見つかりません")
+        if (target.status !== UserStatus.INVITED) throw new UserActionError("招待を取り消せるのは招待中のユーザーだけです")
+        if (target.role === UserRole.OWNER && !isOwner(sess.role)) throw new UserActionError("オーナーの変更はオーナーだけができます")
+
+        // C-D2: 未使用の招待トークンを無効にする → 行に deletedAt（status は INVITED のまま）→ AuditLog。物理削除はしない
+        const now = new Date()
+        const revokedTokens = await revokeUnusedUserTokens(tx, { companyId: sess.companyId, userId: target.id, purpose: "INVITE" }, now)
+        const updated = await tx.user.updateMany({
+          where: { id: target.id, companyId: sess.companyId, status: UserStatus.INVITED, deletedAt: null },
+          data: { deletedAt: now },
+        })
+        if (updated.count !== 1) throw new UserActionError("招待の取り消しに失敗しました。画面を開き直してください")
+        await tx.auditLog.create({
+          data: {
+            companyId: sess.companyId,
+            userId: sess.userId,
+            action: "DELETE",
+            entityType: "User",
+            entityId: target.id,
+            beforeData: { status: UserStatus.INVITED },
+            afterData: { deletedAt: now.toISOString(), revokedTokens },
+            description: `招待を取り消し: ${personName(target)}（${target.email}）`,
+          },
+        })
+        return { id: target.id }
+      },
+      { timeout: 15000 },
+    )
+
+    revalidatePath("/settings", "layout")
+    return { ok: true, data: result }
+  } catch (e) {
+    if (e instanceof UserActionError) return { ok: false, error: e.message }
+    return { ok: false, error: e instanceof Error ? e.message : "招待の取り消しに失敗しました" }
   }
 }

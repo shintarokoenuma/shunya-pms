@@ -24,6 +24,22 @@ export function hashToken(raw: string): string {
 
 export type IssuedToken = { token: string; expiresAt: Date }
 
+/**
+ * B-253（C-D6）: 同じ人・同じ用途の未使用（usedAt も revokedAt も null）のトークンを revokedAt で無効にする。
+ * issueUserToken（再送・再設定）と招待の取り消しの両方から呼ぶ。物理削除はしない。戻り値は無効にした数
+ */
+export async function revokeUnusedUserTokens(
+  tx: TxClient,
+  args: { companyId: string; userId: string; purpose: UserTokenPurpose },
+  now: Date = new Date(),
+): Promise<number> {
+  const r = await tx.userToken.updateMany({
+    where: { companyId: args.companyId, userId: args.userId, purpose: args.purpose, usedAt: null, revokedAt: null },
+    data: { revokedAt: now },
+  })
+  return r.count
+}
+
 export async function issueUserToken(
   tx: TxClient,
   args: {
@@ -36,10 +52,7 @@ export async function issueUserToken(
 ): Promise<IssuedToken> {
   const now = new Date()
   // 同じ人・同じ用途の未使用を無効にする（再送で古いリンクが生き残らないように）
-  await tx.userToken.updateMany({
-    where: { companyId: args.companyId, userId: args.userId, purpose: args.purpose, usedAt: null, revokedAt: null },
-    data: { revokedAt: now },
-  })
+  await revokeUnusedUserTokens(tx, { companyId: args.companyId, userId: args.userId, purpose: args.purpose }, now)
   const token = generateToken()
   const expiresAt = new Date(now.getTime() + args.ttlMs)
   await tx.userToken.create({

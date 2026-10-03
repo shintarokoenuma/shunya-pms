@@ -7,6 +7,7 @@ import {
   assignableRolesFor,
   availableStatusActions,
   checkActorCanTouch,
+  classifyInviteEmail,
   isLastOwnerViolation,
   nextUserStatus,
   statusActionNeedsConfirm,
@@ -99,6 +100,21 @@ function assert(cond: boolean, msg: string): void {
     "⑥-7 壊れた値は空",
   )
   assert(!canSeeSettingsSection(empty, "EXTERNAL", "company") && !canSeeSettingsSection(empty, null, "company"), "⑥-8 EXTERNAL / 未ログインは見えない")
+}
+
+// ⑦ B-253（C-D4）: 招待のときの同じメールの既存の行の分類
+{
+  const me = "company-a"
+  const d = new Date("2026-10-03T00:00:00Z")
+  assert(classifyInviteEmail(null, me) === "new", "⑦-1 行が無ければ new")
+  assert(classifyInviteEmail({ companyId: me, status: "INVITED", deletedAt: d }, me) === "revive", "⑦-2 同じ会社・INVITED・取り消し済みは revive")
+  assert(classifyInviteEmail({ companyId: me, status: "INVITED", deletedAt: null }, me) === "pending", "⑦-3 同じ会社・INVITED・取り消していないは pending")
+  assert(classifyInviteEmail({ companyId: me, status: "ACTIVE", deletedAt: null }, me) === "in_use", "⑦-4 有効な人は in_use")
+  assert(classifyInviteEmail({ companyId: me, status: "SUSPENDED", deletedAt: null }, me) === "in_use", "⑦-5 停止の人は in_use")
+  assert(classifyInviteEmail({ companyId: me, status: "ARCHIVED", deletedAt: null }, me) === "in_use", "⑦-6 アーカイブの人は in_use")
+  assert(classifyInviteEmail({ companyId: "company-b", status: "INVITED", deletedAt: d }, me) === "in_use", "⑦-7 他社の取り消した招待は in_use")
+  assert(classifyInviteEmail({ companyId: "company-b", status: "INVITED", deletedAt: null }, me) === "in_use", "⑦-8 他社の招待中も in_use")
+  assert(classifyInviteEmail({ companyId: me, status: "ACTIVE", deletedAt: d }, me) === "in_use", "⑦-9 同じ会社の削除済みの有効な人は in_use")
 }
 
 console.log("user-management.test.ts: all assertions passed")

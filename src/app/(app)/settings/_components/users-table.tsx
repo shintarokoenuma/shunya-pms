@@ -21,7 +21,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { changeUserStatus, inviteUser, resendInvitation, updateUserRole, type CompanyUserRow } from "@/lib/actions/users"
+import { cancelInvitation, changeUserStatus, inviteUser, resendInvitation, updateUserRole, type CompanyUserRow } from "@/lib/actions/users"
 import { ROLE_LABELS, STATUS_LABELS } from "@/lib/constants/user-roles"
 import { isOwner } from "@/lib/permissions"
 import {
@@ -39,7 +39,8 @@ import {
  * - 操作: 有効「停止」／停止「再開」「アーカイブ」／アーカイブ「停止に戻す」／自分の行は「自分」／管理者から見たオーナーは無し
  * - 「停止」「アーカイブ」は確認を挟む
  * B-205 PR-3（§4-4・P2-D12・P3-D15）: 「＋ ユーザーを招待」（オーナー・管理者だけ・ダイアログ）と、招待中の行の「招待を再送」（確認は挟まない）。
- * 招待中の行には最後に送った日時と期限を小さく出す。招待の取り消しは作らない（§9）
+ * 招待中の行には最後に送った日時と期限を小さく出す。
+ * B-253（C-D1〜C-D3）: 招待中の行に「招待を取り消す」（確認を挟む・「停止」「アーカイブ」と同じ部品）。取り消すと一覧から消える
  */
 const STATUS_BADGE: Record<UserStatus, "default" | "secondary" | "destructive" | "outline"> = {
   ACTIVE: "default",
@@ -84,6 +85,7 @@ export function UsersTable({
   const [inviteOpen, setInviteOpen] = useState(false)
   const [invite, setInvite] = useState<InviteForm>(EMPTY_INVITE)
   const [inviteError, setInviteError] = useState<string | null>(null)
+  const [cancelTarget, setCancelTarget] = useState<CompanyUserRow | null>(null)
   const roleOptions = assignableRolesFor(actorRole)
   const now = new Date()
 
@@ -137,6 +139,20 @@ export function UsersTable({
     })
   }
 
+  // B-253: 招待の取り消し（確認を挟む）
+  const runCancel = (u: CompanyUserRow) => {
+    startTransition(async () => {
+      const r = await cancelInvitation({ userId: u.id })
+      if (!r.ok) {
+        toast.error(r.error)
+        return
+      }
+      toast.success(`${u.name} への招待を取り消しました`)
+      setCancelTarget(null)
+      router.refresh()
+    })
+  }
+
   // B-205 PR-3: 招待の再送（確認は挟まない）
   const resend = (u: CompanyUserRow) => {
     startTransition(async () => {
@@ -182,7 +198,7 @@ export function UsersTable({
               <TableRow>
                 <TableHead>名前</TableHead>
                 {canManage && <TableHead>メール</TableHead>}
-                <TableHead className="w-[170px]">役割</TableHead>
+                <TableHead className="w-[150px]">役割</TableHead>
                 <TableHead className="w-[140px]">状態</TableHead>
                 {canManage && <TableHead className="w-[150px]">最終ログイン</TableHead>}
                 <TableHead className="text-right" />
@@ -202,13 +218,20 @@ export function UsersTable({
                   const canResend = editable && u.status === "INVITED"
                   return (
                     <TableRow key={u.id}>
-                      <TableCell className="text-sm">{u.name}</TableCell>
-                      {canManage && <TableCell className="text-sm">{u.email ?? "—"}</TableCell>}
+                      <TableCell className="max-w-[150px] truncate text-sm" title={u.name}>
+                        {u.name}
+                      </TableCell>
+                      {canManage && (
+                        <TableCell className="max-w-[180px] truncate text-sm" title={u.email ?? undefined}>
+                          {u.email ?? "—"}
+                        </TableCell>
+                      )}
                       <TableCell className="text-sm">
                         {editable ? (
                           <Select value={u.role} onValueChange={(v) => changeRole(u, v)} disabled={isPending}>
-                            <SelectTrigger className="h-8 w-[150px]" aria-label={`${u.name} の役割`}>
-                              <SelectValue />
+                            {/* B-253 追加: 表示する文字を直接渡す（hydration のずれで Radix の自動表示が空欄になるため・拡張機能 Feedly で再現） */}
+                            <SelectTrigger className="h-8 w-[130px]" aria-label={`${u.name} の役割`}>
+                              <SelectValue>{ROLE_LABELS[u.role]}</SelectValue>
                             </SelectTrigger>
                             <SelectContent>
                               {roleOptions.map((r) => (
@@ -243,11 +266,16 @@ export function UsersTable({
                         {u.isSelf ? (
                           <span className="text-xs text-muted-foreground">自分</span>
                         ) : (
-                          <div className="flex justify-end gap-1 whitespace-nowrap">
+                          <div className="flex justify-end gap-1">
                             {canResend && (
-                              <Button type="button" size="sm" variant="outline" disabled={isPending} onClick={() => resend(u)}>
-                                招待を再送
-                              </Button>
+                              <div className="flex flex-col items-end gap-1">
+                                <Button type="button" size="sm" variant="outline" className="w-[120px]" disabled={isPending} onClick={() => resend(u)}>
+                                  招待を再送
+                                </Button>
+                                <Button type="button" size="sm" variant="outline" className="w-[120px]" disabled={isPending} onClick={() => setCancelTarget(u)}>
+                                  招待を取り消す
+                                </Button>
+                              </div>
                             )}
                             {actions.map((a) => (
                               <Button
@@ -271,7 +299,9 @@ export function UsersTable({
             </TableBody>
           </Table>
         </div>
-        <p className="text-xs text-muted-foreground">役割はその場のプルダウンで変えます。「停止」は確認を挟みます。</p>
+        <p className="text-xs text-muted-foreground">
+          役割はその場のプルダウンで変えます。招待中の行は「招待を再送」「招待を取り消す」ができます。「停止」「アーカイブ」「招待を取り消す」は確認を挟みます。
+        </p>
         {!canManage && <p className="text-xs text-muted-foreground">変更できるのはオーナーと管理者だけです。</p>}
       </CardContent>
 
@@ -295,6 +325,32 @@ export function UsersTable({
             <Button variant="destructive" disabled={isPending} onClick={() => confirm && runStatus(confirm.user, confirm.action)}>
               {isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
               {confirm ? USER_STATUS_ACTION_LABELS[confirm.action] : ""}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* B-253（§1 の文言）: 招待の取り消しの確認 */}
+      <Dialog open={cancelTarget !== null} onOpenChange={(open) => !open && !isPending && setCancelTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              招待を取り消しますか？
+            </DialogTitle>
+            <DialogDescription>
+              {cancelTarget
+                ? `${cancelTarget.name}（${cancelTarget.email ?? ""}）への招待を取り消します。送ったリンクは使えなくなり、一覧から消えます。同じアドレスには、あとから招待し直せます。`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" disabled={isPending} onClick={() => setCancelTarget(null)}>
+              戻る
+            </Button>
+            <Button variant="destructive" disabled={isPending} onClick={() => cancelTarget && runCancel(cancelTarget)}>
+              {isPending && <Loader2 className="mr-1 h-4 w-4 animate-spin" />}
+              招待を取り消す
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -357,7 +413,7 @@ export function UsersTable({
               <Label htmlFor="invite-role">役割</Label>
               <Select value={invite.role} onValueChange={(v) => setInvite({ ...invite, role: v })} disabled={isPending}>
                 <SelectTrigger id="invite-role" className="w-full">
-                  <SelectValue />
+                  <SelectValue>{invite.role ? ROLE_LABELS[invite.role as UserRole] : undefined}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {roleOptions.map((r) => (
