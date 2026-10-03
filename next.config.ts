@@ -10,6 +10,12 @@ const nextConfig: NextConfig = {
       bodySizeLimit: "10mb",
     },
   },
+  // B-205 PR-3: dev の Server Function のログ（「└─ ƒ resetPassword({...}) in …ms」）に引数が出るので止める。
+  // パスワード・トークン・メールアドレスを引数に取る action があるため。本番（next start）はもともと出ない
+  // （node_modules/next/dist/server/app-render/action-handler.js: NODE_ENV === 'development' のときだけ）。
+  logging: {
+    serverFunctions: false,
+  },
 };
 
 export default nextConfig;
