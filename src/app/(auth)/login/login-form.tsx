@@ -2,23 +2,27 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { Eye, EyeOff } from "lucide-react"
 import { signIn } from "next-auth/react"
 import { useRouter } from "next/navigation"
 
 /**
  * ログインのフォーム（B-205 PR-3 で page.tsx から切り出し。中身は PR-2 までと同じ）。
  * - B-205 PR-3（§4-6）: パスワード欄の下に「パスワードを忘れた方」。notice は page.tsx が ?invited / ?reset から組み立てる
+ * - B-205 PR-3（慎太郎さんの要望）: パスワード欄の右端に表示／非表示の目のボタン（初期は隠す・保存しない）
  */
 export function LoginForm({ notice }: { notice: string | null }) {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError("")
+    setShowPassword(false)
     setIsLoading(true)
 
     try {
@@ -100,17 +104,29 @@ export function LoginForm({ notice }: { notice: string | null }) {
               >
                 パスワード
               </label>
-              <input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={isLoading}
-                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent transition disabled:bg-slate-50 disabled:cursor-not-allowed"
-                placeholder="••••••••"
-                autoComplete="current-password"
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={isLoading}
+                  className="w-full px-4 py-2 pr-11 border border-slate-300 rounded-lg focus:ring-2 focus:ring-slate-900 focus:border-transparent transition disabled:bg-slate-50 disabled:cursor-not-allowed"
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "パスワードを隠す" : "パスワードを表示"}
+                  aria-pressed={showPassword}
+                  disabled={isLoading}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-slate-500 hover:text-slate-900 disabled:opacity-50"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               <p className="mt-1 text-right">
                 <Link href="/forgot-password" className="text-xs text-slate-500 underline hover:text-slate-900">
                   パスワードを忘れた方

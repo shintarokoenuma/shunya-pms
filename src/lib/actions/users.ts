@@ -360,6 +360,9 @@ export async function inviteUser(input: unknown): Promise<ActionResult<{ id: str
             email,
             firstName,
             lastName,
+            // authorize は displayName を session の name にする（auth.ts）。無いとダッシュボードの挨拶が空・右上がメールの @ の前になる。
+            // dev の確認用ユーザー（dev-create-test-users.ts）と同じ「姓 名」の形で入れる
+            displayName: inviteeName,
             role,
             status: UserStatus.INVITED,
             passwordHash: placeholderHash,
