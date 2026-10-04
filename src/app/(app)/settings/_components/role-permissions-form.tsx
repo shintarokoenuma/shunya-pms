@@ -73,15 +73,14 @@ export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissio
     })
   }
 
+  // B-257（D-1・D-3）: 項目の列は左に固定（横スクロールしても行名が残る・右端に線）。役割の列は最小幅を決めず中身に任せる
   const headerRow = (
     <TableRow>
-      <TableHead className="min-w-[110px]">項目</TableHead>
-      <TableHead className="min-w-[90px]">{ROLE_LABELS.OWNER}</TableHead>
-      <TableHead className="min-w-[90px]">{ROLE_LABELS.ADMIN}</TableHead>
+      <TableHead className="sticky left-0 z-10 min-w-[110px] border-r bg-card">項目</TableHead>
+      <TableHead>{ROLE_LABELS.OWNER}</TableHead>
+      <TableHead>{ROLE_LABELS.ADMIN}</TableHead>
       {CONFIGURABLE_ROLES.map((r) => (
-        <TableHead key={r} className="min-w-[110px]">
-          {ROLE_LABELS[r]}
-        </TableHead>
+        <TableHead key={r}>{ROLE_LABELS[r]}</TableHead>
       ))}
     </TableRow>
   )
@@ -93,7 +92,7 @@ export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissio
   ) =>
     canManage ? (
       <Select value={value} onValueChange={(v) => onChange(v as SectionVisibility)} disabled={isPending}>
-        <SelectTrigger className="h-8 w-[96px]" aria-label={ariaLabel}>
+        <SelectTrigger className="h-8 w-[84px]" aria-label={ariaLabel}>
           {/* B-258 の対策（PR #180 と同じ）: 表示する文字を直接渡す */}
           <SelectValue>{VIS_LABELS[value]}</SelectValue>
         </SelectTrigger>
@@ -113,13 +112,14 @@ export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissio
         <CardDescription>役割ごとに、見せる項目と隠す項目を選びます。オーナーと管理者だけが変えられます</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="overflow-x-auto rounded-md border">
+        {/* B-257（D-4）: 横スクロールの入れ物は Table 自身のものだけにする（sticky が効く入れ物を1つにする） */}
+        <div className="rounded-md border">
           <Table>
             <TableHeader>{headerRow}</TableHeader>
             <TableBody>
               {SETTINGS_SECTIONS.map((s) => (
                 <TableRow key={s}>
-                  <TableCell className="text-sm font-medium">{SETTINGS_SECTION_LABELS[s]}</TableCell>
+                  <TableCell className="sticky left-0 z-10 border-r bg-card text-sm font-medium">{SETTINGS_SECTION_LABELS[s]}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">変更できる</TableCell>
                   <TableCell className="text-sm text-muted-foreground">変更できる</TableCell>
                   {CONFIGURABLE_ROLES.map((r) => (
@@ -138,14 +138,15 @@ export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissio
         {/* B-243 PR-1（C-D8）: 画面の領域。行は「発注」 */}
         <div>
           <h3 className="mb-2 text-sm font-medium">画面</h3>
-          <div className="overflow-x-auto rounded-md border">
+          <div className="rounded-md border">
             <Table>
               <TableHeader>{headerRow}</TableHeader>
               <TableBody>
                 {AREA_KEYS.map((a) => (
                   <TableRow key={a}>
-                    <TableCell className="text-sm">
-                      <div className="font-medium">{AREA_LABELS[a]}</div>
+                    {/* B-257（D-2）: 項目の幅を決めて説明は折り返す。ラベルは1行のまま */}
+                    <TableCell className="sticky left-0 z-10 w-[168px] min-w-[168px] whitespace-normal border-r bg-card text-sm">
+                      <div className="whitespace-nowrap font-medium">{AREA_LABELS[a]}</div>
                       <div className="text-xs text-muted-foreground">{AREA_HINTS[a]}</div>
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">変更できる</TableCell>
