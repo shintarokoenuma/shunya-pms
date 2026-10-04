@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { CounterpartType, Prisma, DeliveryLineKind, DeliveryNoteStatus, SalesOrderStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { getCompanyIssuer, issuerAddressLine } from "@/lib/company-issuer"
 import { checkPeriodLock } from "@/lib/period-close/lock"
 import { toYmd } from "@/lib/calc/invoice-period"
@@ -1152,6 +1153,9 @@ export async function createDepositRequest(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: sales が見えない役割は止める
+    const area = await checkArea("sales")
+    if (!area.ok) return area
 
     const parsed = depositRequestSchema.safeParse(input)
     if (!parsed.success) {
@@ -1317,6 +1321,9 @@ export async function getSalesOrderDepositSection(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: sales が見えない役割は止める
+    const area = await checkArea("sales")
+    if (!area.ok) return area
     const summaries = await loadDepositSummaries(sess.companyId, [soId])
     const rows = await prisma.deliveryNoteItem.findMany({
       where: {

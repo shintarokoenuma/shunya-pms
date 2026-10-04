@@ -141,6 +141,9 @@ export async function generateProductionOrders(
     // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は生成できない（中で呼ぶ createPurchaseOrder / createWorkOrder も同じ判定をする）
     const area = await checkArea("orders")
     if (!area.ok) return area
+    // B-243 PR-2（D2-6）: 量産見積の明細と単価を扱うため、原価・見積も見える人だけ
+    const costArea = await checkArea("cost")
+    if (!costArea.ok) return costArea
 
     // 対象 PE が自社のものであることを確認（ProductionEstimateItem に companyId 列は無い）。
     const pe = await prisma.productionEstimate.findFirst({

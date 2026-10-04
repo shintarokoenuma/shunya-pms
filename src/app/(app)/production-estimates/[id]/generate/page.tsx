@@ -19,6 +19,8 @@ export default async function GenerateProductionOrdersPage({
   if (!session?.user) redirect("/login")
   // B-243 PR-1（§2-3）: 発注が見えない役割は /dashboard へ
   await requireAreaPage("orders")
+  // B-243 PR-2（D2-6）: 量産見積の明細と単価を並べるため、原価・見積も見える人だけ（layout でも止まるが意図を明示）
+  await requireAreaPage("cost")
 
   const { id } = await params
   const result = await getProductionOrderGenerationContext(id)

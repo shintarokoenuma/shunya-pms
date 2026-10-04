@@ -11,6 +11,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import {
   salesOrderInputSchema,
   type SalesOrderInput,
@@ -331,6 +332,9 @@ export async function listSalesOrders(): Promise<
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: sales が見えない役割は止める
+    const area = await checkArea("sales")
+    if (!area.ok) return area
 
     const orders = await prisma.salesOrder.findMany({
       where: { companyId: sess.companyId, deletedAt: null },
@@ -401,6 +405,9 @@ export async function getSalesOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: sales が見えない役割は止める
+    const area = await checkArea("sales")
+    if (!area.ok) return area
 
     const so = await prisma.salesOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -469,6 +476,9 @@ export async function createSalesOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: sales が見えない役割は止める
+    const area = await checkArea("sales")
+    if (!area.ok) return area
 
     const parsed = salesOrderInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -620,6 +630,9 @@ export async function updateSalesOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: sales が見えない役割は止める
+    const area = await checkArea("sales")
+    if (!area.ok) return area
 
     const parsed = salesOrderInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -754,6 +767,9 @@ export async function updateSalesOrderStatus(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: sales が見えない役割は止める
+    const area = await checkArea("sales")
+    if (!area.ok) return area
 
     const existing = await prisma.salesOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -815,6 +831,9 @@ export async function cancelSalesOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: sales が見えない役割は止める
+    const area = await checkArea("sales")
+    if (!area.ok) return area
 
     const existing = await prisma.salesOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },

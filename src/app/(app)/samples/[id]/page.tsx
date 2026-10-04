@@ -93,9 +93,10 @@ export default async function SampleProductionDetailPage({
     }
   }
 
-  // S-4c-1.5: コスト集計の明細内訳
-  const breakdownResult = await getSampleProductionCostBreakdown(item.id)
-  const costSections = breakdownResult.ok ? breakdownResult.data.sections : []
+  // S-4c-1.5: コスト集計の明細内訳。B-243 PR-2（§2-7）: 原価が見えない役割は呼ばず、カードも出さない
+  const canSeeCost = await canSeeAreaForSession("cost")
+  const breakdownResult = canSeeCost ? await getSampleProductionCostBreakdown(item.id) : null
+  const costSections = breakdownResult?.ok ? breakdownResult.data.sections : []
 
   // B-130 PR-C1: 修正記録
   const revisionsResult = await listSampleRevisions(item.id)
@@ -202,7 +203,8 @@ export default async function SampleProductionDetailPage({
         </Card>
       </div>
 
-      {/* コスト集計（S-4c-1・伝票駆動の denormalized 集計） */}
+      {/* コスト集計（S-4c-1・伝票駆動の denormalized 集計）。B-243 PR-2: 原価が見える役割だけ */}
+      {canSeeCost && (
       <Card>
         <CardHeader>
           <CardTitle className="text-base">コスト集計</CardTitle>
@@ -224,6 +226,7 @@ export default async function SampleProductionDetailPage({
           </p>
         </CardContent>
       </Card>
+      )}
 
       {/* 基本情報 */}
       <Card>

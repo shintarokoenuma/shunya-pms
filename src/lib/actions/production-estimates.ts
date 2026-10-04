@@ -15,6 +15,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import {
   resolveSourceCounterparties,
   type SourceCounterparty,
@@ -342,6 +343,9 @@ export async function createProductionEstimateFromSample(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
 
     const product = await prisma.product.findFirst({
       where: { id: productId, companyId: sess.companyId, deletedAt: null },
@@ -680,6 +684,9 @@ export async function updateProductionEstimate(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
 
     const parsed = productionEstimateInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -797,6 +804,9 @@ export async function softDeleteProductionEstimate(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
 
     const existing = await prisma.productionEstimate.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -839,6 +849,9 @@ export async function getProductionEstimate(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
 
     const header = await prisma.productionEstimate.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -925,6 +938,9 @@ export async function getProductionEstimateSection(productId: string): Promise<{
 }> {
   const sess = await requireSession()
   if (!sess.ok) return { rows: [], hasBaseSample: false }
+  // B-243 PR-2（§2-4）: cost が見えない役割は止める
+  const area = await checkArea("cost")
+  if (!area.ok) return { rows: [], hasBaseSample: false }
 
   const [estimates, baseCount] = await Promise.all([
     prisma.productionEstimate.findMany({
@@ -1006,6 +1022,9 @@ export async function listProductionEstimatesForCompany(): Promise<
 > {
   const sess = await requireSession()
   if (!sess.ok) return []
+  // B-243 PR-2（§2-4）: cost が見えない役割は止める
+  const area = await checkArea("cost")
+  if (!area.ok) return []
 
   const estimates = await prisma.productionEstimate.findMany({
     where: { companyId: sess.companyId, deletedAt: null },
@@ -1132,6 +1151,9 @@ export async function getProductionOrderGenerationContext(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
 
     const pe = await prisma.productionEstimate.findFirst({
       where: { id: peId, companyId: sess.companyId, deletedAt: null },
