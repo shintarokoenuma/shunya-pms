@@ -52,9 +52,9 @@ export default async function FactoriesPage({
         )}
       </div>
       <FactoriesSearch />
-      {/* B-252（D-7）: 未入力の項目数を一覧に出す */}
+      {/* B-252（D-7）: 未入力の項目数を一覧に出す。B-243 PR-4: 編集できない人には数も計算しない（編集を促さない・取引条件の未入力が漏れない） */}
       <FactoriesTable
-        items={result.factories.map((f) => ({ ...f, missingFields: factoryMissingFields({ ...f, hasPrimaryContact: f.contacts.length > 0 }) }))}
+        items={result.factories.map((f) => ({ ...f, missingFields: canEditMaster ? factoryMissingFields({ ...f, hasPrimaryContact: f.contacts.length > 0 }) : undefined }))}
         isMasterAdmin={isMasterAdmin}
         canEdit={canEditMaster}
       />

@@ -66,9 +66,9 @@ export default async function ContractorsPage({
         )}
       </div>
       <ContractorsSearch />
-      {/* B-252（D-7）: 未入力の項目数を一覧に出す */}
+      {/* B-252（D-7）: 未入力の項目数を一覧に出す。B-243 PR-4: 編集できない人には数も計算しない（編集を促さない・取引条件の未入力が漏れない） */}
       <ContractorsTable
-        items={result.contractors.map((c) => ({ ...c, missingFields: contractorMissingFields({ ...c, hasPrimaryContact: c.contacts.length > 0 }) }))}
+        items={result.contractors.map((c) => ({ ...c, missingFields: canEditMaster ? contractorMissingFields({ ...c, hasPrimaryContact: c.contacts.length > 0 }) : undefined }))}
         isMasterAdmin={isMasterAdmin}
         canEdit={canEditMaster}
       />

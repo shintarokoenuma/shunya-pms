@@ -61,7 +61,8 @@ export function ClientsTable({ items, isMasterAdmin, canEdit }: Props) {
                 >
                   {c.companyName}
                 </Link>
-                <MissingFieldsBadge fields={c.missingFields ?? []} />
+                {/* B-243 PR-4: 編集できる人にだけ「未入力」のバッジを出す */}
+                {canEdit && <MissingFieldsBadge fields={c.missingFields ?? []} />}
               </TableCell>
               <TableCell className="font-mono text-xs">
                 <Link
