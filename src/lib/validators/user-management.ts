@@ -73,3 +73,31 @@ export const resetPasswordSchema = z
   .object({ token: tokenField, password: passwordField, passwordConfirm: z.string() })
   .refine((d) => d.password === d.passwordConfirm, PASSWORD_MISMATCH)
 export type ResetPasswordInput = z.input<typeof resetPasswordSchema>
+
+// =============================================================================
+// B-244: 自分のプロフィール
+// =============================================================================
+const personNameField = (label: string) =>
+  z.string().trim().min(1, `${label}は必須です`).max(100, "100文字以内で入力してください")
+
+/** D-2: 姓・名は必須（100文字以内）。表示名は任意（200文字以内・trim して空なら null） */
+export const updateMyProfileSchema = z.object({
+  lastName: personNameField("姓"),
+  firstName: personNameField("名"),
+  displayName: z
+    .string()
+    .trim()
+    .max(200, "200文字以内で入力してください")
+    .transform((v) => (v === "" ? null : v)),
+})
+export type UpdateMyProfileInput = z.input<typeof updateMyProfileSchema>
+
+/** D-4: 今のパスワード＋新しいパスワードと確認。新しいものの規則は passwordField と同じ */
+export const changeMyPasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "今のパスワードを入力してください"),
+    password: passwordField,
+    passwordConfirm: z.string(),
+  })
+  .refine((d) => d.password === d.passwordConfirm, PASSWORD_MISMATCH)
+export type ChangeMyPasswordInput = z.input<typeof changeMyPasswordSchema>
