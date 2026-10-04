@@ -51,7 +51,10 @@ export async function globalSearch(query: string): Promise<GlobalSearchItem[]> {
   const c = contains(q)
   const upper = q.toUpperCase()
   // B-243 PR-1（§2-9）: 発注が見えない役割は ③発注（PO・WO）の2本を実行しない（結果にも出ない）
-  const canSeeOrders = canSeeArea(await getRolePermissions(companyId), session.user.role, "orders")
+  const perms = await getRolePermissions(companyId)
+  const canSeeOrders = canSeeArea(perms, session.user.role, "orders")
+  // B-243 PR-2（§2-10）: 原価・見積が見えない役割は ②見積（概算・量産）の2本を実行しない
+  const canSeeCost = canSeeArea(perms, session.user.role, "cost")
 
   // 発注の「相手先名」検索用: マスターを名称/コードで引いて id 集合を得る。
   const [supMatches, facMatches, conMatches] = await Promise.all([
@@ -113,28 +116,32 @@ export async function globalSearch(query: string): Promise<GlobalSearchItem[]> {
       select: { id: true, productCode: true, productName: true, clientProductCode: true },
       take: LIMIT,
     }),
-    // ②見積（概算 RoughEstimate）
-    prisma.roughEstimate.findMany({
-      where: {
-        companyId,
-        deletedAt: null,
-        OR: [{ estimateNumber: c }, { title: c }],
-      },
-      select: { id: true, estimateNumber: true, title: true, productId: true },
-      take: LIMIT,
-      orderBy: { estimateNumber: "desc" },
-    }),
-    // ②見積（量産 ProductionEstimate）
-    prisma.productionEstimate.findMany({
-      where: {
-        companyId,
-        deletedAt: null,
-        OR: [{ estimateNumber: c }, { title: c }],
-      },
-      select: { id: true, estimateNumber: true, title: true },
-      take: LIMIT,
-      orderBy: { estimateNumber: "desc" },
-    }),
+    // ②見積（概算 RoughEstimate）。B-243 PR-2: 原価・見積が見えない役割は実行しない
+    canSeeCost
+      ? prisma.roughEstimate.findMany({
+          where: {
+            companyId,
+            deletedAt: null,
+            OR: [{ estimateNumber: c }, { title: c }],
+          },
+          select: { id: true, estimateNumber: true, title: true, productId: true },
+          take: LIMIT,
+          orderBy: { estimateNumber: "desc" },
+        })
+      : Promise.resolve([] as { id: string; estimateNumber: string; title: string | null; productId: string }[]),
+    // ②見積（量産 ProductionEstimate）。B-243 PR-2: 同上
+    canSeeCost
+      ? prisma.productionEstimate.findMany({
+          where: {
+            companyId,
+            deletedAt: null,
+            OR: [{ estimateNumber: c }, { title: c }],
+          },
+          select: { id: true, estimateNumber: true, title: true },
+          take: LIMIT,
+          orderBy: { estimateNumber: "desc" },
+        })
+      : Promise.resolve([] as { id: string; estimateNumber: string; title: string | null }[]),
     // ③発注（PO・番号/タイトル/相手先名）。B-243 PR-1: 発注が見えない役割は実行しない
     canSeeOrders
       ? prisma.purchaseOrder.findMany({

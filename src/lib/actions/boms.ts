@@ -13,6 +13,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { bomItemInputSchema, type BomItemInput } from "@/lib/validators/bom"
 import { normalizeSupplierColorCode } from "@/lib/color-code"
 
@@ -62,6 +63,8 @@ export type BomSupplierOption = {
 export async function listMaterialsForBomSelect(): Promise<BomMaterialOption[]> {
   const sess = await requireSession()
   if (!sess.ok) return []
+  // B-243 PR-2（§2-6）: cost が見えない人には素材マスタの単価も返さない（ダイアログの自動入力・候補表示の元）
+  const canSeeCost = (await checkArea("cost")).ok
   const rows = await prisma.material.findMany({
     where: { companyId: sess.companyId, deletedAt: null, status: MaterialStatus.ACTIVE },
     select: {
@@ -83,7 +86,7 @@ export async function listMaterialsForBomSelect(): Promise<BomMaterialOption[]> 
     unit: r.unit,
     primarySupplierId: r.primarySupplierId,
     standardLossRate: r.standardLossRate?.toString() ?? null,
-    unitPrice: r.unitPrice?.toString() ?? null,
+    unitPrice: canSeeCost ? r.unitPrice?.toString() ?? null : null,
   }))
 }
 
@@ -147,6 +150,8 @@ export async function getBomByProductId(
       where: { companyId: sess.companyId, productId, deletedAt: null },
     })
     if (!bom) return { ok: true, data: null }
+    // B-243 PR-2（§2-6）: cost が見えない人には unitPrice と単価の出どころ（costSource・purchaseOrderId）を返さない
+    const canSeeCost = (await checkArea("cost")).ok
 
     const items = await prisma.bomItem.findMany({
       where: { bomId: bom.id },
@@ -182,6 +187,7 @@ export async function getBomByProductId(
         ...bom,
         items: items.map((i) => ({
           ...i,
+          ...(canSeeCost ? {} : { unitPrice: null, costSource: "MANUAL" as const, purchaseOrderId: null }),
           material: i.materialId ? matMap.get(i.materialId) ?? null : null,
           supplier: i.supplierId ? supMap.get(i.supplierId) ?? null : null,
         })),
@@ -286,6 +292,19 @@ async function findBomInCompany(bomId: string, companyId: string) {
 // =============================================================================
 // 明細 追加
 // =============================================================================
+/**
+ * B-243 PR-2（§2-6）: cost が見えない人が保存しても単価を書かない。
+ * buildItemData の結果から unitPrice を落とす（新規は null のまま・更新は既存の単価を残す）。
+ * buildItemData が書くのは unitPrice だけ（currency・costSource は書かない）。AuditLog は変えない
+ */
+function stripUnitPriceIfCostBlind<T extends { unitPrice?: unknown }>(data: T, canSeeCost: boolean): T {
+  if (canSeeCost) return data
+  const { unitPrice: _unitPrice, ...rest } = data
+  void _unitPrice
+  // unitPrice は T で省略可なので、キーを外した rest は T として扱える（Prisma はキーが無ければ触らない）
+  return rest as T
+}
+
 export async function addBomItem(
   bomId: string,
   input: BomItemInput,
@@ -300,6 +319,7 @@ export async function addBomItem(
     }
     const bom = await findBomInCompany(bomId, sess.companyId)
     if (!bom) return { ok: false, error: "BOM が見つかりません" }
+    const canSeeCost = (await checkArea("cost")).ok
 
     const last = await prisma.bomItem.findFirst({
       where: { bomId },
@@ -309,7 +329,7 @@ export async function addBomItem(
     const itemOrder = (last?.itemOrder ?? -1) + 1
 
     const created = await prisma.bomItem.create({
-      data: { ...buildItemData(parsed.data), bomId, itemOrder },
+      data: { ...stripUnitPriceIfCostBlind(buildItemData(parsed.data), canSeeCost), bomId, itemOrder },
       select: { id: true },
     })
 
@@ -356,10 +376,12 @@ export async function updateBomItem(
     if (!existing) return { ok: false, error: "明細が見つかりません" }
     const bom = await findBomInCompany(existing.bomId, sess.companyId)
     if (!bom) return { ok: false, error: "BOM が見つかりません" }
+    // ★ cost が見えない人の保存は unitPrice を data に含めない＝既存の単価を残す
+    const canSeeCost = (await checkArea("cost")).ok
 
     const updated = await prisma.bomItem.update({
       where: { id: itemId },
-      data: buildItemData(parsed.data),
+      data: stripUnitPriceIfCostBlind(buildItemData(parsed.data), canSeeCost),
     })
 
     await prisma.auditLog.create({
@@ -485,6 +507,9 @@ export async function listPoItemsForBomImport(
 ): Promise<PoImportGroup[]> {
   const sess = await requireSession()
   if (!sess.ok) return []
+  // B-243 PR-2（§2-4）: orders が見えない役割は止める
+  const area = await checkArea("orders")
+  if (!area.ok) return []
 
   // ① 当該品番の ProgressTask（taskType 導出用）
   const tasks = await prisma.progressTask.findMany({
@@ -606,6 +631,9 @@ export async function importPoItemsToBom(input: {
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: orders が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const { bomId, poItemIds } = input
     if (!poItemIds || poItemIds.length === 0)

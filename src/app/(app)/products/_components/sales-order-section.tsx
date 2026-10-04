@@ -23,8 +23,11 @@ import {
  */
 export function SalesOrderSection({
   section,
+  canSeeSales,
 }: {
   section: SalesOrderKarteSection
+  /** B-243 PR-2（D2-5）: 受注が見える役割か。false なら受注へのリンクと「受注を作成」を出さない（集約表は出す） */
+  canSeeSales: boolean
 }) {
   const { skus, orders } = section
   const hasOrdered = skus.some((s) => s.orderedQuantity > 0)
@@ -34,21 +37,35 @@ export function SalesOrderSection({
       {orders.length > 0 ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-muted-foreground">紐づく受注:</span>
-          {orders.map((o) => (
-            <Link
-              key={o.id}
-              href={`/sales-orders/${o.id}`}
-              className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs hover:bg-muted"
-            >
-              <span className="font-mono">{o.soNumber}</span>
-              <Badge
-                variant={SALES_ORDER_STATUS_BADGE_VARIANT[o.status]}
-                className="ml-1 text-[10px]"
+          {orders.map((o) => {
+            const inner = (
+              <>
+                <span className="font-mono">{o.soNumber}</span>
+                <Badge
+                  variant={SALES_ORDER_STATUS_BADGE_VARIANT[o.status]}
+                  className="ml-1 text-[10px]"
+                >
+                  {SALES_ORDER_STATUS_LABELS[o.status]}
+                </Badge>
+              </>
+            )
+            return canSeeSales ? (
+              <Link
+                key={o.id}
+                href={`/sales-orders/${o.id}`}
+                className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs hover:bg-muted"
               >
-                {SALES_ORDER_STATUS_LABELS[o.status]}
-              </Badge>
-            </Link>
-          ))}
+                {inner}
+              </Link>
+            ) : (
+              <span
+                key={o.id}
+                className="inline-flex items-center rounded-md border px-2 py-0.5 text-xs"
+              >
+                {inner}
+              </span>
+            )
+          })}
         </div>
       ) : (
         <p className="text-sm text-muted-foreground">
@@ -91,15 +108,17 @@ export function SalesOrderSection({
           受注数は確定受注（CONFIRMED）以降で集計されます。入力途中（TENTATIVE）の受注は含みません。
         </p>
       )}
-      <div className="flex justify-end">
-        <Link
-          href="/sales-orders/new"
-          className="inline-flex items-center text-sm text-primary hover:underline"
-        >
-          受注を作成
-          <ChevronRight className="ml-0.5 h-4 w-4" />
-        </Link>
-      </div>
+      {canSeeSales && (
+        <div className="flex justify-end">
+          <Link
+            href="/sales-orders/new"
+            className="inline-flex items-center text-sm text-primary hover:underline"
+          >
+            受注を作成
+            <ChevronRight className="ml-0.5 h-4 w-4" />
+          </Link>
+        </div>
+      )}
     </div>
   )
 }

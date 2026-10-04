@@ -13,6 +13,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import {
   resolveSourceCounterparties,
   type SourceCounterparty,
@@ -80,6 +81,9 @@ export async function getDefaultMarginRateForProduct(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
     const product = await prisma.product.findFirst({
       where: { id: productId, companyId: sess.companyId, deletedAt: null },
       select: { brandId: true },
@@ -170,6 +174,9 @@ export async function listPastPoItemsBySupplier(
 ): Promise<PastPoItemCandidate[]> {
   const sess = await requireSession()
   if (!sess.ok) return []
+  // B-243 PR-2（§2-4）: cost が見えない役割は止める
+  const area = await checkArea("cost")
+  if (!area.ok) return []
   if (!supplierId) return []
 
   // その仕入先の PO だけを親として絞る（会社スコープ＋論理削除除外）。
@@ -235,6 +242,9 @@ export async function listPastWoItemsByCostCategory(
 ): Promise<PastWoItemCandidate[]> {
   const sess = await requireSession()
   if (!sess.ok) return []
+  // B-243 PR-2（§2-4）: cost が見えない役割は止める
+  const area = await checkArea("cost")
+  if (!area.ok) return []
   if (!costCategoryId) return []
 
   const wos = await prisma.workOrder.findMany({
@@ -313,6 +323,9 @@ export async function generateNextRoughEstimateNumberPreview(): Promise<
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
     const preview = await computeNextRoughEstimateNumber(
       prisma.roughEstimate,
       sess.companyId,
@@ -401,6 +414,9 @@ export async function createRoughEstimate(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
 
     const parsed = roughEstimateInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -543,6 +559,9 @@ export async function updateRoughEstimate(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
 
     const parsed = roughEstimateInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -667,6 +686,9 @@ export async function softDeleteRoughEstimate(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
 
     const existing = await prisma.roughEstimate.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -726,6 +748,9 @@ export async function listRoughEstimatesByProduct(
 ): Promise<RoughEstimateListRow[]> {
   const sess = await requireSession()
   if (!sess.ok) return []
+  // B-243 PR-2（§2-4）: cost が見えない役割は止める
+  const area = await checkArea("cost")
+  if (!area.ok) return []
   const rows = await prisma.roughEstimate.findMany({
     where: { companyId: sess.companyId, productId, deletedAt: null },
     orderBy: { issuedAt: "desc" },
@@ -812,6 +837,9 @@ export async function listRoughEstimatesForCompany(): Promise<
 > {
   const sess = await requireSession()
   if (!sess.ok) return []
+  // B-243 PR-2（§2-4）: cost が見えない役割は止める
+  const area = await checkArea("cost")
+  if (!area.ok) return []
 
   const estimates = await prisma.roughEstimate.findMany({
     where: { companyId: sess.companyId, deletedAt: null },
@@ -880,6 +908,9 @@ export async function getRoughEstimate(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
 
     const header = await prisma.roughEstimate.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -949,6 +980,9 @@ export async function getRoughEstimateForEdit(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
 
     const header = await prisma.roughEstimate.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -1031,6 +1065,9 @@ export type RoughEstimateDuplicateData = Omit<
 export async function duplicateRoughEstimate(
   id: string,
 ): Promise<ActionResult<RoughEstimateDuplicateData>> {
+  // B-243 PR-2（§2-4）: cost が見えない役割は止める（getRoughEstimateForEdit でも止まるが、12 本すべてに明示）
+  const area = await checkArea("cost")
+  if (!area.ok) return area
   const r = await getRoughEstimateForEdit(id)
   if (!r.ok) return r
   const d = r.data

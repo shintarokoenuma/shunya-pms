@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft, Pencil } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { canSeeAreaForSession } from "@/lib/area-access"
 import { prisma } from "@/lib/prisma"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -43,6 +44,8 @@ export default async function ModelCodeDetailPage({
   if (!session?.user) redirect("/login")
   // S-1（1A-12 撤去）: 型番は裏方化。MASTER_ADMIN 限定で温存（可逆）。
   if (session.user.tenantType !== "MASTER_ADMIN") redirect("/products")
+  // B-243 PR-2（D2-9）: 原価・見積が見えない役割には売上・コストの4行を出さない
+  const canSeeCost = await canSeeAreaForSession("cost")
 
   const { id } = await params
   const result = await getModelCode(id)
@@ -224,16 +227,20 @@ export default async function ModelCodeDetailPage({
               label="累計生産数"
               value={`${item.totalProductionQty.toLocaleString("ja-JP")} 点`}
             />
-            <DetailRow label="累計売上" value={formatDecimal(item.totalRevenue)} />
-            <DetailRow
-              label="累計パターンコスト"
-              value={formatDecimal(item.totalPatternCost)}
-            />
-            <DetailRow
-              label="累計デザインコスト"
-              value={formatDecimal(item.totalDesignCost)}
-            />
-            <DetailRow label="単位コスト" value={formatDecimal(item.costPerUnit)} />
+            {canSeeCost && (
+              <>
+                <DetailRow label="累計売上" value={formatDecimal(item.totalRevenue)} />
+                <DetailRow
+                  label="累計パターンコスト"
+                  value={formatDecimal(item.totalPatternCost)}
+                />
+                <DetailRow
+                  label="累計デザインコスト"
+                  value={formatDecimal(item.totalDesignCost)}
+                />
+                <DetailRow label="単位コスト" value={formatDecimal(item.costPerUnit)} />
+              </>
+            )}
           </div>
         </CardContent>
       </Card>

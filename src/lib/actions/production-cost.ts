@@ -3,6 +3,7 @@
 import { WorkOrderCategory } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import type {
   MaterialCostInput,
   LaborCostInput,
@@ -48,6 +49,9 @@ export async function getProductionCostInputs(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める
+    const area = await checkArea("cost")
+    if (!area.ok) return area
 
     // ---- 材料費入力（BOM 行 ＋ ROLL 時の Material 反情報）----
     const bom = await prisma.bom.findFirst({

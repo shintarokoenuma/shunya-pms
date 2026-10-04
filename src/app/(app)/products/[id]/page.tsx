@@ -198,7 +198,14 @@ export default async function ProductDetailPage({
     })),
   }))
 
+  // B-243 PR-2（§2-5）: 原価・見積（cost）と受注（sales）が見える役割か。見えなければ原価系の読み取りは呼ばない
+  const [canSeeCost, canSeeSales] = await Promise.all([
+    canSeeAreaForSession("cost"),
+    canSeeAreaForSession("sales"),
+  ])
+
   // QE-1R: 概算量産見積（提示価格）。一覧・既定利益率・引き当てピッカー用の素材/費目/仕入先候補を取得。
+  // B-243 PR-2: 概算量産見積の引き出しごと出さないので、cost が見えない役割は5本とも呼ばない
   const [
     roughEstimateRows,
     marginDefaultResult,
@@ -206,18 +213,21 @@ export default async function ProductDetailPage({
     qeCostCategories,
     qeSuppliers,
   ] = await Promise.all([
-    listRoughEstimatesByProduct(id),
-    getDefaultMarginRateForProduct(id),
-    listActiveMaterialsForPoSelect(),
-    listActiveCostCategoriesForPoSelect(),
-    listActiveSuppliersForPoSelect(),
+    canSeeCost ? listRoughEstimatesByProduct(id) : Promise.resolve([]),
+    canSeeCost ? getDefaultMarginRateForProduct(id) : Promise.resolve(null),
+    canSeeCost ? listActiveMaterialsForPoSelect() : Promise.resolve([]),
+    canSeeCost ? listActiveCostCategoriesForPoSelect() : Promise.resolve([]),
+    canSeeCost ? listActiveSuppliersForPoSelect() : Promise.resolve([]),
   ])
-  const brandDefaultMarginRate = marginDefaultResult.ok
+  const brandDefaultMarginRate = marginDefaultResult?.ok
     ? marginDefaultResult.data.marginRate
     : 0
 
-  // A-seed1: 量産見積（発行履歴＋基準サンプル有無）。
-  const productionEstimateSection = await getProductionEstimateSection(id)
+  // A-seed1: 量産見積（発行履歴＋基準サンプル有無）。B-243 PR-2: cost が見えない役割は呼ばない
+  const productionEstimateSection = canSeeCost
+    ? await getProductionEstimateSection(id)
+    : { rows: [], hasBaseSample: false }
+  // 受注の集約は D2-5・D2-8 で sales の判定をしない（受注数・MOQ は品番カルテに残す）
   const salesOrderSection = await getSalesOrderSectionForProduct(id)
   // B-243 PR-1（§2-5・C-D6）: 発注の一覧（金額あり・見えない役割は []）と、金額を含まない WO の要約（工場・縫製仕様書の宛先用）
   const [productOrders, productWoSummaries, canSeeOrders] = await Promise.all([
@@ -226,9 +236,9 @@ export default async function ProductDetailPage({
     canSeeAreaForSession("orders"),
   ])
 
-  // QE-1: 量産原価ビュー用の入力（ROLL 反情報・PRODUCTION WoItem。read-only）。
-  const productionCostResult = await getProductionCostInputs(id)
-  const productionCostInputs = productionCostResult.ok
+  // QE-1: 量産原価ビュー用の入力（ROLL 反情報・PRODUCTION WoItem。read-only）。B-243 PR-2: cost が見えない役割は呼ばない
+  const productionCostResult = canSeeCost ? await getProductionCostInputs(id) : null
+  const productionCostInputs = productionCostResult?.ok
     ? productionCostResult.data
     : { materials: [], labor: [] }
 
@@ -719,10 +729,13 @@ export default async function ProductDetailPage({
                 suppliers={bomSuppliers}
                 markings={bomMarkings}
                 colorwayColumns={colorways.filter((c) => c.status === "ACTIVE")}
+                canSeeCost={canSeeCost}
+                canSeeOrders={canSeeOrders}
               />
             ),
           },
-          {
+          // B-243 PR-2（D2-2）: 原価・見積が見えない役割には「見積・原価」の引き出しごと出さない
+          ...(canSeeCost ? [{
             id: "est",
             title: "見積・原価",
             hint: "概算／量産見積／原価",
@@ -752,7 +765,7 @@ export default async function ProductDetailPage({
                       productId={item.id}
                       rows={productionEstimateSection.rows}
                       hasBaseSample={productionEstimateSection.hasBaseSample}
-                      canSeeOrders={canSeeOrders}
+                      canSeeOrders={canSeeOrders && canSeeCost}
                     />
                   </CardContent>
                 </Card>
@@ -763,7 +776,7 @@ export default async function ProductDetailPage({
                 />
               </div>
             ),
-          },
+          }] : []),
           {
             id: "ord",
             title: "受注・発注",
@@ -777,7 +790,8 @@ export default async function ProductDetailPage({
                       <CardTitle className="text-base">受注</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <SalesOrderSection section={salesOrderSection.data} />
+                      {/* B-243 PR-2（D2-5）: 受注が見えない役割にも集約表は出す（リンクと「受注を作成」は出さない） */}
+                      <SalesOrderSection section={salesOrderSection.data} canSeeSales={canSeeSales} />
                     </CardContent>
                   </Card>
                 )}

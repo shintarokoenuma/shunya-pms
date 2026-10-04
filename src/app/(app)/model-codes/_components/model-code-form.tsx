@@ -95,6 +95,8 @@ type Props =
       defaultValues: ModelCodeBaseInput
       currentModelCode: string
       aggregates: ReadOnlyAggregates
+      /** B-243 PR-2（D2-9）: 原価・見積が見える役割か。false なら累計売上・コストの4行を出さない */
+      canSeeCost: boolean
     }
 
 const NO_CATEGORY = "__none__"
@@ -498,22 +500,26 @@ export function ModelCodeForm(props: Props) {
                   label="累計生産数"
                   value={`${props.aggregates.totalProductionQty.toLocaleString("ja-JP")} 点`}
                 />
-                <ReadOnlyRow
-                  label="累計売上"
-                  value={formatDecimal(props.aggregates.totalRevenue)}
-                />
-                <ReadOnlyRow
-                  label="累計パターンコスト"
-                  value={formatDecimal(props.aggregates.totalPatternCost)}
-                />
-                <ReadOnlyRow
-                  label="累計デザインコスト"
-                  value={formatDecimal(props.aggregates.totalDesignCost)}
-                />
-                <ReadOnlyRow
-                  label="単位コスト"
-                  value={formatDecimal(props.aggregates.costPerUnit)}
-                />
+                {props.canSeeCost && (
+                  <>
+                    <ReadOnlyRow
+                      label="累計売上"
+                      value={formatDecimal(props.aggregates.totalRevenue)}
+                    />
+                    <ReadOnlyRow
+                      label="累計パターンコスト"
+                      value={formatDecimal(props.aggregates.totalPatternCost)}
+                    />
+                    <ReadOnlyRow
+                      label="累計デザインコスト"
+                      value={formatDecimal(props.aggregates.totalDesignCost)}
+                    />
+                    <ReadOnlyRow
+                      label="単位コスト"
+                      value={formatDecimal(props.aggregates.costPerUnit)}
+                    />
+                  </>
+                )}
               </dl>
             )}
           </CardContent>

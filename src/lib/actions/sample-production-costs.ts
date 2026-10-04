@@ -9,6 +9,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 
 export type ActionResult<T = void> =
   | { ok: true; data: T extends void ? undefined : T }
@@ -191,6 +192,9 @@ export async function getSampleProductionCostBreakdown(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証されていません" }
+    // B-243 PR-2（§2-4）: cost が見えない役割は止める（recomputeSampleProductionCosts は D2-8 で除外）
+    const area = await checkArea("cost")
+    if (!area.ok) return area
     const companyId = session.user.companyId
 
     const sp = await prisma.sampleProduction.findFirst({

@@ -143,10 +143,39 @@ function assert(cond: boolean, msg: string): void {
   const broken2 = readRolePermissions({ rolePermissions: { areas: { bogus: { STAFF: "view" }, orders: { STAFF: "nope", BOGUS: "view" } } } })
   assert(Object.keys(broken1.areas).length === 0 && !canSeeArea(broken1, "STAFF", "orders"), "⑧-6 areas が配列なら捨てて既定（STAFF 隠す）")
   assert(Object.keys(broken2.areas).length === 0 && !canSeeArea(broken2, "STAFF", "orders"), "⑧-6' 知らない area・知らない値は捨てて既定")
-  assert(JSON.stringify(visibleAreas(empty, "STAFF")) === "[]" && JSON.stringify(visibleAreas(empty, "SALES")) === JSON.stringify(["orders"]), "⑧-6'' visibleAreas")
+  assert(JSON.stringify(visibleAreas(empty, "STAFF")) === "[]" && JSON.stringify(visibleAreas(empty, "SALES")) === JSON.stringify(["orders", "cost", "sales"]), "⑧-6'' visibleAreas（B-243 PR-2 で cost・sales が増えた）")
   // 7. settings 側は変わらない（既定は「見る」）
   assert(visibleSettingsSections(empty, "STAFF").length === 4, "⑧-7 settings の既定は「見る」のまま")
   assert(Object.keys(readRolePermissions(null).areas).length === 0 && Object.keys(readRolePermissions({ rolePermissions: { settings: { bank: { STAFF: "hidden" } } } }).areas).length === 0, "⑧-7' areas が無くても settings は読める")
+}
+
+// ⑨ B-243 PR-2（D2-1）: cost・sales の area
+{
+  const AREAS = ["orders", "cost", "sales"] as const
+  // 1. 空の設定: STAFF は3つとも見られない・他4役割は3つとも見られる
+  const empty = readRolePermissions({})
+  for (const a of AREAS) {
+    assert(!canSeeArea(empty, "STAFF", a), `⑨-1 空の設定で STAFF は ${a} が見えない`)
+    for (const r of ["PRODUCTION", "ACCOUNTING", "SALES", "DESIGNER"]) {
+      assert(canSeeArea(empty, r, a), `⑨-1' 空の設定で ${r} は ${a} が見える`)
+    }
+  }
+  assert(JSON.stringify(visibleAreas(empty, "STAFF")) === "[]" && JSON.stringify(visibleAreas(empty, "SALES")) === JSON.stringify(["orders", "cost", "sales"]), "⑨-1'' visibleAreas の3つ")
+  // 2. cost だけ STAFF=view → cost は見える・sales と orders は隠れたまま（area ごとに独立）
+  const costView = readRolePermissions({ rolePermissions: { areas: { cost: { STAFF: "view" } } } })
+  assert(canSeeArea(costView, "STAFF", "cost") && !canSeeArea(costView, "STAFF", "sales") && !canSeeArea(costView, "STAFF", "orders"), "⑨-2 cost=view は cost だけ")
+  // 3. sales.DESIGNER=hidden → DESIGNER だけ sales が見えない
+  const dsHidden = readRolePermissions({ rolePermissions: { areas: { sales: { DESIGNER: "hidden" } } } })
+  assert(!canSeeArea(dsHidden, "DESIGNER", "sales") && canSeeArea(dsHidden, "DESIGNER", "cost") && canSeeArea(dsHidden, "SALES", "sales"), "⑨-3 sales.DESIGNER=hidden")
+  // 4. OWNER / ADMIN は3つとも hidden でも見える・EXTERNAL・null は見えない
+  const allHidden = readRolePermissions({ rolePermissions: { areas: { orders: { OWNER: "hidden", ADMIN: "hidden" }, cost: { OWNER: "hidden", ADMIN: "hidden" }, sales: { OWNER: "hidden", ADMIN: "hidden" } } } })
+  for (const a of AREAS) {
+    assert(canSeeArea(allHidden, "OWNER", a) && canSeeArea(allHidden, "ADMIN", a), `⑨-4 OWNER / ADMIN は ${a} が常に見える`)
+    assert(!canSeeArea(costView, "EXTERNAL", a) && !canSeeArea(costView, null, a), `⑨-4' EXTERNAL / 未ログインは ${a} が見えない`)
+  }
+  // 5. 知らない area（billing）は捨てられる
+  const unknown = readRolePermissions({ rolePermissions: { areas: { billing: { STAFF: "view" }, cost: { STAFF: "view" } } } })
+  assert(Object.keys(unknown.areas).length === 1 && unknown.areas.cost?.STAFF === "view", "⑨-5 知らない area は捨て、知っている area は残る")
 }
 
 console.log("user-management.test.ts: all assertions passed")

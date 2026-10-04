@@ -126,6 +126,10 @@ type Props = {
   markings: BomMarkingOption[]
   /** B-062 β 次PR: ACTIVE カラーウェイ列（0件なら列を出さない＝二段構えのフォールバック） */
   colorwayColumns: ColorwayRow[]
+  /** B-243 PR-2（D2-3）: 原価・見積が見える役割か。false なら単価・1着概算・単価の出どころ・単価の入力欄を出さない */
+  canSeeCost: boolean
+  /** B-243 PR-2（D2-4）: 発注が見える役割か。false なら「発注から取り込む」を出さない */
+  canSeeOrders: boolean
 }
 
 function num(n: number | null): string {
@@ -138,7 +142,7 @@ function withLoss(usage: number | null, lossRate: number): number | null {
   return usage * (1 + lossRate / 100)
 }
 
-export function BomSection({ productId, bomId, items, materials, suppliers, markings, colorwayColumns }: Props) {
+export function BomSection({ productId, bomId, items, materials, suppliers, markings, colorwayColumns, canSeeCost, canSeeOrders }: Props) {
   const router = useRouter()
   const [creating, startCreate] = useTransition()
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -178,14 +182,16 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
   return (
     <div className="space-y-3">
       <div className="flex justify-end gap-2">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setImportOpen(true)}
-        >
-          <Download className="mr-1 h-4 w-4" />
-          発注から取り込む
-        </Button>
+        {canSeeOrders && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setImportOpen(true)}
+          >
+            <Download className="mr-1 h-4 w-4" />
+            発注から取り込む
+          </Button>
+        )}
         <Button
           size="sm"
           variant="outline"
@@ -219,8 +225,12 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                   </TableHead>
                 )}
                 <TableHead className="w-[120px]" rowSpan={hasColorways ? 2 : undefined}>用尺</TableHead>
-                <TableHead className="w-[110px] text-right" rowSpan={hasColorways ? 2 : undefined}>単価</TableHead>
-                <TableHead className="w-[130px] text-right" rowSpan={hasColorways ? 2 : undefined}>1着概算</TableHead>
+                {canSeeCost && (
+                  <>
+                    <TableHead className="w-[110px] text-right" rowSpan={hasColorways ? 2 : undefined}>単価</TableHead>
+                    <TableHead className="w-[130px] text-right" rowSpan={hasColorways ? 2 : undefined}>1着概算</TableHead>
+                  </>
+                )}
                 <TableHead className="w-[80px]" rowSpan={hasColorways ? 2 : undefined}>ロス率</TableHead>
                 <TableHead className="w-[110px]" rowSpan={hasColorways ? 2 : undefined}>調達</TableHead>
                 <TableHead className="w-[90px]" rowSpan={hasColorways ? 2 : undefined} />
@@ -305,19 +315,23 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
                         </div>
                       )}
                     </TableCell>
-                    <TableCell className="text-right text-sm">
-                      {it.unitPrice === null ? "未定" : `¥${num(it.unitPrice)}`}
-                      {it.costSource === "PURCHASE_ORDER" && (
-                        <div>
-                          <Badge variant="outline" className="text-[10px]">
-                            {COST_SOURCE_LABELS.PURCHASE_ORDER}
-                          </Badge>
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right text-sm">
-                      {estimate === null ? "—" : `¥${estimate.toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`}
-                    </TableCell>
+                    {canSeeCost && (
+                      <>
+                        <TableCell className="text-right text-sm">
+                          {it.unitPrice === null ? "未定" : `¥${num(it.unitPrice)}`}
+                          {it.costSource === "PURCHASE_ORDER" && (
+                            <div>
+                              <Badge variant="outline" className="text-[10px]">
+                                {COST_SOURCE_LABELS.PURCHASE_ORDER}
+                              </Badge>
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right text-sm">
+                          {estimate === null ? "—" : `¥${estimate.toLocaleString("ja-JP", { maximumFractionDigits: 2 })}`}
+                        </TableCell>
+                      </>
+                    )}
                     <TableCell className="text-sm">{it.lossRate}%</TableCell>
                     <TableCell className="text-sm">
                       {it.procurementMode
@@ -355,7 +369,9 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
         </div>
       )}
       <p className="text-xs text-muted-foreground">
-        ※ ロス込み用尺・1着概算は参考表示（保存しません）。金額未定の単価は概算から除外されます。
+        {canSeeCost
+          ? "※ ロス込み用尺・1着概算は参考表示（保存しません）。金額未定の単価は概算から除外されます。"
+          : "※ ロス込み用尺は参考表示（保存しません）。"}
       </p>
 
       {dialogOpen && (
@@ -365,6 +381,7 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
           materials={materials}
           suppliers={suppliers}
           markings={markings}
+          canSeeCost={canSeeCost}
           onClose={() => setDialogOpen(false)}
           onSaved={() => {
             setDialogOpen(false)
@@ -373,7 +390,7 @@ export function BomSection({ productId, bomId, items, materials, suppliers, mark
         />
       )}
 
-      {importOpen && (
+      {canSeeOrders && importOpen && (
         <PoImportDialog
           bomId={bomId}
           productId={productId}
@@ -479,6 +496,7 @@ function BomItemDialog({
   materials,
   suppliers,
   markings,
+  canSeeCost,
   onClose,
   onSaved,
 }: {
@@ -487,6 +505,8 @@ function BomItemDialog({
   materials: BomMaterialOption[]
   suppliers: BomSupplierOption[]
   markings: BomMarkingOption[]
+  /** B-243 PR-2（D2-3）: false なら単価の入力欄・1着概算を出さず、素材選択で単価を自動入力しない */
+  canSeeCost: boolean
   onClose: () => void
   onSaved: () => void
 }) {
@@ -609,7 +629,7 @@ function BomItemDialog({
                           form.setValue("supplierId", m.primarySupplierId)
                           if (m.standardLossRate != null)
                             form.setValue("lossRate", m.standardLossRate)
-                          if (m.unitPrice != null) form.setValue("unitPrice", m.unitPrice)
+                          if (canSeeCost && m.unitPrice != null) form.setValue("unitPrice", m.unitPrice)
                           form.setValue("customMaterialName", "")
                         }
                       }}
@@ -925,6 +945,7 @@ function BomItemDialog({
                   </FormItem>
                 )}
               />
+              {canSeeCost && (
               <FormField
                 control={form.control}
                 name="unitPrice"
@@ -947,6 +968,7 @@ function BomItemDialog({
                   </FormItem>
                 )}
               />
+              )}
             </div>
 
             {isFabric && (
@@ -1029,7 +1051,7 @@ function BomItemDialog({
               <div className="rounded-md border bg-muted/40 p-3 text-sm">
                 <span className="text-muted-foreground">参考: </span>
                 ロス込み用尺 {preview.lossUsage.toLocaleString("ja-JP", { maximumFractionDigits: 4 })}
-                {preview.est !== null && (
+                {canSeeCost && preview.est !== null && (
                   <>
                     {" / "}1着概算 ¥
                     {preview.est.toLocaleString("ja-JP", { maximumFractionDigits: 2 })}
