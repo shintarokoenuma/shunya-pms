@@ -9,6 +9,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { runWithoutTenantContext } from "@/lib/tenant-context"
 import {
   contractorInputSchema,
@@ -120,7 +121,24 @@ export async function listContractors(params: ListContractorsParams) {
 // =============================================================================
 // 詳細取得
 // =============================================================================
-export async function getContractor(id: string) {
+/**
+ * B-243 PR-4（D4-4）: 詳細の「料金体系」「取引条件」のカードに出す列。masterTerms が見えない人には null で返す（画面で隠すだけにしない）。
+ * termsHidden で見分ける（編集ページは layout で止まるが、型のため termsHidden=true なら /dashboard へ）
+ */
+type ContractorTermsHidden = {
+  packageFee: null; hourlyRate: null; monthlyFee: null
+  taxId: null; isQualifiedInvoiceIssuer: null; paymentTermType: null; closingDay: null; paymentMonthOffset: null; paymentDay: null
+}
+const CONTRACTOR_TERMS_HIDDEN: ContractorTermsHidden = {
+  packageFee: null, hourlyRate: null, monthlyFee: null,
+  taxId: null, isQualifiedInvoiceIssuer: null, paymentTermType: null, closingDay: null, paymentMonthOffset: null, paymentDay: null,
+}
+type ContractorWithContacts = Prisma.ContractorGetPayload<{ include: { contacts: true } }>
+export type ContractorDetail =
+  | (ContractorWithContacts & { termsHidden: false })
+  | (Omit<ContractorWithContacts, keyof ContractorTermsHidden> & ContractorTermsHidden & { termsHidden: true })
+
+export async function getContractor(id: string): Promise<ContractorDetail> {
   const session = await auth()
   if (!session?.user) throw new Error("認証が必要です")
   const companyId = session.user.companyId
@@ -140,7 +158,10 @@ export async function getContractor(id: string) {
     throw new Error("外注先が見つかりません")
   }
 
-  return contractor
+  const canSeeTerms = (await checkArea("masterTerms")).ok
+  return canSeeTerms
+    ? { ...contractor, termsHidden: false }
+    : { ...contractor, ...CONTRACTOR_TERMS_HIDDEN, termsHidden: true }
 }
 
 // =============================================================================
@@ -152,6 +173,9 @@ export async function createContractor(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -281,6 +305,9 @@ export async function updateContractor(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -453,6 +480,9 @@ export async function archiveContractor(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -505,6 +535,9 @@ export async function restoreContractor(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -557,6 +590,9 @@ export async function restoreContractor(
 export async function checkContractorUsage(id: string): Promise<ContractorUsage> {
   const session = await auth()
   if (!session?.user) throw new Error("認証が必要です")
+  // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める（この関数は認証失敗も throw）
+  const area = await checkArea("masterTerms")
+  if (!area.ok) throw new Error(area.error)
   const companyId = session.user.companyId
   if (!companyId) throw new Error("テナント情報が取得できません")
 
@@ -596,6 +632,9 @@ export async function deleteContractorPermanently(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)

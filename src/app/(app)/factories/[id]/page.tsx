@@ -75,8 +75,10 @@ export default async function FactoryDetailPage({
   if (!factory) notFound()
 
   const primary = factory.contacts.find((c) => c.isPrimary)
-  // B-252（D-6・D-7）: 未入力の項目
-  const missing = factoryMissingFields({ ...factory, hasPrimaryContact: !!primary })
+  // B-243 PR-4（D4-3）: マスターの取引条件・編集が見えない役割は「見るだけ」。取引条件のカード・編集・メニュー・未入力の案内を出さない
+  const canEditMaster = !factory.termsHidden
+  // B-252（D-6・D-7）: 未入力の項目（編集できる人にだけ出す）
+  const missing = factory.termsHidden ? [] : factoryMissingFields({ ...factory, hasPrimaryContact: !!primary })
 
   return (
     <div className="space-y-6">
@@ -104,6 +106,7 @@ export default async function FactoryDetailPage({
             {factory.factoryCode}
           </p>
         </div>
+        {canEditMaster && (
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm">
             <Link href={`/factories/${id}/edit`}>
@@ -119,9 +122,10 @@ export default async function FactoryDetailPage({
             variant="menu"
           />
         </div>
+        )}
       </div>
 
-      <MissingFieldsNotice fields={missing} editHref={`/factories/${id}/edit`} />
+      {canEditMaster && <MissingFieldsNotice fields={missing} editHref={`/factories/${id}/edit`} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* 基本情報 */}
@@ -221,7 +225,8 @@ export default async function FactoryDetailPage({
           </CardContent>
         </Card>
 
-        {/* 取引条件 */}
+        {/* 取引条件。B-243 PR-4（D4-3）: マスターの取引条件が見える役割だけ（見えない人には action が null で返す） */}
+        {!factory.termsHidden && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">取引条件</CardTitle>
@@ -278,6 +283,7 @@ export default async function FactoryDetailPage({
             </Dl>
           </CardContent>
         </Card>
+        )}
 
         {/* 製造キャパシティ */}
         <Card>

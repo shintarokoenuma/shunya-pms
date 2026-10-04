@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { ClientForm } from "../../_components/client-form"
 import { getClient, listAssignableUsers } from "@/lib/actions/clients"
 import type { ClientBaseInput } from "@/lib/validators/client"
@@ -17,6 +17,8 @@ export default async function EditClientPage({
     listAssignableUsers(),
   ])
   if (!client) notFound()
+  // B-243 PR-4（D4-4）: layout で masterTerms を要求しているので取引条件は必ず入っている。型のため確かめる
+  if (client.termsHidden) redirect("/dashboard")
 
   const contact = client.contacts[0]
   const useSeparateBilling =

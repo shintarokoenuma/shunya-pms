@@ -10,6 +10,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { runWithoutTenantContext } from "@/lib/tenant-context"
 import {
   materialBaseSchema,
@@ -143,7 +144,10 @@ type MaterialListBaseRow = Pick<
   | "updatedAt"
 >
 
-export type MaterialListItem = MaterialListBaseRow & {
+/** B-243 PR-4（D4-4）: 一覧の「単価」の列。masterTerms が見えない人には unitPrice と currency を null で返す */
+export type MaterialListItem = Omit<MaterialListBaseRow, "unitPrice" | "currency"> & {
+  unitPrice: Material["unitPrice"] | null
+  currency: Material["currency"] | null
   supplier: SupplierSummary | null
 }
 
@@ -210,13 +214,15 @@ export async function listMaterials(
     const supplierIds = [
       ...new Set(rows.map((r) => r.primarySupplierId).filter((v): v is string => !!v)),
     ]
-    const supplierMap = await fetchSupplierSummariesByIds(
-      sess.companyId,
-      supplierIds,
-    )
+    const [supplierMap, canSeeTerms] = await Promise.all([
+      fetchSupplierSummariesByIds(sess.companyId, supplierIds),
+      checkArea("masterTerms").then((r) => r.ok),
+    ])
 
     const items: MaterialListItem[] = rows.map((r) => ({
       ...r,
+      // B-243 PR-4（D4-4）: 単価が見えない人には単価と通貨を返さない
+      ...(canSeeTerms ? {} : { unitPrice: null, currency: null }),
       supplier: r.primarySupplierId
         ? supplierMap.get(r.primarySupplierId) ?? null
         : null,
@@ -249,10 +255,19 @@ export type MaterialCategorySummary = {
   categoryName: string
 }
 
-export type MaterialDetail = Material & {
+type MaterialDetailExtras = {
   supplier: SupplierSummary | null
   category: MaterialCategorySummary | null
 }
+/**
+ * B-243 PR-4（D4-4）: 詳細の「単価」のカードに出す列（単価・通貨・最小発注数）。masterTerms が見えない人には null で返す。
+ * termsHidden で見分ける（編集ページは layout で止まるが、型のため termsHidden=true なら /dashboard へ）
+ */
+type MaterialTermsHidden = { unitPrice: null; currency: null; minimumOrderQty: null }
+const MATERIAL_TERMS_HIDDEN: MaterialTermsHidden = { unitPrice: null, currency: null, minimumOrderQty: null }
+export type MaterialDetail =
+  | (Material & MaterialDetailExtras & { termsHidden: false })
+  | (Omit<Material, keyof MaterialTermsHidden> & MaterialTermsHidden & MaterialDetailExtras & { termsHidden: true })
 
 export async function getMaterial(
   id: string,
@@ -282,16 +297,19 @@ export async function getMaterial(
 
     // include した category は prisma 側で含まれているのでそのまま使う
     const { category, ...rest } = row
+    const extras: MaterialDetailExtras = {
+      category,
+      supplier: row.primarySupplierId
+        ? supplierMap.get(row.primarySupplierId) ?? null
+        : null,
+    }
+    const canSeeTerms = (await checkArea("masterTerms")).ok
 
     return {
       ok: true,
-      data: {
-        ...rest,
-        category,
-        supplier: row.primarySupplierId
-          ? supplierMap.get(row.primarySupplierId) ?? null
-          : null,
-      },
+      data: canSeeTerms
+        ? { ...rest, ...extras, termsHidden: false }
+        : { ...rest, ...MATERIAL_TERMS_HIDDEN, ...extras, termsHidden: true },
     }
   } catch (e) {
     return {
@@ -310,6 +328,9 @@ export async function createMaterial(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
 
     const parsed = materialBaseSchema.safeParse(input)
     if (!parsed.success) {
@@ -416,6 +437,9 @@ export async function updateMaterial(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
 
     const parsed = materialBaseSchema.safeParse(input)
     if (!parsed.success) {
@@ -605,6 +629,9 @@ export async function archiveMaterial(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
 
     const existing = await prisma.material.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -653,6 +680,9 @@ export async function restoreMaterial(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
 
     const existing = await prisma.material.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -702,6 +732,9 @@ export async function checkMaterialUsage(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
 
     const existing = await prisma.material.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -734,6 +767,9 @@ export async function deleteMaterialPermanently(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
 
     // ガード 1: MASTER_ADMIN
     if (sess.tenantType !== "MASTER_ADMIN") {

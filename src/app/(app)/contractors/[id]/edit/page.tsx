@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { ContractorForm } from "../../_components/contractor-form"
 import { getContractor } from "@/lib/actions/contractors"
 import { listAssignableUsers } from "@/lib/actions/clients"
@@ -25,6 +25,8 @@ export default async function EditContractorPage({
     listAssignableUsers(),
   ])
   if (!contractor) notFound()
+  // B-243 PR-4（D4-4）: layout で masterTerms を要求しているので取引条件は必ず入っている。型のため確かめる
+  if (contractor.termsHidden) redirect("/dashboard")
   const primary = contractor.contacts.find((c) => c.isPrimary)
   const defaultValues: ContractorInput = {
     contractorCode: contractor.contractorCode,

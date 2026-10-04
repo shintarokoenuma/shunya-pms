@@ -20,14 +20,16 @@ import {
 
 type Props = {
   items: MaterialListItem[]
+  /** B-243 PR-4（D4-3）: false なら「単価」の列を出さない（action も unitPrice・currency を null で返す） */
+  showPrice: boolean
 }
 
 function formatPrice(
   price: Prisma.Decimal | number | null,
-  currency: string,
+  currency: string | null,
   unit: string,
 ): string {
-  if (price === null || price === undefined) return "—"
+  if (price === null || price === undefined || currency === null) return "—"
   const n =
     typeof price === "number"
       ? price
@@ -38,7 +40,7 @@ function formatPrice(
   return `${n.toLocaleString("ja-JP", { maximumFractionDigits: 4 })} ${currency}/${unit}`
 }
 
-export function MaterialsTable({ items }: Props) {
+export function MaterialsTable({ items, showPrice }: Props) {
   if (items.length === 0) {
     return (
       <div className="rounded-md border border-dashed py-12 text-center text-sm text-muted-foreground">
@@ -56,7 +58,7 @@ export function MaterialsTable({ items }: Props) {
             <TableHead className="w-[160px]">コード</TableHead>
             <TableHead className="w-[110px]">タイプ</TableHead>
             <TableHead className="w-[200px]">仕入先</TableHead>
-            <TableHead className="w-[180px]">単価</TableHead>
+            {showPrice && <TableHead className="w-[180px]">単価</TableHead>}
             <TableHead className="w-[110px]">ステータス</TableHead>
             <TableHead className="w-[80px]" />
           </TableRow>
@@ -95,9 +97,11 @@ export function MaterialsTable({ items }: Props) {
                   <span className="text-muted-foreground">—</span>
                 )}
               </TableCell>
-              <TableCell className="text-sm tabular-nums">
-                {formatPrice(item.unitPrice, item.currency, item.unit)}
-              </TableCell>
+              {showPrice && (
+                <TableCell className="text-sm tabular-nums">
+                  {formatPrice(item.unitPrice, item.currency, item.unit)}
+                </TableCell>
+              )}
               <TableCell>
                 <Badge variant={MATERIAL_STATUS_BADGE_VARIANT[item.status]}>
                   {MATERIAL_STATUS_LABELS[item.status]}

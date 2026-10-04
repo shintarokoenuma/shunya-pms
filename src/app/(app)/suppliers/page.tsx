@@ -3,6 +3,7 @@ import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { listSuppliers } from "@/lib/actions/suppliers"
 import { auth } from "@/lib/auth"
+import { canSeeAreaForSession } from "@/lib/area-access"
 import { SuppliersTable } from "./_components/suppliers-table"
 import { supplierMissingFields } from "@/lib/master-completeness"
 import { SuppliersSearch } from "./_components/suppliers-search"
@@ -24,6 +25,8 @@ export default async function SuppliersPage({
   const sp = await searchParams
   const session = await auth()
   const isMasterAdmin = session?.user?.tenantType === "MASTER_ADMIN"
+  // B-243 PR-4（D4-3）: マスターの取引条件・編集が見えない役割には「新規」と行の「編集」を出さない
+  const canEditMaster = await canSeeAreaForSession("masterTerms")
 
   const result = await listSuppliers({
     q: sp.q,
@@ -41,12 +44,14 @@ export default async function SuppliersPage({
             生地・付属・糸などの仕入先を管理します。
           </p>
         </div>
-        <Button asChild>
-          <Link href="/suppliers/new">
-            <Plus className="mr-1 h-4 w-4" />
-            新規仕入先
-          </Link>
-        </Button>
+        {canEditMaster && (
+          <Button asChild>
+            <Link href="/suppliers/new">
+              <Plus className="mr-1 h-4 w-4" />
+              新規仕入先
+            </Link>
+          </Button>
+        )}
       </div>
 
       <SuppliersSearch />
@@ -55,6 +60,7 @@ export default async function SuppliersPage({
       <SuppliersTable
         items={result.suppliers.map((s) => ({ ...s, missingFields: supplierMissingFields({ ...s, hasPrimaryContact: s.contacts.length > 0 }) }))}
         isMasterAdmin={isMasterAdmin}
+        canEdit={canEditMaster}
       />
 
       <SuppliersPagination

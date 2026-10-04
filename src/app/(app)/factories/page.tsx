@@ -3,6 +3,7 @@ import { Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { listFactories } from "@/lib/actions/factories"
 import { auth } from "@/lib/auth"
+import { canSeeAreaForSession } from "@/lib/area-access"
 import { FactoriesTable } from "./_components/factories-table"
 import { factoryMissingFields } from "@/lib/master-completeness"
 import { FactoriesSearch } from "./_components/factories-search"
@@ -24,6 +25,8 @@ export default async function FactoriesPage({
   const sp = await searchParams
   const session = await auth()
   const isMasterAdmin = session?.user?.tenantType === "MASTER_ADMIN"
+  // B-243 PR-4（D4-3）: マスターの取引条件・編集が見えない役割には「新規」と行の「編集」を出さない
+  const canEditMaster = await canSeeAreaForSession("masterTerms")
   const result = await listFactories({
     q: sp.q,
     status: sp.status as FactoryStatus | undefined,
@@ -39,18 +42,21 @@ export default async function FactoriesPage({
             縫製・ニット・加工等の工場を管理します。
           </p>
         </div>
-        <Button asChild>
-          <Link href="/factories/new">
-            <Plus className="mr-1 h-4 w-4" />
-            新規工場
-          </Link>
-        </Button>
+        {canEditMaster && (
+          <Button asChild>
+            <Link href="/factories/new">
+              <Plus className="mr-1 h-4 w-4" />
+              新規工場
+            </Link>
+          </Button>
+        )}
       </div>
       <FactoriesSearch />
       {/* B-252（D-7）: 未入力の項目数を一覧に出す */}
       <FactoriesTable
         items={result.factories.map((f) => ({ ...f, missingFields: factoryMissingFields({ ...f, hasPrimaryContact: f.contacts.length > 0 }) }))}
         isMasterAdmin={isMasterAdmin}
+        canEdit={canEditMaster}
       />
       <FactoriesPagination
         page={result.page}

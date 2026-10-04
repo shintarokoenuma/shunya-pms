@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { SupplierForm } from "../../_components/supplier-form"
 import { getSupplier } from "@/lib/actions/suppliers"
 import { listAssignableUsers } from "@/lib/actions/clients"
@@ -18,6 +18,8 @@ export default async function EditSupplierPage({
     listAssignableUsers(),
   ])
   if (!supplier) notFound()
+  // B-243 PR-4（D4-4）: layout で masterTerms を要求しているので取引条件は必ず入っている。型のため確かめる
+  if (supplier.termsHidden) redirect("/dashboard")
 
   const primary = supplier.contacts.find((c) => c.isPrimary)
 

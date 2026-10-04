@@ -25,9 +25,11 @@ type Props = {
   // B-252（D-7）: missingFields は一覧側で clientMissingFields から計算して渡す
   items: (Client & { missingFields?: string[] })[]
   isMasterAdmin: boolean
+  /** B-243 PR-4（D4-3）: false なら「操作」の列（編集・メニュー）を出さない */
+  canEdit: boolean
 }
 
-export function ClientsTable({ items, isMasterAdmin }: Props) {
+export function ClientsTable({ items, isMasterAdmin, canEdit }: Props) {
   if (items.length === 0) {
     return (
       <div className="border rounded-md py-16 text-center text-sm text-muted-foreground">
@@ -46,7 +48,7 @@ export function ClientsTable({ items, isMasterAdmin }: Props) {
             <TableHead>業態</TableHead>
             <TableHead>国</TableHead>
             <TableHead>ステータス</TableHead>
-            <TableHead className="w-32 text-right">操作</TableHead>
+            {canEdit && <TableHead className="w-32 text-right">操作</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -80,6 +82,7 @@ export function ClientsTable({ items, isMasterAdmin }: Props) {
                   {STATUS_LABEL[c.status]}
                 </Badge>
               </TableCell>
+              {canEdit && (
               <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-1">
                   <Button asChild variant="ghost" size="icon">
@@ -97,6 +100,7 @@ export function ClientsTable({ items, isMasterAdmin }: Props) {
                   />
                 </div>
               </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

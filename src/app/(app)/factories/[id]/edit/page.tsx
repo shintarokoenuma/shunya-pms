@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
 import { FactoryForm } from "../../_components/factory-form"
 import { getFactory } from "@/lib/actions/factories"
 import { listAssignableUsers } from "@/lib/actions/clients"
@@ -18,6 +18,8 @@ export default async function EditFactoryPage({
     listAssignableUsers(),
   ])
   if (!factory) notFound()
+  // B-243 PR-4（D4-4）: layout で masterTerms を要求しているので取引条件は必ず入っている。型のため確かめる
+  if (factory.termsHidden) redirect("/dashboard")
   const primary = factory.contacts.find((c) => c.isPrimary)
   const defaultValues: FactoryInput = {
     factoryCode: factory.factoryCode,

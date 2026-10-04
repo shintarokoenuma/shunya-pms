@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { Prisma, FactoryStatus, type FactoryType } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { runWithoutTenantContext } from "@/lib/tenant-context"
 import {
   factoryInputSchema,
@@ -96,7 +97,18 @@ export async function listFactories(params: ListFactoriesParams) {
 // =============================================================================
 // 詳細取得
 // =============================================================================
-export async function getFactory(id: string) {
+/**
+ * B-243 PR-4（D4-4）: 詳細の「取引条件」のカードに出す列。masterTerms が見えない人には null で返す（画面で隠すだけにしない）。
+ * termsHidden で見分ける（編集ページは layout で止まるが、型のため termsHidden=true なら /dashboard へ）
+ */
+type FactoryTermsHidden = { taxId: null; isQualifiedInvoiceIssuer: null; paymentTermType: null; closingDay: null; paymentMonthOffset: null; paymentDay: null }
+const FACTORY_TERMS_HIDDEN: FactoryTermsHidden = { taxId: null, isQualifiedInvoiceIssuer: null, paymentTermType: null, closingDay: null, paymentMonthOffset: null, paymentDay: null }
+type FactoryWithContacts = Prisma.FactoryGetPayload<{ include: { contacts: true } }>
+export type FactoryDetail =
+  | (FactoryWithContacts & { termsHidden: false })
+  | (Omit<FactoryWithContacts, keyof FactoryTermsHidden> & FactoryTermsHidden & { termsHidden: true })
+
+export async function getFactory(id: string): Promise<FactoryDetail> {
   const session = await auth()
   if (!session?.user) throw new Error("認証が必要です")
   const companyId = session.user.companyId
@@ -116,7 +128,10 @@ export async function getFactory(id: string) {
     throw new Error("工場が見つかりません")
   }
 
-  return factory
+  const canSeeTerms = (await checkArea("masterTerms")).ok
+  return canSeeTerms
+    ? { ...factory, termsHidden: false }
+    : { ...factory, ...FACTORY_TERMS_HIDDEN, termsHidden: true }
 }
 
 // =============================================================================
@@ -128,6 +143,9 @@ export async function createFactory(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -254,6 +272,9 @@ export async function updateFactory(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -418,6 +439,9 @@ export async function archiveFactory(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -470,6 +494,9 @@ export async function restoreFactory(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -522,6 +549,9 @@ export async function restoreFactory(
 export async function checkFactoryUsage(id: string): Promise<FactoryUsage> {
   const session = await auth()
   if (!session?.user) throw new Error("認証が必要です")
+  // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める（この関数は認証失敗も throw）
+  const area = await checkArea("masterTerms")
+  if (!area.ok) throw new Error(area.error)
   const companyId = session.user.companyId
   if (!companyId) throw new Error("テナント情報が取得できません")
 
@@ -561,6 +591,9 @@ export async function deleteFactoryPermanently(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)

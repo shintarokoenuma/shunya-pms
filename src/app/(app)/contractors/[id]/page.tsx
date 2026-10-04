@@ -83,8 +83,10 @@ export default async function ContractorDetailPage({
   if (!contractor) notFound()
 
   const primary = contractor.contacts.find((c) => c.isPrimary)
-  // B-252（D-6・D-7）: 未入力の項目
-  const missing = contractorMissingFields({ ...contractor, hasPrimaryContact: !!primary })
+  // B-243 PR-4（D4-3）: マスターの取引条件・編集が見えない役割は「見るだけ」。料金体系・取引条件のカード・編集・メニュー・未入力の案内を出さない
+  const canEditMaster = !contractor.termsHidden
+  // B-252（D-6・D-7）: 未入力の項目（編集できる人にだけ出す）
+  const missing = contractor.termsHidden ? [] : contractorMissingFields({ ...contractor, hasPrimaryContact: !!primary })
   const contractType = contractor.contractType
 
   // 料金体系の表示制御（フォームと同じロジック）
@@ -122,6 +124,7 @@ export default async function ContractorDetailPage({
             {contractor.contractorCode}
           </p>
         </div>
+        {canEditMaster && (
         <div className="flex items-center gap-2">
           <Button asChild variant="outline" size="sm">
             <Link href={`/contractors/${id}/edit`}>
@@ -137,9 +140,10 @@ export default async function ContractorDetailPage({
             variant="menu"
           />
         </div>
+        )}
       </div>
 
-      <MissingFieldsNotice fields={missing} editHref={`/contractors/${id}/edit`} />
+      {canEditMaster && <MissingFieldsNotice fields={missing} editHref={`/contractors/${id}/edit`} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* 基本情報 */}
@@ -237,7 +241,9 @@ export default async function ContractorDetailPage({
           </CardContent>
         </Card>
 
-        {/* 料金体系 */}
+        {/* 料金体系・取引条件。B-243 PR-4（D4-3）: マスターの取引条件が見える役割だけ（見えない人には action が null で返す） */}
+        {!contractor.termsHidden && (
+        <>
         <Card>
           <CardHeader>
             <CardTitle className="text-base">料金体系</CardTitle>
@@ -332,6 +338,8 @@ export default async function ContractorDetailPage({
             </Dl>
           </CardContent>
         </Card>
+        </>
+        )}
 
         {/* 先方担当者(法人のときだけ出す。B-252 D-9: 主担当が無くても落とさず「—」で出す) */}
         {!contractor.isIndividual && (
