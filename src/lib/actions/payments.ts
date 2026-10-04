@@ -9,6 +9,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { checkPeriodLock } from "@/lib/period-close/lock"
 import { clientPaymentCreateSchema, clientPaymentCancelSchema } from "@/lib/validators/payment"
 import { fromYmd, toYmd } from "@/lib/calc/invoice-period"
@@ -84,6 +85,9 @@ async function computeNextPaymentNumber(
 export async function listClientPayments(clientId: string): Promise<ClientPaymentRow[]> {
   const sess = await requireSession()
   if (!sess.ok) return []
+  // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+  const area = await checkArea("accounting")
+  if (!area.ok) return []
   return listClientPaymentsRows(sess.companyId, clientId, { order: "desc" })
 }
 
@@ -115,6 +119,9 @@ export async function listPayments(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
     const page = Math.max(1, Math.floor(params.page ?? 1))
     const r = await listPaymentsPaged(
       sess.companyId,
@@ -149,6 +156,9 @@ export async function createClientPayment(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
 
     const parsed = clientPaymentCreateSchema.safeParse(input)
     if (!parsed.success) {
@@ -276,6 +286,9 @@ export async function getPaymentCancelImpact(id: string): Promise<ActionResult<P
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
 
     const p = await prisma.payment.findFirst({
       where: {
@@ -345,6 +358,9 @@ export async function cancelClientPayment(input: unknown): Promise<ActionResult<
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
 
     const parsed = clientPaymentCancelSchema.safeParse(input)
     if (!parsed.success) {

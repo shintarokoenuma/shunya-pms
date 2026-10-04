@@ -84,7 +84,7 @@ export const NAV_SECTIONS: NavSection[] = [
       { label: "発注（作業 WO）", href: "/work-orders", icon: Hammer, enabled: true, area: "orders" },
       { label: "受注", href: "/sales-orders", icon: ClipboardCheck, enabled: true, area: "sales" },
       // 納品（DLV・B-108）は取引。請求・入金・締めは経理グループ（B-109 PR-6・D-38 の再編）
-      { label: "納品", href: "/deliveries", icon: Receipt, enabled: true },
+      { label: "納品", href: "/deliveries", icon: Receipt, enabled: true, area: "delivery" },
     ],
   },
   {
@@ -92,9 +92,9 @@ export const NAV_SECTIONS: NavSection[] = [
     label: "経理",
     accent: "trade",
     items: [
-      { label: "請求", href: "/invoices", icon: FileText, enabled: true },
-      { label: "入金", href: "/payments", icon: Banknote, enabled: true },
-      { label: "締め", href: "/closings", icon: Lock, enabled: true },
+      { label: "請求", href: "/invoices", icon: FileText, enabled: true, area: "accounting" },
+      { label: "入金", href: "/payments", icon: Banknote, enabled: true, area: "accounting" },
+      { label: "締め", href: "/closings", icon: Lock, enabled: true, area: "accounting" },
     ],
   },
   {

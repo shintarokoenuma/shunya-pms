@@ -3,6 +3,7 @@
 import type { DeliveryNoteStatus } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { SO_ALLOCATABLE_STATUSES } from "@/lib/validators/delivery-note"
 
 /**
@@ -152,11 +153,20 @@ export async function listAllocationCandidates(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: delivery が見えない役割は止める
+    const area = await checkArea("delivery")
+    if (!area.ok) return area
 
     // (a) clientId 未指定なら空（ok）。
     if (!clientId) return { ok: true, data: EMPTY }
 
     const companyId = sess.companyId
+    // B-243 PR-3（D3-5）: 発注が見えない人には発注の候補（orders・blocked）を、受注が見えない人には受注の候補（soItems）を
+    // サーバで空にして返す（画面は該当のタブを出さない）。groups は品番の束ねで発注由来ではないので変えない
+    const [canSeeOrders, canSeeSales] = await Promise.all([
+      checkArea("orders").then((r) => r.ok),
+      checkArea("sales").then((r) => r.ok),
+    ])
 
     // (b) 品番グループ（§⑥・クライアント配下の全品番）。brand relation が無いため2クエリ。
     const products = await prisma.product.findMany({
@@ -223,8 +233,8 @@ export async function listAllocationCandidates(
     })
     const sampleIds = sampleRows.map((s) => s.id)
 
-    // (d) WO 明細候補（relation 名は wo）。
-    const woRows = await prisma.woItem.findMany({
+    // (d) WO 明細候補（relation 名は wo）。D3-5: 発注が見えなければ引かない
+    const woRows = !canSeeOrders ? [] : await prisma.woItem.findMany({
       where: {
         billingClassification: "INDIVIDUAL_BILLING",
         wo: { companyId, deletedAt: null },
@@ -239,8 +249,8 @@ export async function listAllocationCandidates(
       },
     })
 
-    // (e) PO 明細候補（relation 名は po）。
-    const poRows = await prisma.poItem.findMany({
+    // (e) PO 明細候補（relation 名は po）。D3-5: 発注が見えなければ引かない
+    const poRows = !canSeeOrders ? [] : await prisma.poItem.findMany({
       where: {
         OR: [
           { billingClassification: "INDIVIDUAL_BILLING" },
@@ -403,8 +413,8 @@ export async function listAllocationCandidates(
       })
     }
 
-    // (g) B-114 §2-1: 受注（量産）の候補。
-    const soItems = await listSoItemCandidates(companyId, clientId, products)
+    // (g) B-114 §2-1: 受注（量産）の候補。D3-5: 受注が見えなければ引かない
+    const soItems = canSeeSales ? await listSoItemCandidates(companyId, clientId, products) : []
 
     return { ok: true, data: { groups, samples, orders, blocked, soItems } }
   } catch (e) {

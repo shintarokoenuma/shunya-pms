@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation"
 import { ChevronLeft, Pencil } from "lucide-react"
 import { YieldMode } from "@prisma/client"
 import { auth } from "@/lib/auth"
+import { canSeeAreaForSession } from "@/lib/area-access"
 import { prisma } from "@/lib/prisma"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -86,7 +87,9 @@ export default async function SalesOrderDetailPage({
         : 0
   const defaultDepositAmount = Math.floor(((so.subtotal ?? 0) * depositRate) / 100)
   const depositLabel = client?.paymentTermType === "ADVANCE_PAYMENT" ? "100%（前払い）" : `${depositRate}%`
-  const depositSection = depositTerm ? await getSalesOrderDepositSection(so.id) : null
+  // B-243 PR-3（§2-6・D3-4）: 納品が見えない役割は前受金の請求ができず、前受金の節も出さない（action が拒否する＝文言は画面に出さない）
+  const canSeeDelivery = await canSeeAreaForSession("delivery")
+  const depositSection = depositTerm && canSeeDelivery ? await getSalesOrderDepositSection(so.id) : null
 
   // productId → items
   const grouped = new Map<string, typeof so.items>()
@@ -107,7 +110,7 @@ export default async function SalesOrderDetailPage({
           </Link>
         </Button>
         <div className="flex items-center gap-2">
-          {canRequestDeposit && (
+          {canRequestDeposit && canSeeDelivery && (
             <DepositRequestDialog
               soId={so.id}
               soNumber={so.soNumber}
@@ -190,9 +193,13 @@ export default async function SalesOrderDetailPage({
                 {depositSection.data.notes.map((n, i) => (
                   <li key={`${n.id}-${i}`} className="flex flex-wrap items-center gap-2">
                     <Badge variant="outline">{n.kind === "DEPOSIT" ? "前受金" : "前受金充当"}</Badge>
-                    <Link href={`/deliveries/${n.id}`} className="font-mono hover:underline">
-                      {n.deliveryNumber}
-                    </Link>
+                    {canSeeDelivery ? (
+                      <Link href={`/deliveries/${n.id}`} className="font-mono hover:underline">
+                        {n.deliveryNumber}
+                      </Link>
+                    ) : (
+                      <span className="font-mono">{n.deliveryNumber}</span>
+                    )}
                     <span className="text-muted-foreground">{n.deliveryDate}</span>
                     <span className="tabular-nums">¥{n.amount.toLocaleString("ja-JP")}</span>
                     <Badge variant={DELIVERY_NOTE_STATUS_BADGE_VARIANT[n.status]}>

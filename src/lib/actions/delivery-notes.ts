@@ -91,6 +91,9 @@ export async function listActiveClientsForDeliverySelect(): Promise<ClientOption
 export async function listActiveBuyersForDeliverySelect(): Promise<BuyerOption[]> {
   const sess = await requireSession()
   if (!sess.ok) return []
+  // B-243 PR-3（§2-4）: delivery が見えない役割は止める
+  const area = await checkArea("delivery")
+  if (!area.ok) return []
   return prisma.buyer.findMany({
     where: { companyId: sess.companyId, deletedAt: null, status: "ACTIVE" },
     select: { id: true, buyerCode: true, buyerName: true, clientId: true },
@@ -103,6 +106,9 @@ export async function listActiveDestinationsForDeliverySelect(): Promise<
 > {
   const sess = await requireSession()
   if (!sess.ok) return []
+  // B-243 PR-3（§2-4）: delivery が見えない役割は止める
+  const area = await checkArea("delivery")
+  if (!area.ok) return []
   return prisma.deliveryDestination.findMany({
     where: { companyId: sess.companyId, deletedAt: null, status: "ACTIVE" },
     select: {
@@ -173,6 +179,9 @@ export async function generateNextDeliveryNumberPreview(): Promise<
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: delivery が見えない役割は止める
+    const area = await checkArea("delivery")
+    if (!area.ok) return area
     const preview = await computeNextDeliveryNumber(
       prisma.deliveryNote,
       sess.companyId,
@@ -237,6 +246,9 @@ export async function listDeliveryNotes(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: delivery が見えない役割は止める
+    const area = await checkArea("delivery")
+    if (!area.ok) return area
     const parsed = deliveryNoteListParamsSchema.parse(params)
 
     const skip = (parsed.page - 1) * parsed.pageSize
@@ -319,6 +331,9 @@ export async function getDeliveryNote(id: string) {
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: delivery が見えない役割は止める
+    const area = await checkArea("delivery")
+    if (!area.ok) return area
     const row = await prisma.deliveryNote.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
       include: {
@@ -828,6 +843,9 @@ export async function createDeliveryNote(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: delivery が見えない役割は止める
+    const area = await checkArea("delivery")
+    if (!area.ok) return area
 
     const parsed = deliveryNoteInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -887,6 +905,9 @@ export async function updateDeliveryNote(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: delivery が見えない役割は止める
+    const area = await checkArea("delivery")
+    if (!area.ok) return area
 
     const parsed = deliveryNoteInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -1006,6 +1027,9 @@ export async function updateDeliveryNoteStatus(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: delivery が見えない役割は止める
+    const area = await checkArea("delivery")
+    if (!area.ok) return area
 
     if (!DELIVERY_NOTE_STATUS_UI_VALUES.includes(status)) {
       return { ok: false, error: "このステータスは選択できません" }
@@ -1073,6 +1097,9 @@ export async function softDeleteDeliveryNote(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: delivery が見えない役割は止める
+    const area = await checkArea("delivery")
+    if (!area.ok) return area
 
     const existing = await prisma.deliveryNote.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -1156,6 +1183,9 @@ export async function createDepositRequest(
     // B-243 PR-2（§2-4）: sales が見えない役割は止める
     const area = await checkArea("sales")
     if (!area.ok) return area
+    // B-243 PR-3（D3-4）: 前受金の請求は納品書を作るので delivery も要る
+    const deliveryArea = await checkArea("delivery")
+    if (!deliveryArea.ok) return deliveryArea
 
     const parsed = depositRequestSchema.safeParse(input)
     if (!parsed.success) {
@@ -1273,6 +1303,9 @@ export async function getDepositSuggestions(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: delivery が見えない役割は止める
+    const area = await checkArea("delivery")
+    if (!area.ok) return area
     const ids = [...new Set(soIds.filter((v): v is string => !!v))]
     if (ids.length === 0) return { ok: true, data: [] }
     const sos = await prisma.salesOrder.findMany({
@@ -1324,6 +1357,9 @@ export async function getSalesOrderDepositSection(
     // B-243 PR-2（§2-4）: sales が見えない役割は止める
     const area = await checkArea("sales")
     if (!area.ok) return area
+    // B-243 PR-3（D3-4）: 前受金の請求は納品書を作るので delivery も要る
+    const deliveryArea = await checkArea("delivery")
+    if (!deliveryArea.ok) return deliveryArea
     const summaries = await loadDepositSummaries(sess.companyId, [soId])
     const rows = await prisma.deliveryNoteItem.findMany({
       where: {

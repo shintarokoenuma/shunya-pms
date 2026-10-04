@@ -11,6 +11,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { DELIVERY_NOTE_DELIVERED_STATUSES } from "@/lib/validators/delivery-note"
 import {
   closePeriodSchema,
@@ -299,6 +300,9 @@ export async function getCloseWarnings(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
     if (sess.role === "EXTERNAL") return { ok: false, error: EXTERNAL_DENIED }
     const w = await computeCloseWarnings(sess.companyId, counterpartType, counterpartId, periodStart, periodEnd)
     return { ok: true, data: w }
@@ -336,6 +340,9 @@ export async function listPeriodCloses(input: unknown): Promise<ActionResult<Per
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
     if (sess.role === "EXTERNAL") return { ok: false, error: EXTERNAL_DENIED }
 
     const parsed = periodCloseListSchema.safeParse(input)
@@ -421,6 +428,9 @@ export async function closePeriod(input: unknown): Promise<ActionResult<{ id: st
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
     if (sess.role === "EXTERNAL") return { ok: false, error: EXTERNAL_DENIED }
 
     const parsed = closePeriodSchema.safeParse(input)
@@ -515,6 +525,9 @@ export async function reopenPeriod(input: unknown): Promise<ActionResult<{ id: s
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
     if (sess.role === "EXTERNAL") return { ok: false, error: EXTERNAL_DENIED }
     // ★UI で隠すだけでなくサーバで判定する
     if (!canManageCompany(sess.role)) return { ok: false, error: REOPEN_DENIED }

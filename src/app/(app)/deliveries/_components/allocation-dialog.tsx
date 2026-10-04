@@ -50,6 +50,10 @@ type Props = {
   onAdd: (rows: AllocationPickedRow[]) => void
   /** B-114: この納品書に既にある量産行の soItemId（「追加済み」表示・重複防止） */
   existingSoItemIds?: string[]
+  /** B-243 PR-3（D3-5）: 発注が見える役割か。false なら「発注」のタブを出さない（候補はサーバで空） */
+  canSeeOrders: boolean
+  /** B-243 PR-3（D3-5）: 受注が見える役割か。false なら「受注（量産）」のタブを出さない（候補はサーバで空） */
+  canSeeSales: boolean
 }
 
 type TabKey = "SAMPLE" | "ORDER" | "SO"
@@ -59,7 +63,7 @@ function fmtYen(n: number | null): string {
   return `¥${n.toLocaleString("ja-JP")}`
 }
 
-export function AllocationDialog({ clientId, onAdd, existingSoItemIds = [] }: Props) {
+export function AllocationDialog({ clientId, onAdd, existingSoItemIds = [], canSeeOrders, canSeeSales }: Props) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<TabKey>("SAMPLE")
   const [candidates, setCandidates] = useState<AllocationCandidates | null>(null)
@@ -216,16 +220,20 @@ export function AllocationDialog({ clientId, onAdd, existingSoItemIds = [] }: Pr
                 onClick={() => setTab("SAMPLE")}
                 label={`サンプル（${candidates.samples.length}）`}
               />
-              <TabButton
-                active={tab === "ORDER"}
-                onClick={() => setTab("ORDER")}
-                label={`発注（${candidates.orders.length}）`}
-              />
-              <TabButton
-                active={tab === "SO"}
-                onClick={() => setTab("SO")}
-                label={`受注（量産）（${candidates.soItems.length}）`}
-              />
+              {canSeeOrders && (
+                <TabButton
+                  active={tab === "ORDER"}
+                  onClick={() => setTab("ORDER")}
+                  label={`発注（${candidates.orders.length}）`}
+                />
+              )}
+              {canSeeSales && (
+                <TabButton
+                  active={tab === "SO"}
+                  onClick={() => setTab("SO")}
+                  label={`受注（量産）（${candidates.soItems.length}）`}
+                />
+              )}
             </div>
 
             <div className="max-h-[420px] space-y-4 overflow-y-auto py-1">
