@@ -41,7 +41,10 @@ type ContractorRow = {
 export function ContractorsTable({
   items,
   isMasterAdmin,
+  canEdit,
 }: {
+  /** B-243 PR-4（D4-3）: false なら「操作」の列（編集・メニュー）を出さない */
+  canEdit: boolean
   items: ContractorRow[]
   isMasterAdmin: boolean
 }) {
@@ -64,7 +67,7 @@ export function ContractorsTable({
             <TableHead className="w-[140px]">契約形態</TableHead>
             <TableHead className="w-[80px]">国</TableHead>
             <TableHead className="w-[100px]">ステータス</TableHead>
-            <TableHead className="w-[120px] text-right">操作</TableHead>
+            {canEdit && <TableHead className="w-[120px] text-right">操作</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -77,7 +80,8 @@ export function ContractorsTable({
                 >
                   {c.contractorName}
                 </Link>
-                <MissingFieldsBadge fields={c.missingFields ?? []} />
+                {/* B-243 PR-4: 編集できる人にだけ「未入力」のバッジを出す */}
+                {canEdit && <MissingFieldsBadge fields={c.missingFields ?? []} />}
                 {c.contractorNameEn && (
                   <div className="text-xs text-muted-foreground">
                     {c.contractorNameEn}
@@ -114,6 +118,7 @@ export function ContractorsTable({
                   {CONTRACTOR_STATUS_LABELS[c.status]}
                 </Badge>
               </TableCell>
+              {canEdit && (
               <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-1">
                   <Button asChild variant="ghost" size="icon" aria-label="編集">
@@ -130,6 +135,7 @@ export function ContractorsTable({
                   />
                 </div>
               </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

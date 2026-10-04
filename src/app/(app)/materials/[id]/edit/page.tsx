@@ -44,6 +44,8 @@ export default async function EditMaterialPage({
     notFound()
   }
   const item = result.data
+  // B-243 PR-4（D4-4）: layout で masterTerms を要求しているので取引条件は必ず入っている。型のため確かめる
+  if (item.termsHidden) redirect("/dashboard")
 
   const [suppliers, categories] = await Promise.all([
     listActiveSuppliersForMaterialSelect(),

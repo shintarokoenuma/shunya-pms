@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { Prisma, SupplierStatus, type SupplierType } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { runWithoutTenantContext } from "@/lib/tenant-context"
 import {
   supplierInputSchema,
@@ -96,7 +97,18 @@ export async function listSuppliers(params: ListSuppliersParams) {
 // =============================================================================
 // 詳細取得
 // =============================================================================
-export async function getSupplier(id: string) {
+/**
+ * B-243 PR-4（D4-4）: 詳細の「取引条件」のカードに出す列。masterTerms が見えない人には null で返す（画面で隠すだけにしない）。
+ * termsHidden で見分ける（編集ページは layout で止まるが、型のため termsHidden=true なら /dashboard へ）
+ */
+type SupplierTermsHidden = { taxId: null; isQualifiedInvoiceIssuer: null; paymentTermType: null; closingDay: null; paymentMonthOffset: null; paymentDay: null }
+const SUPPLIER_TERMS_HIDDEN: SupplierTermsHidden = { taxId: null, isQualifiedInvoiceIssuer: null, paymentTermType: null, closingDay: null, paymentMonthOffset: null, paymentDay: null }
+type SupplierWithContacts = Prisma.SupplierGetPayload<{ include: { contacts: true } }>
+export type SupplierDetail =
+  | (SupplierWithContacts & { termsHidden: false })
+  | (Omit<SupplierWithContacts, keyof SupplierTermsHidden> & SupplierTermsHidden & { termsHidden: true })
+
+export async function getSupplier(id: string): Promise<SupplierDetail> {
   const session = await auth()
   if (!session?.user) throw new Error("認証が必要です")
   const companyId = session.user.companyId
@@ -116,7 +128,10 @@ export async function getSupplier(id: string) {
     throw new Error("仕入先が見つかりません")
   }
 
-  return supplier
+  const canSeeTerms = (await checkArea("masterTerms")).ok
+  return canSeeTerms
+    ? { ...supplier, termsHidden: false }
+    : { ...supplier, ...SUPPLIER_TERMS_HIDDEN, termsHidden: true }
 }
 
 // =============================================================================
@@ -128,6 +143,9 @@ export async function createSupplier(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -251,6 +269,9 @@ export async function updateSupplier(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -413,6 +434,9 @@ export async function archiveSupplier(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -465,6 +489,9 @@ export async function restoreSupplier(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)
@@ -517,6 +544,9 @@ export async function restoreSupplier(
 export async function checkSupplierUsage(id: string): Promise<SupplierUsage> {
   const session = await auth()
   if (!session?.user) throw new Error("認証が必要です")
+  // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める（この関数は認証失敗も throw）
+  const area = await checkArea("masterTerms")
+  if (!area.ok) throw new Error(area.error)
   const companyId = session.user.companyId
   if (!companyId) throw new Error("テナント情報が取得できません")
 
@@ -556,6 +586,9 @@ export async function deleteSupplierPermanently(
   try {
     const session = await auth()
     if (!session?.user) return { ok: false, error: "認証が必要です" }
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const companyId = session.user.companyId
     const userId = session.user.id
     if (!companyId || !userId)

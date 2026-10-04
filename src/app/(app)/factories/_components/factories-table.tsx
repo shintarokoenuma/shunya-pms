@@ -34,7 +34,10 @@ type FactoryRow = {
 export function FactoriesTable({
   items,
   isMasterAdmin,
+  canEdit,
 }: {
+  /** B-243 PR-4（D4-3）: false なら「操作」の列（編集・メニュー）を出さない */
+  canEdit: boolean
   items: FactoryRow[]
   isMasterAdmin: boolean
 }) {
@@ -55,7 +58,7 @@ export function FactoriesTable({
             <TableHead>工場タイプ</TableHead>
             <TableHead className="w-[80px]">国</TableHead>
             <TableHead className="w-[100px]">ステータス</TableHead>
-            <TableHead className="w-[120px] text-right">操作</TableHead>
+            {canEdit && <TableHead className="w-[120px] text-right">操作</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -68,7 +71,8 @@ export function FactoriesTable({
                 >
                   {f.factoryName}
                 </Link>
-                <MissingFieldsBadge fields={f.missingFields ?? []} />
+                {/* B-243 PR-4: 編集できる人にだけ「未入力」のバッジを出す */}
+                {canEdit && <MissingFieldsBadge fields={f.missingFields ?? []} />}
                 {f.factoryNameEn && (
                   <div className="text-xs text-muted-foreground">
                     {f.factoryNameEn}
@@ -95,6 +99,7 @@ export function FactoriesTable({
                   {FACTORY_STATUS_LABELS[f.status]}
                 </Badge>
               </TableCell>
+              {canEdit && (
               <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-1">
                   <Button asChild variant="ghost" size="icon" aria-label="編集">
@@ -111,6 +116,7 @@ export function FactoriesTable({
                   />
                 </div>
               </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

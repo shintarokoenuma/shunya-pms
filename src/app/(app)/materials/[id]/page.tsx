@@ -61,10 +61,8 @@ export default async function MaterialDetailPage({
   })
   const isMasterAdmin = company?.tenantType === "MASTER_ADMIN"
 
-  const priceDisplay =
-    item.unitPrice !== null
-      ? `${formatDecimal(item.unitPrice)} ${item.currency} / ${item.unit}`
-      : "—"
+  // B-243 PR-4（D4-3）: マスターの取引条件・編集が見えない役割は「見るだけ」。単価のカード・編集・メニューを出さない
+  const canEditMaster = !item.termsHidden
 
   return (
     <div className="space-y-6 p-6">
@@ -99,6 +97,7 @@ export default async function MaterialDetailPage({
               )}
             </div>
           </div>
+          {canEditMaster && (
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
               <Link href={`/materials/${id}/edit`}>
@@ -113,6 +112,7 @@ export default async function MaterialDetailPage({
               isMasterAdmin={isMasterAdmin}
             />
           </div>
+          )}
         </div>
       </div>
 
@@ -201,13 +201,21 @@ export default async function MaterialDetailPage({
         </Card>
       </div>
 
-      {/* 単価 */}
+      {/* 単価。B-243 PR-4（D4-3）: マスターの取引条件が見える役割だけ（見えない人には action が null で返す） */}
+      {!item.termsHidden && (
       <Card>
         <CardHeader>
           <CardTitle className="text-base">単価</CardTitle>
         </CardHeader>
         <CardContent>
-          <DetailRow label="単価" value={priceDisplay} />
+          <DetailRow
+            label="単価"
+            value={
+              item.unitPrice !== null
+                ? `${formatDecimal(item.unitPrice)} ${item.currency} / ${item.unit}`
+                : "—"
+            }
+          />
           <DetailRow
             label="最小発注数"
             value={
@@ -218,6 +226,7 @@ export default async function MaterialDetailPage({
           />
         </CardContent>
       </Card>
+      )}
 
       {/* 仕様 */}
       {item.specification && (

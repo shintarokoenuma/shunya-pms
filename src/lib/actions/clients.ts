@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache"
 import { Prisma } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { withTenantContext } from "@/lib/with-tenant"
+import { checkArea } from "@/lib/area-access"
 import { requireTenantContext, runWithoutTenantContext } from "@/lib/tenant-context"
 import { writeAuditLog } from "@/lib/audit-log"
 import { getEffectiveCompanyId } from "@/lib/tenant-context"
@@ -135,9 +136,26 @@ export async function listClients(rawQuery: ListClientsQuery = {}) {
   })
 }
 
-export async function getClient(id: string) {
+/**
+ * B-243 PR-4（D4-4）: 詳細の「取引条件」のカードに出す列。masterTerms が見えない人には null で返す（画面で隠すだけにしない）。
+ * termsHidden で見分ける（編集ページは layout で止まるが、型のため termsHidden=true なら /dashboard へ）
+ */
+type ClientTermsHidden = {
+  taxId: null; isQualifiedInvoiceIssuer: null; paymentTermType: null; closingDay: null; paymentMonthOffset: null; paymentDay: null
+  taxRoundingMode: null; depositPercentage: null; displayPattern: null
+}
+const CLIENT_TERMS_HIDDEN: ClientTermsHidden = {
+  taxId: null, isQualifiedInvoiceIssuer: null, paymentTermType: null, closingDay: null, paymentMonthOffset: null, paymentDay: null,
+  taxRoundingMode: null, depositPercentage: null, displayPattern: null,
+}
+type ClientWithContacts = Prisma.ClientGetPayload<{ include: { contacts: true } }>
+export type ClientDetail =
+  | (ClientWithContacts & { termsHidden: false })
+  | (Omit<ClientWithContacts, keyof ClientTermsHidden> & ClientTermsHidden & { termsHidden: true })
+
+export async function getClient(id: string): Promise<ClientDetail | null> {
   return withTenantContext(async () => {
-    return prisma.client.findUnique({
+    const client = await prisma.client.findUnique({
       where: { id },
       include: {
         contacts: {
@@ -146,6 +164,11 @@ export async function getClient(id: string) {
         },
       },
     })
+    if (!client) return null
+    const canSeeTerms = (await checkArea("masterTerms")).ok
+    return canSeeTerms
+      ? { ...client, termsHidden: false }
+      : { ...client, ...CLIENT_TERMS_HIDDEN, termsHidden: true }
   })
 }
 
@@ -153,6 +176,9 @@ export async function createClient(
   input: CreateClientInput
 ): Promise<ActionResult<{ id: string }>> {
   return withTenantContext(async () => {
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const parsed = createClientSchema.safeParse(input)
     if (!parsed.success) {
       return {
@@ -256,6 +282,9 @@ export async function updateClient(
   input: UpdateClientInput
 ): Promise<ActionResult<{ id: string }>> {
   return withTenantContext(async () => {
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const parsed = updateClientSchema.safeParse(input)
     if (!parsed.success) {
       return {
@@ -407,6 +436,9 @@ export async function archiveClient(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   return withTenantContext(async () => {
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const before = await prisma.client.findUnique({ where: { id } })
     if (!before) {
       return { ok: false, error: "対象のクライアントが見つかりません" }
@@ -440,6 +472,9 @@ export async function restoreClient(
   id: string
 ): Promise<ActionResult<{ id: string }>> {
   return withTenantContext(async () => {
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const before = await prisma.client.findUnique({ where: { id } })
     if (!before) {
       return { ok: false, error: "対象のクライアントが見つかりません" }
@@ -481,6 +516,9 @@ export type ClientUsage = {
 
 export async function checkClientUsage(id: string): Promise<ClientUsage> {
   return withTenantContext(async () => {
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める（この関数は認証失敗も throw）
+    const area = await checkArea("masterTerms")
+    if (!area.ok) throw new Error(area.error)
     const [brandCount, inquiryCount, productCount] = await Promise.all([
       prisma.brand.count({ where: { clientId: id } }),
       prisma.inquiry.count({ where: { existingClientId: id } }),
@@ -500,6 +538,9 @@ export async function deleteClientPermanently(
   confirmName: string
 ): Promise<ActionResult<{ id: string }>> {
   return withTenantContext(async () => {
+    // B-243 PR-4（D4-5）: マスターの取引条件・編集が見えない役割は止める
+    const area = await checkArea("masterTerms")
+    if (!area.ok) return area
     const ctx = requireTenantContext()
     if (ctx.tenantType !== "MASTER_ADMIN") {
       return { ok: false, error: "本削除は MASTER_ADMIN のみ実行できます" }

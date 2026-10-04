@@ -34,7 +34,10 @@ type SupplierRow = {
 export function SuppliersTable({
   items,
   isMasterAdmin,
+  canEdit,
 }: {
+  /** B-243 PR-4（D4-3）: false なら「操作」の列（編集・メニュー）を出さない */
+  canEdit: boolean
   items: SupplierRow[]
   isMasterAdmin: boolean
 }) {
@@ -56,7 +59,7 @@ export function SuppliersTable({
             <TableHead>取扱品目</TableHead>
             <TableHead className="w-[80px]">国</TableHead>
             <TableHead className="w-[100px]">ステータス</TableHead>
-            <TableHead className="w-[120px] text-right">操作</TableHead>
+            {canEdit && <TableHead className="w-[120px] text-right">操作</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -69,7 +72,8 @@ export function SuppliersTable({
                 >
                   {s.companyName}
                 </Link>
-                <MissingFieldsBadge fields={s.missingFields ?? []} />
+                {/* B-243 PR-4: 編集できる人にだけ「未入力」のバッジを出す */}
+                {canEdit && <MissingFieldsBadge fields={s.missingFields ?? []} />}
                 {s.companyNameEn && (
                   <div className="text-xs text-muted-foreground">
                     {s.companyNameEn}
@@ -96,6 +100,7 @@ export function SuppliersTable({
                   {SUPPLIER_STATUS_LABELS[s.status]}
                 </Badge>
               </TableCell>
+              {canEdit && (
               <TableCell className="text-right">
                 <div className="flex items-center justify-end gap-1">
                   <Button asChild variant="ghost" size="icon" aria-label="編集">
@@ -112,6 +117,7 @@ export function SuppliersTable({
                   />
                 </div>
               </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

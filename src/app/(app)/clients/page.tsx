@@ -6,6 +6,7 @@ import { listClients } from "@/lib/actions/clients"
 import { ClientsTable } from "./_components/clients-table"
 import { clientMissingFields } from "@/lib/master-completeness"
 import { auth } from "@/lib/auth"
+import { canSeeAreaForSession } from "@/lib/area-access"
 import { ClientsSearch } from "./_components/clients-search"
 import { ClientsPagination } from "./_components/clients-pagination"
 
@@ -28,6 +29,8 @@ export default async function ClientsListPage({
   const sp = await searchParams
   const session = await auth()
   const isMasterAdmin = session?.user?.tenantType === "MASTER_ADMIN"
+  // B-243 PR-4（D4-3）: マスターの取引条件・編集が見えない役割には「新規」と行の「編集」を出さない
+  const canEditMaster = await canSeeAreaForSession("masterTerms")
 
   const result = await listClients({
     q: sp.q,
@@ -53,20 +56,23 @@ export default async function ClientsListPage({
             OEM 発注元のマスター管理
           </p>
         </div>
-        <Button asChild>
-          <Link href="/clients/new">
-            <Plus className="size-4" />
-            新規作成
-          </Link>
-        </Button>
+        {canEditMaster && (
+          <Button asChild>
+            <Link href="/clients/new">
+              <Plus className="size-4" />
+              新規作成
+            </Link>
+          </Button>
+        )}
       </div>
 
       <ClientsSearch />
 
-      {/* B-252（D-7）: 未入力の項目数を一覧に出す */}
+      {/* B-252（D-7）: 未入力の項目数を一覧に出す。B-243 PR-4: 編集できない人には数も計算しない（編集を促さない・取引条件の未入力が漏れない） */}
       <ClientsTable
-        items={result.items.map((c) => ({ ...c, missingFields: clientMissingFields({ ...c, hasPrimaryContact: c.contacts.length > 0 }) }))}
+        items={result.items.map((c) => ({ ...c, missingFields: canEditMaster ? clientMissingFields({ ...c, hasPrimaryContact: c.contacts.length > 0 }) : undefined }))}
         isMasterAdmin={isMasterAdmin}
+        canEdit={canEditMaster}
       />
 
       <ClientsPagination

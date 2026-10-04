@@ -2,6 +2,7 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Plus } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { canSeeAreaForSession } from "@/lib/area-access"
 import { Button } from "@/components/ui/button"
 import {
   listMaterials,
@@ -31,7 +32,8 @@ export default async function MaterialsPage({
   const sp = await searchParams
   const page = sp.page ? Number(sp.page) : 1
 
-  const [result, suppliers] = await Promise.all([
+  // B-243 PR-4（D4-3）: マスターの取引条件・編集が見えない役割には「新規」と「単価」の列を出さない（単価は action も null で返す）
+  const [result, suppliers, canEditMaster] = await Promise.all([
     listMaterials({
       q: sp.q,
       status: sp.status as MaterialStatus | undefined,
@@ -41,6 +43,7 @@ export default async function MaterialsPage({
       pageSize: 20,
     }),
     listActiveSuppliersForMaterialSelect(),
+    canSeeAreaForSession("masterTerms"),
   ])
 
   if (!result.ok) {
@@ -62,16 +65,18 @@ export default async function MaterialsPage({
             生地・副資材マスター（Phase 1A-13a：基本コア）
           </p>
         </div>
-        <Button asChild>
-          <Link href="/materials/new">
-            <Plus className="mr-1 h-4 w-4" />
-            新規作成
-          </Link>
-        </Button>
+        {canEditMaster && (
+          <Button asChild>
+            <Link href="/materials/new">
+              <Plus className="mr-1 h-4 w-4" />
+              新規作成
+            </Link>
+          </Button>
+        )}
       </div>
 
       <MaterialsSearch suppliers={suppliers} />
-      <MaterialsTable items={items} />
+      <MaterialsTable items={items} showPrice={canEditMaster} />
       <MaterialsPagination
         page={currentPage}
         totalPages={totalPages}

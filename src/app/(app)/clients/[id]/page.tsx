@@ -134,8 +134,10 @@ export default async function ClientDetailPage({
     : null
 
   const contact = client.contacts[0]
-  // B-252（D-6・D-7）: 未入力の項目
-  const missing = clientMissingFields({ ...client, hasPrimaryContact: !!contact })
+  // B-243 PR-4（D4-3）: マスターの取引条件・編集が見えない役割は「見るだけ」。取引条件のカード・編集・メニュー・未入力の案内を出さない
+  const canEditMaster = !client.termsHidden
+  // B-252（D-6・D-7）: 未入力の項目（編集できる人にだけ出す）
+  const missing = client.termsHidden ? [] : clientMissingFields({ ...client, hasPrimaryContact: !!contact })
   const masterAddress = formatAddress({
     postalCode: client.postalCode,
     prefecture: client.prefecture,
@@ -179,18 +181,20 @@ export default async function ClientDetailPage({
             {client.clientCode}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button asChild variant="outline" size="sm">
-            <Link href={`/clients/${id}/edit`}>
-              <Pencil className="mr-1 h-4 w-4" />
-              編集
-            </Link>
-          </Button>
-          <ClientActions id={id} name={client.companyName} status={client.status} isMasterAdmin={isMasterAdmin} variant="menu" />
-        </div>
+        {canEditMaster && (
+          <div className="flex items-center gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/clients/${id}/edit`}>
+                <Pencil className="mr-1 h-4 w-4" />
+                編集
+              </Link>
+            </Button>
+            <ClientActions id={id} name={client.companyName} status={client.status} isMasterAdmin={isMasterAdmin} variant="menu" />
+          </div>
+        )}
       </div>
 
-      <MissingFieldsNotice fields={missing} editHref={`/clients/${id}/edit`} />
+      {canEditMaster && <MissingFieldsNotice fields={missing} editHref={`/clients/${id}/edit`} />}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* 基本情報 */}
@@ -262,7 +266,8 @@ export default async function ClientDetailPage({
           </CardContent>
         </Card>
 
-        {/* 取引条件 */}
+        {/* 取引条件。B-243 PR-4（D4-3）: マスターの取引条件が見える役割だけ（見えない人には action が null で返す） */}
+        {!client.termsHidden && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">取引条件</CardTitle>
@@ -331,6 +336,7 @@ export default async function ClientDetailPage({
             </Dl>
           </CardContent>
         </Card>
+        )}
       </div>
 
       {/* 請求書発送先住所（マスターと異なる場合のみ表示） */}
