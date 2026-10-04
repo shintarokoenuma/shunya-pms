@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { LogOut, User as UserIcon } from "lucide-react"
 import { signOut } from "next-auth/react"
 import { Button } from "@/components/ui/button"
@@ -46,9 +47,12 @@ export function UserMenu({ name, email, role, tenantType }: Props) {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem disabled>
-          <UserIcon className="mr-2 size-4" />
-          プロフィール
+        {/* B-244（D-1）: 自分のプロフィール（名前・パスワード） */}
+        <DropdownMenuItem asChild>
+          <Link href="/profile">
+            <UserIcon className="mr-2 size-4" />
+            プロフィール
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem

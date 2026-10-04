@@ -3,7 +3,10 @@ import Credentials from "next-auth/providers/credentials"
 import { PrismaAdapter } from "@auth/prisma-adapter"
 import bcrypt from "bcryptjs"
 import { prisma } from "@/lib/prisma"
+import { isSessionStale } from "@/lib/session-validity"
 import type { UserRole, TenantType } from "@prisma/client"
+// B-244: "next-auth/jwt" の JWT 型を拡張するには先にモジュールを読み込む必要がある（副作用だけの import）
+import "next-auth/jwt"
 
 // NextAuth.js 用の型拡張
 declare module "next-auth" {
@@ -22,6 +25,13 @@ declare module "next-auth" {
     companyId: string
     tenantType: TenantType
     role: UserRole
+  }
+}
+
+// B-244（D-5）: その端末でログインした時刻（ms）。passwordChangedAt がこれより後なら切る
+declare module "next-auth/jwt" {
+  interface JWT {
+    loginAt?: number
   }
 }
 
@@ -93,7 +103,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return {
           id: user.id,
           email: user.email,
-          name: user.displayName,
+          // B-244（D-3）: 表示名が無ければ「姓 名」（ログイン直後から出る）
+          name: user.displayName ?? `${user.lastName} ${user.firstName}`,
           companyId: user.companyId,
           tenantType: user.company.tenantType,
           role: user.role,
@@ -106,21 +117,38 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     // ログイン直後（user がある時）は authorize の値を焼く。それ以外の呼び出しでは主キーで 1 行読み、
     // 行が無い・deletedAt がある・ACTIVE でない・companyId が違う、のどれかなら null（＝ログアウト）。
     // ★1 回の画面表示で auth() は proxy・layout・page・action から複数回呼ばれ、そのたびに 1 行読む（人数が増えたら見直す・§9）
+    // B-244（D-3・D-5）: 名前（displayName ?? "姓 名"）も読み直して token.name に入れる（変えたらすぐ右上に出る）。
+    // ログイン直後に token.loginAt（ms）を持ち、passwordChangedAt がそれより後なら null（＝ほかの端末も切れる）。
+    // loginAt の無い token（このデプロイ前からのログイン）は、その場の時刻として扱い締め出さない
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id
         token.companyId = (user as { companyId: string }).companyId
         token.tenantType = (user as { tenantType: TenantType }).tenantType
         token.role = (user as { role: UserRole }).role
+        token.name = user.name ?? null
+        token.loginAt = Date.now()
         return token
       }
       if (!token.id) return null
+      if (typeof token.loginAt !== "number") token.loginAt = Date.now()
       const row = await prisma.user.findUnique({
         where: { id: token.id as string },
-        select: { role: true, status: true, companyId: true, deletedAt: true },
+        select: {
+          role: true,
+          status: true,
+          companyId: true,
+          deletedAt: true,
+          displayName: true,
+          lastName: true,
+          firstName: true,
+          passwordChangedAt: true,
+        },
       })
       if (!row || row.deletedAt || row.status !== "ACTIVE" || row.companyId !== token.companyId) return null
+      if (isSessionStale(row.passwordChangedAt, token.loginAt)) return null
       token.role = row.role
+      token.name = row.displayName ?? `${row.lastName} ${row.firstName}`
       return token
     },
     async session({ session, token }) {
@@ -129,6 +157,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         session.user.companyId = token.companyId as string
         session.user.tenantType = token.tenantType as TenantType
         session.user.role = token.role as UserRole
+        session.user.name = (token.name as string | null | undefined) ?? null
       }
       return session
     },
