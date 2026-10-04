@@ -34,19 +34,24 @@ export type SectionVisibility = "view" | "hidden"
 
 // ---- B-243 PR-1: 画面の領域（areas）
 // B-243 PR-2（D2-1）: cost（原価・見積）・sales（受注）を足す
-export const AREA_KEYS = ["orders", "cost", "sales"] as const
+// B-243 PR-3（D3-1）: delivery（納品）・accounting（経理）を足す
+export const AREA_KEYS = ["orders", "cost", "sales", "delivery", "accounting"] as const
 export type AreaKey = (typeof AREA_KEYS)[number]
 
 export const AREA_LABELS: Record<AreaKey, string> = {
   orders: "発注",
   cost: "原価・見積",
   sales: "受注",
+  delivery: "納品",
+  accounting: "経理",
 }
 
 export const AREA_HINTS: Record<AreaKey, string> = {
   orders: "仕入 PO・作業 WO",
   cost: "量産見積・概算見積・原価・BOM の単価",
   sales: "受注の一覧・詳細・作成",
+  delivery: "納品書の一覧・詳細・作成・PDF",
+  accounting: "請求・入金・締め",
 }
 
 /** C-D2: 未設定のときの既定。書かれていない役割は "view" */
@@ -54,6 +59,8 @@ export const AREA_DEFAULTS: Record<AreaKey, Partial<Record<ConfigurableRole, Sec
   orders: { STAFF: "hidden" },
   cost: { STAFF: "hidden" },
   sales: { STAFF: "hidden" },
+  delivery: { STAFF: "hidden" },
+  accounting: { STAFF: "hidden" },
 }
 
 /** C-D5: action・API 共通の拒否の文言 */
@@ -61,6 +68,8 @@ export const AREA_DENIED_MESSAGES: Record<AreaKey, string> = {
   orders: "この役割では発注を扱えません",
   cost: "この役割では原価・見積を扱えません",
   sales: "この役割では受注を扱えません",
+  delivery: "この役割では納品を扱えません",
+  accounting: "この役割では経理を扱えません",
 }
 
 export type RolePermissions = {

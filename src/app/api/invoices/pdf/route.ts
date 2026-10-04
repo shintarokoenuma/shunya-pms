@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { getInvoicePdfData } from "@/lib/pdf/invoice-data"
 import { renderInvoicePdfBuffer } from "@/lib/pdf/render"
 import { timestampJst } from "@/lib/gcs"
@@ -12,6 +13,11 @@ export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user) {
     return new Response("Unauthorized", { status: 401 })
+  }
+  // B-243 PR-3（§2-8）: accounting が見えない役割は 403
+  const area = await checkArea("accounting")
+  if (!area.ok) {
+    return new Response(area.error, { status: 403 })
   }
   const body = await req.json().catch(() => null)
   const ids = body?.ids

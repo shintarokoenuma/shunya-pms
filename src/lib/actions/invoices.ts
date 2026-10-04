@@ -12,6 +12,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { getCompanyIssuer, issuerAddressLine } from "@/lib/company-issuer"
 import { checkPeriodLock } from "@/lib/period-close/lock"
 import { DELIVERY_NOTE_DELIVERED_STATUSES } from "@/lib/validators/delivery-note"
@@ -88,6 +89,9 @@ export type InvoiceClientOption = {
 export async function listActiveClientsForInvoiceSelect(): Promise<InvoiceClientOption[]> {
   const sess = await requireSession()
   if (!sess.ok) return []
+  // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+  const area = await checkArea("accounting")
+  if (!area.ok) return []
   return prisma.client.findMany({
     where: { companyId: sess.companyId, deletedAt: null, status: "ACTIVE" },
     select: {
@@ -408,6 +412,9 @@ export async function getInvoiceCandidates(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
     const parsed = invoiceCandidateQuerySchema.safeParse(input)
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容に誤りがあります" }
@@ -433,6 +440,9 @@ export async function createInvoice(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
 
     const parsed = invoiceCreateSchema.safeParse(input)
     if (!parsed.success) {
@@ -689,6 +699,9 @@ export async function listInvoices(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
     const parsed = invoiceListParamsSchema.parse(params)
     const skip = (parsed.page - 1) * parsed.pageSize
     const q = parsed.q.trim()
@@ -809,6 +822,9 @@ export async function getInvoice(id: string): Promise<ActionResult<InvoiceDetail
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
     const row = await prisma.invoice.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
       include: { items: { orderBy: { itemOrder: "asc" } } },
@@ -926,6 +942,9 @@ export async function updateInvoiceStatus(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-3（§2-4）: accounting が見えない役割は止める
+    const area = await checkArea("accounting")
+    if (!area.ok) return area
 
     const existing = await prisma.invoice.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },

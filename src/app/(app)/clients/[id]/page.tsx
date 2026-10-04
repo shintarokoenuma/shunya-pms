@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/table"
 import { PAYMENT_METHOD_LABELS, fmtYen, fmtYmd } from "../../invoices/_components/labels"
 import { auth } from "@/lib/auth"
+import { canSeeAreaForSession } from "@/lib/area-access"
 import { Plus } from "lucide-react"
 import {
   BUSINESS_TYPE_LABEL,
@@ -114,7 +115,9 @@ export default async function ClientDetailPage({
 
   // B-109 PR-2c（D-25）: クライアント単位の入金（新しい順）。B-222 PR-2d（D-38）: この節は直近5件だけ出す。
   // ★action 側で 5 に絞らない（請求書の御入金の節など他の消費者に影響する）
-  const payments = (await listClientPayments(id)).slice(0, 5)
+  // B-243 PR-3（§2-7・D3-3）: 経理が見えない役割は入金を読まず、「入金」のカードも出さない（取引条件のカードは PR-4）
+  const canSeeAccounting = await canSeeAreaForSession("accounting")
+  const payments = canSeeAccounting ? (await listClientPayments(id)).slice(0, 5) : []
 
   // 自社担当者の名前を取得
   const assignedUser = client.assignedToUserId
@@ -524,6 +527,7 @@ export default async function ClientDetailPage({
       </Card>
 
       {/* B-109 PR-2c（addendum v0.9 §2-4）: 入金はクライアント単位で記録する（請求書には充当しない・D-25） */}
+      {canSeeAccounting && (
       <Card>
         <CardHeader className="flex flex-row items-center justify-between space-y-0 gap-3">
           <CardTitle className="text-base">入金</CardTitle>
@@ -574,6 +578,7 @@ export default async function ClientDetailPage({
           )}
         </CardContent>
       </Card>
+      )}
 
       {client.notes && (
         <Card>

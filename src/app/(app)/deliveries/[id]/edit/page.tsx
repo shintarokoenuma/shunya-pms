@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { canSeeAreaForSession } from "@/lib/area-access"
 import { Button } from "@/components/ui/button"
 import {
   getDeliveryNote,
@@ -35,12 +36,15 @@ export default async function EditDeliveryNotePage({
   if (!session?.user) redirect("/login")
 
   const { id } = await params
-  const [result, clients, buyers, destinations, products] = await Promise.all([
+  // B-243 PR-3（D3-5）: 引き当てダイアログのタブ用（発注・受注が見える役割か）
+  const [result, clients, buyers, destinations, products, canSeeOrders, canSeeSales] = await Promise.all([
     getDeliveryNote(id),
     listActiveClientsForDeliverySelect(),
     listActiveBuyersForDeliverySelect(),
     listActiveDestinationsForDeliverySelect(),
     listActiveProductsForDeliverySelect(),
+    canSeeAreaForSession("orders"),
+    canSeeAreaForSession("sales"),
   ])
   if (!result.ok) notFound()
   const dn = result.data
@@ -118,6 +122,8 @@ export default async function EditDeliveryNotePage({
         products={products}
         initial={initial}
         currentDeliveryNumber={dn.deliveryNumber}
+        canSeeOrders={canSeeOrders}
+        canSeeSales={canSeeSales}
       />
     </div>
   )

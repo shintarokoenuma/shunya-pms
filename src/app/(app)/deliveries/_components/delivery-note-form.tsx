@@ -118,7 +118,12 @@ export function DeliveryNoteForm({
   id,
   initial,
   currentDeliveryNumber,
+  canSeeOrders,
+  canSeeSales,
 }: {
+  /** B-243 PR-3（D3-5）: 引き当てダイアログの「発注」「受注（量産）」のタブを出すか */
+  canSeeOrders: boolean
+  canSeeSales: boolean
   clients: ClientOption[]
   buyers: BuyerOption[]
   destinations: DestinationOption[]
@@ -463,6 +468,8 @@ export function DeliveryNoteForm({
               clientId={clientId}
               onAdd={handleAllocationAdd}
               existingSoItemIds={items.map((r) => r.soItemId).filter((v): v is string => !!v)}
+              canSeeOrders={canSeeOrders}
+              canSeeSales={canSeeSales}
             />
           </div>
         </div>

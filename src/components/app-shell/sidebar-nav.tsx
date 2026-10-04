@@ -7,13 +7,22 @@ import { NAV_SECTIONS } from "./nav-items"
 import { SECTION_ACCENTS } from "@/lib/constants/section-accents"
 import type { AreaKey } from "@/lib/settings-visibility"
 
-/** B-243 PR-1: visibleAreas に無い領域（item.area）の項目は hidden と同じく描画しない */
+/**
+ * B-243 PR-1: visibleAreas に無い領域（item.area）の項目は hidden と同じく描画しない
+ * B-243 PR-3（§2-2）: 項目がすべて消えたセクションは見出しごと出さない（経理の3つが隠れたとき）
+ */
 export function SidebarNav({ visibleAreas }: { visibleAreas: AreaKey[] }) {
   const pathname = usePathname()
 
   return (
     <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
-      {NAV_SECTIONS.map((section, idx) => (
+      {NAV_SECTIONS.map((section, idx) => ({
+        section,
+        idx,
+        items: section.items.filter((item) => !item.hidden && (!item.area || visibleAreas.includes(item.area))),
+      }))
+        .filter(({ items }) => items.length > 0)
+        .map(({ section, idx, items }) => (
         <div key={idx}>
           {section.label && (
             <h3
@@ -28,9 +37,7 @@ export function SidebarNav({ visibleAreas }: { visibleAreas: AreaKey[] }) {
             </h3>
           )}
           <ul className="space-y-1">
-            {section.items
-              .filter((item) => !item.hidden && (!item.area || visibleAreas.includes(item.area)))
-              .map((item) => {
+            {items.map((item) => {
               const Icon = item.icon
               const isActive =
                 pathname === item.href || pathname.startsWith(item.href + "/")
