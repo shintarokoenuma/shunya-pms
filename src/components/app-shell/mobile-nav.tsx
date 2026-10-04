@@ -13,6 +13,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet"
 import { SidebarNav } from "./sidebar-nav"
+import type { AreaKey } from "@/lib/settings-visibility"
 
 /**
  * B-093 PR-1（D-2〜D-4）: スマートフォン幅（768px 未満）のメニュー。
@@ -21,7 +22,7 @@ import { SidebarNav } from "./sidebar-nav"
  * - 項目を押す（リンクのクリック）／外側のタップ／Esc／ページ移動 で閉じる
  * 表示の切り替え（md:hidden）は呼び出し側（header.tsx）で行う。
  */
-export function MobileNav() {
+export function MobileNav({ visibleAreas }: { visibleAreas: AreaKey[] }) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
 
@@ -67,7 +68,7 @@ export function MobileNav() {
             if ((e.target as HTMLElement).closest("a")) setOpen(false)
           }}
         >
-          <SidebarNav />
+          <SidebarNav visibleAreas={visibleAreas} />
         </div>
       </SheetContent>
     </Sheet>

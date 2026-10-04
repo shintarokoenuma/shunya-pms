@@ -1,7 +1,8 @@
 import Link from "next/link"
 import { SidebarNav } from "./sidebar-nav"
+import type { AreaKey } from "@/lib/settings-visibility"
 
-export function Sidebar() {
+export function Sidebar({ visibleAreas }: { visibleAreas: AreaKey[] }) {
   return (
     // B-093 PR-1（D-2）: 768px 未満はサイドバーを隠し、ヘッダの ☰（MobileNav）から出す
     <aside className="hidden md:flex w-64 shrink-0 border-r bg-card flex-col h-screen sticky top-0">
@@ -16,7 +17,7 @@ export function Sidebar() {
           <span className="text-sm">PMS</span>
         </Link>
       </div>
-      <SidebarNav />
+      <SidebarNav visibleAreas={visibleAreas} />
       <div className="border-t px-4 py-3 text-xs text-muted-foreground shrink-0">
         Phase 0 完了
       </div>

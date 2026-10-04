@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
+import { getRolePermissions } from "@/lib/settings-visibility-db"
+import { visibleAreas } from "@/lib/settings-visibility"
 import { Header } from "./header"
 import { Sidebar } from "./sidebar"
 import { PageAccentBar } from "./page-accent-bar"
@@ -17,6 +19,10 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
     select: { companyName: true },
   })
 
+  // B-243 PR-1（§2-10）: 役割と権限で見える領域。サイドバー（PC）とヘッダの ☰（MobileNav）の両方に渡す
+  const perms = await getRolePermissions(session.user.companyId)
+  const areas = visibleAreas(perms, session.user.role)
+
   const user = {
     id: session.user.id,
     name: session.user.name ?? session.user.email.split("@")[0],
@@ -28,9 +34,9 @@ export async function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-background">
-      <Sidebar />
+      <Sidebar visibleAreas={areas} />
       <div className="flex-1 flex flex-col min-w-0">
-        <Header user={user} />
+        <Header user={user} visibleAreas={areas} />
         <PageAccentBar />
         <main className="flex-1 overflow-auto">
           {/* B-093 PR-1（D-6）: 768px 未満は余白を詰める */}

@@ -72,6 +72,8 @@ type Props = {
   posByTask: Record<string, PoForTask[]>
   /** progressTaskId → そのタスクに紐づく WO 群（タスク行下の列挙用） */
   wosByTask: Record<string, WoForTask[]>
+  /** B-243 PR-1（§2-6）: false なら「発注を作成」とタスクごとの PO/WO の一覧を出さない */
+  canSeeOrders: boolean
 }
 
 const RECEIVED_TYPES: ReadonlySet<ProgressTaskType> = new Set([
@@ -85,6 +87,7 @@ export function ProgressChecklist({
   processingOptions,
   posByTask,
   wosByTask,
+  canSeeOrders,
 }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -148,6 +151,7 @@ export function ProgressChecklist({
                 sampleProductionId={sampleProductionId}
                 pos={posByTask[t.id] ?? []}
                 wos={wosByTask[t.id] ?? []}
+                canSeeOrders={canSeeOrders}
               />
             ))}
           </tbody>
@@ -176,11 +180,13 @@ function TaskRow({
   sampleProductionId,
   pos,
   wos,
+  canSeeOrders,
 }: {
   task: ProgressTaskItem
   sampleProductionId: string
   pos: PoForTask[]
   wos: WoForTask[]
+  canSeeOrders: boolean
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -289,7 +295,8 @@ function TaskRow({
       <td className="px-3 py-2">
         <div className="flex flex-col items-end gap-1">
           <div className="flex items-center justify-end gap-1">
-            {isPoTask && (
+            {/* B-243 PR-1（§2-6）: 発注が見えない役割には「発注を作成」と PO/WO の一覧を出さない */}
+            {canSeeOrders && isPoTask && (
               <Button asChild variant="outline" size="sm">
                 <Link
                   href={`/purchase-orders/new?progressTaskId=${task.id}&sampleProductionId=${sampleProductionId}`}
@@ -299,7 +306,7 @@ function TaskRow({
                 </Link>
               </Button>
             )}
-            {isWoTask && (
+            {canSeeOrders && isWoTask && (
               <Button asChild variant="outline" size="sm">
                 <Link
                   href={`/work-orders/new?progressTaskId=${task.id}&sampleProductionId=${sampleProductionId}`}
@@ -323,7 +330,7 @@ function TaskRow({
               </Button>
             )}
           </div>
-          {isPoTask && pos.length > 0 && (
+          {canSeeOrders && isPoTask && pos.length > 0 && (
             <ul className="space-y-0.5 text-right text-xs">
               {pos.map((po) => (
                 <li key={po.id}>
@@ -340,7 +347,7 @@ function TaskRow({
               ))}
             </ul>
           )}
-          {isWoTask && wos.length > 0 && (
+          {canSeeOrders && isWoTask && wos.length > 0 && (
             <ul className="space-y-0.5 text-right text-xs">
               {wos.map((wo) => (
                 <li key={wo.id}>

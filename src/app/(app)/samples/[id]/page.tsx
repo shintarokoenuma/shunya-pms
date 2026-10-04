@@ -31,6 +31,7 @@ import { SampleProductionActions } from "../_components/sample-production-delete
 import { SampleStatusControl } from "../_components/sample-status-control"
 import { SampleGenealogy } from "../_components/sample-genealogy"
 import { ProgressChecklist } from "../_components/progress-checklist"
+import { canSeeAreaForSession } from "@/lib/area-access"
 import { SampleSewingInstructionSection } from "../_components/sample-sewing-instruction-section"
 import { parseSewingInstruction } from "@/lib/validators/sewing-instruction"
 import { SampleRevisionSection } from "../_components/sample-revision-section"
@@ -70,9 +71,12 @@ export default async function SampleProductionDetailPage({
 
   // S-4b-1/2: タスクに紐づく PO / WO を一括取得し progressTaskId でグルーピング
   const taskIds = tasks.map((t) => t.id)
-  const [posResult, wosResult] = await Promise.all([
+  // B-243 PR-1（§2-6）: 発注が見えない役割は action が拒否して posResult / wosResult が ok:false → 空のまま。
+  //   「発注を作成」とタスクごとの PO/WO の一覧は canSeeOrders で出し分ける
+  const [posResult, wosResult, canSeeOrders] = await Promise.all([
     listPurchaseOrdersByProgressTasks(taskIds),
     listWorkOrdersByProgressTasks(taskIds),
+    canSeeAreaForSession("orders"),
   ])
   const posByTask: Record<string, PoForTask[]> = {}
   if (posResult.ok) {
@@ -329,6 +333,7 @@ export default async function SampleProductionDetailPage({
             wosByTask={wosByTask}
             processingOptions={processingOptions}
             posByTask={posByTask}
+            canSeeOrders={canSeeOrders}
           />
         </CardContent>
       </Card>

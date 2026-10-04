@@ -16,6 +16,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { EXTERNAL_COST_CATEGORY_ORDER } from "@/lib/constants/cost-category-types"
 import { checkPeriodLock } from "@/lib/period-close/lock"
 import { fromYmd, todayYmdJst, toYmd } from "@/lib/calc/invoice-period"
@@ -212,6 +213,9 @@ export async function generateNextPoNumberPreview(): Promise<
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
     const preview = await computeNextPoNumber(
       prisma.purchaseOrder,
       sess.companyId,
@@ -260,6 +264,9 @@ export async function listPurchaseOrders(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
     const parsed = purchaseOrderListParamsSchema.parse(params)
 
     const skip = (parsed.page - 1) * parsed.pageSize
@@ -345,6 +352,9 @@ export async function listPurchaseOrdersByProgressTasks(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
     const ids = [...new Set(progressTaskIds.filter(Boolean))]
     if (ids.length === 0) return { ok: true, data: [] }
 
@@ -399,6 +409,9 @@ export async function getPurchaseOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const po = await prisma.purchaseOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -495,6 +508,9 @@ export async function createPurchaseOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const parsed = purchaseOrderInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -704,6 +720,9 @@ export async function updatePurchaseOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const parsed = purchaseOrderInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -800,6 +819,9 @@ export async function deletePurchaseOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const existing = await prisma.purchaseOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -870,6 +892,9 @@ export async function updatePurchaseOrderStatus(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const existing = await prisma.purchaseOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },

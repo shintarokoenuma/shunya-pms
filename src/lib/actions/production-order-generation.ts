@@ -8,6 +8,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { checkPeriodLock } from "@/lib/period-close/lock"
 import { todayYmdJst } from "@/lib/calc/invoice-period"
 import {
@@ -137,6 +138,9 @@ export async function generateProductionOrders(
     const session = await auth()
     const companyId = session?.user?.companyId
     if (!companyId) return { ok: false, error: "認証されていません" }
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は生成できない（中で呼ぶ createPurchaseOrder / createWorkOrder も同じ判定をする）
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     // 対象 PE が自社のものであることを確認（ProductionEstimateItem に companyId 列は無い）。
     const pe = await prisma.productionEstimate.findFirst({

@@ -13,9 +13,11 @@ import {
   statusActionNeedsConfirm,
 } from "./user-management"
 import {
+  canSeeArea,
   canSeeSettingsSection,
   firstVisibleSettingsPath,
   readRolePermissions,
+  visibleAreas,
   visibleSettingsSections,
 } from "./settings-visibility"
 import { canManageCompany, isOwner } from "./permissions"
@@ -115,6 +117,36 @@ function assert(cond: boolean, msg: string): void {
   assert(classifyInviteEmail({ companyId: "company-b", status: "INVITED", deletedAt: d }, me) === "in_use", "⑦-7 他社の取り消した招待は in_use")
   assert(classifyInviteEmail({ companyId: "company-b", status: "INVITED", deletedAt: null }, me) === "in_use", "⑦-8 他社の招待中も in_use")
   assert(classifyInviteEmail({ companyId: me, status: "ACTIVE", deletedAt: d }, me) === "in_use", "⑦-9 同じ会社の削除済みの有効な人は in_use")
+}
+
+// ⑧ B-243 PR-1（C-D1〜C-D3）: 画面の領域（areas・発注）
+{
+  // 1. 空の設定: STAFF は見られない（既定 hidden）・ほかの4役割は見られる
+  const empty = readRolePermissions({})
+  assert(!canSeeArea(empty, "STAFF", "orders"), "⑧-1 空の設定で STAFF は発注が見えない")
+  for (const r of ["PRODUCTION", "ACCOUNTING", "SALES", "DESIGNER"]) {
+    assert(canSeeArea(empty, r, "orders"), `⑧-1' 空の設定で ${r} は発注が見える`)
+  }
+  // 2. OWNER / ADMIN は hidden が書かれていても見られる
+  const allHidden = readRolePermissions({ rolePermissions: { areas: { orders: { OWNER: "hidden", ADMIN: "hidden", STAFF: "hidden" } } } })
+  assert(canSeeArea(allHidden, "OWNER", "orders") && canSeeArea(allHidden, "ADMIN", "orders"), "⑧-2 OWNER / ADMIN は常に見える")
+  // 3. STAFF を view で上書きできる
+  const staffView = readRolePermissions({ rolePermissions: { areas: { orders: { STAFF: "view" } } } })
+  assert(canSeeArea(staffView, "STAFF", "orders"), "⑧-3 STAFF=view を保存すると見える")
+  // 4. SALES を hidden にできる
+  const salesHidden = readRolePermissions({ rolePermissions: { areas: { orders: { SALES: "hidden" } } } })
+  assert(!canSeeArea(salesHidden, "SALES", "orders") && canSeeArea(salesHidden, "PRODUCTION", "orders"), "⑧-4 SALES=hidden で SALES だけ見えない")
+  // 5. EXTERNAL・null・知らない役割は見られない
+  assert(!canSeeArea(staffView, "EXTERNAL", "orders") && !canSeeArea(staffView, null, "orders") && !canSeeArea(staffView, "BOGUS", "orders"), "⑧-5 EXTERNAL / 未ログイン / 知らない役割は見えない")
+  // 6. 壊れた値は捨てられ、既定値に戻る
+  const broken1 = readRolePermissions({ rolePermissions: { areas: [] } })
+  const broken2 = readRolePermissions({ rolePermissions: { areas: { bogus: { STAFF: "view" }, orders: { STAFF: "nope", BOGUS: "view" } } } })
+  assert(Object.keys(broken1.areas).length === 0 && !canSeeArea(broken1, "STAFF", "orders"), "⑧-6 areas が配列なら捨てて既定（STAFF 隠す）")
+  assert(Object.keys(broken2.areas).length === 0 && !canSeeArea(broken2, "STAFF", "orders"), "⑧-6' 知らない area・知らない値は捨てて既定")
+  assert(JSON.stringify(visibleAreas(empty, "STAFF")) === "[]" && JSON.stringify(visibleAreas(empty, "SALES")) === JSON.stringify(["orders"]), "⑧-6'' visibleAreas")
+  // 7. settings 側は変わらない（既定は「見る」）
+  assert(visibleSettingsSections(empty, "STAFF").length === 4, "⑧-7 settings の既定は「見る」のまま")
+  assert(Object.keys(readRolePermissions(null).areas).length === 0 && Object.keys(readRolePermissions({ rolePermissions: { settings: { bank: { STAFF: "hidden" } } } }).areas).length === 0, "⑧-7' areas が無くても settings は読める")
 }
 
 console.log("user-management.test.ts: all assertions passed")

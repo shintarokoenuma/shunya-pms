@@ -3,6 +3,7 @@ import { Badge } from "@/components/ui/badge"
 import { UserMenu } from "./user-menu"
 import { MobileNav } from "./mobile-nav"
 import { GlobalSearchTrigger } from "./global-search-dialog"
+import type { AreaKey } from "@/lib/settings-visibility"
 
 type Props = {
   user: {
@@ -12,15 +13,17 @@ type Props = {
     tenantType: string
     companyName: string
   }
+  /** B-243 PR-1: MobileNav に渡す（見える領域） */
+  visibleAreas: AreaKey[]
 }
 
-export function Header({ user }: Props) {
+export function Header({ user, visibleAreas }: Props) {
   return (
     <header className="h-16 border-b bg-background flex items-center justify-between px-3 md:px-6 sticky top-0 z-10 shrink-0">
       <div className="flex items-center gap-2 md:gap-3 min-w-0">
         {/* B-093 PR-1（D-5）: 768px 未満は ☰ とロゴを出す。会社名は 640px 未満で隠す。「管理者モード」は隠さない */}
         <div className="md:hidden flex items-center gap-1">
-          <MobileNav />
+          <MobileNav visibleAreas={visibleAreas} />
           <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
             <div className="size-8 rounded-md bg-foreground text-background flex items-center justify-center text-sm font-bold">
               P

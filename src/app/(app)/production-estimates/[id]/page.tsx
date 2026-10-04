@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft, Pencil, PackagePlus } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { canSeeAreaForSession } from "@/lib/area-access"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -35,6 +36,8 @@ export default async function ProductionEstimateDetailPage({
 }) {
   const session = await auth()
   if (!session?.user) redirect("/login")
+  // B-243 PR-1（§2-7）: 発注が見える役割だけ「量産発注を生成」を出す
+  const canSeeOrders = await canSeeAreaForSession("orders")
 
   const { id } = await params
   const result = await getProductionEstimate(id)
@@ -93,13 +96,15 @@ export default async function ProductionEstimateDetailPage({
                 編集
               </Link>
             </Button>
-            {/* (B): 量産発注生成の入口。 */}
-            <Button asChild size="sm">
-              <Link href={`/production-estimates/${pe.id}/generate`}>
-                <PackagePlus className="mr-1 h-4 w-4" />
-                量産発注を生成
-              </Link>
-            </Button>
+            {/* (B): 量産発注生成の入口。B-243 PR-1: 発注が見えるときだけ */}
+            {canSeeOrders && (
+              <Button asChild size="sm">
+                <Link href={`/production-estimates/${pe.id}/generate`}>
+                  <PackagePlus className="mr-1 h-4 w-4" />
+                  量産発注を生成
+                </Link>
+              </Button>
+            )}
           </div>
         </div>
       </div>

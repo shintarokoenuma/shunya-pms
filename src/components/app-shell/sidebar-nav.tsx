@@ -5,8 +5,10 @@ import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { NAV_SECTIONS } from "./nav-items"
 import { SECTION_ACCENTS } from "@/lib/constants/section-accents"
+import type { AreaKey } from "@/lib/settings-visibility"
 
-export function SidebarNav() {
+/** B-243 PR-1: visibleAreas に無い領域（item.area）の項目は hidden と同じく描画しない */
+export function SidebarNav({ visibleAreas }: { visibleAreas: AreaKey[] }) {
   const pathname = usePathname()
 
   return (
@@ -27,7 +29,7 @@ export function SidebarNav() {
           )}
           <ul className="space-y-1">
             {section.items
-              .filter((item) => !item.hidden)
+              .filter((item) => !item.hidden && (!item.area || visibleAreas.includes(item.area)))
               .map((item) => {
               const Icon = item.icon
               const isActive =

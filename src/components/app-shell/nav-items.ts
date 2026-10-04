@@ -30,6 +30,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import type { SectionAccentKey } from "@/lib/constants/section-accents"
+import type { AreaKey } from "@/lib/settings-visibility"
 
 export type NavItem = {
   label: string
@@ -43,6 +44,8 @@ export type NavItem = {
    * 型番（ModelCode）を裏方化するために導入。元に戻すには hidden を外すだけ（可逆）。
    */
   hidden?: boolean
+  /** B-243 PR-1: 画面の領域。役割と権限で隠された領域の項目は出さない（hidden と同じ扱い） */
+  area?: AreaKey
 }
 
 export type NavSection = {
@@ -77,8 +80,8 @@ export const NAV_SECTIONS: NavSection[] = [
     accent: "trade",
     items: [
       { label: "見積もり", href: "/quotations", icon: Calculator, enabled: true },
-      { label: "発注（仕入 PO）", href: "/purchase-orders", icon: ShoppingCart, enabled: true },
-      { label: "発注（作業 WO）", href: "/work-orders", icon: Hammer, enabled: true },
+      { label: "発注（仕入 PO）", href: "/purchase-orders", icon: ShoppingCart, enabled: true, area: "orders" },
+      { label: "発注（作業 WO）", href: "/work-orders", icon: Hammer, enabled: true, area: "orders" },
       { label: "受注", href: "/sales-orders", icon: ClipboardCheck, enabled: true },
       // 納品（DLV・B-108）は取引。請求・入金・締めは経理グループ（B-109 PR-6・D-38 の再編）
       { label: "納品", href: "/deliveries", icon: Receipt, enabled: true },
