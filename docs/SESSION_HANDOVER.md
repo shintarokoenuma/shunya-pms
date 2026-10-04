@@ -1,127 +1,125 @@
-# セッション引き継ぎメモ（CLOSE-AH・2026-10-04 00時台 JST）
+# セッション引き継ぎメモ（CLOSE-AI・2026-10-04 23時台 JST）
 
 ## ⓪ 次セッションの最初の一手
 
-- ★何よりも先に shunya-session-start を発動する。日付は date で取り直す（本セッションは 10-03 20:15 に始まり 10-04 00:xx に日をまたいだ）
-- 前のメモ（CLOSE-AG）は本メモで置き換えた。原文は git show 71a6ba3:docs/SESSION_HANDOVER.md
-- ★shunya-pr-url-checklist を更新した（提案カードで保存）。次のチャットから有効
-- ★慎太郎さんの予定: 「10月中頃にはスタッフも含めた実務で使用したいです。」（2026-10-03 21:14）。§9 の順はこれを前提にしている
-- 締めの前に「他に気づいた点は」と聞いたが、回答は届かないまま締めた。次セッションの冒頭で聞き直す
+- ★何よりも先に shunya-session-start を発動する。日付は date で取り直す
+- 前のメモ（CLOSE-AH）は本メモで置き換えた。原文は git show 3dd8abe:docs/SESSION_HANDOVER.md
+- ★慎太郎さんの予定: 「10月中頃にはスタッフも含めた実務で使用したいです。」（2026-10-03 21:14）。本セッションで、一般スタッフに見せない範囲（B-243）は全部入った
+- 締めの前に「他に気づいた点は」と聞き、回答は「ありません。」（2026-10-04 23:45）
 
 ## 1. プロジェクトの棲み分け
 
 - 本件は shunya-pms（~/shunya-production-system・github.com/shintarokoenuma/shunya-pms）
 - saagara-v2 / earnpulse / swtras-showroom は別プロジェクト
 
-## 2. 本セッションでやったこと（2026-10-03 20:15 〜 10-04 00:xx）
+## 2. 本セッションでやったこと（2026-10-04 09:4x 〜 23:45）
 
-- B-253（招待の取り消し）: 設計の調査 → 案A に決定 → ブリーフ → 実装 → PR #180 を 2026-10-04 00:0x に squash マージ（8d17a2e）。本番デプロイのログで「No pending migrations to apply.」→ Ready を確認
-- B-254（停止の人の文言）: 調べると PR #174 の commit 1070da0（2026-09-28）で実装済みだった。BACKLOG の定義が誤り。dev のブラウザで確認して完了（コード変更なし）
-- PR #180 の追加コミット（dev 確認で見つけて直したもの）:
-  - 277afce: ユーザー一覧が横にはみ出す（招待中の行のボタンを縦2段・役割の Select を w-[130px]・メール列を省略表示）／役割のプルダウンが開いた直後に空欄になる（SelectValue に ROLE_LABELS の文字を直接渡す）
-  - 8cc6f4d: 名前の列も省略表示にし、メール列を max-w-[180px] に（慎太郎さん 22:33「もう少し、調整して画面に全て映るようにしてほしい。」）
+B-243（役割ごとの出し分け）を4本、B-257（表のはみ出し）を1本、すべて squash マージ・本番デプロイ（どれも「No pending migrations to apply.」・migration 60本のまま）・本番の /settings/roles を目視。
 
-## 3. 確定した設計（B-253）
+| PR | commit | 内容 | 本番確認 |
+|---|---|---|---|
+| #181 | a6ad821 | B-243 PR-1: 基盤（rolePermissions.areas・area-access.ts）＋「発注」 | 11:50 |
+| #182 | a457a4a | B-243 PR-2: 「原価・見積」（BOM の単価は保存しても消さない）＋「受注」 | 13:02 |
+| #183 | 64ee0a6 | B-243 PR-3: 「納品」＋「経理」（請求・入金・締め・クライアントの入金カード） | 22:32 |
+| #184 | f4c8785 | B-257: 「役割と権限」の表（項目列を左に固定・説明を折り返す） | 22:47 |
+| #185 | c262c58 | B-243 PR-4: 「マスターの取引条件・編集」（5マスターは見るだけ・取引条件と単価をサーバでも null） | 23:4x |
 
-- 決定は docs/specs/b-253-b-254-implementation-brief-2026-10-03.md の C-D1〜C-D8（PR #180 に同梱）
-- 慎太郎さん原文: 21:11「これって重要な項目？」→ 21:17「もう少し調べてベストな方法考えてみて。」→ 21:20「Aでいきましょう。」
-- 取り消し＝行に deletedAt を入れる。status は INVITED のまま。アーカイブは使わない（「停止に戻す」→「再開」で、パスワードを決めていない人が有効になり、再設定メールから入れてしまうため）
-- 取り消しは1トランザクション: 未使用の招待トークンを revokedAt（revokeUnusedUserTokens を user-tokens.ts に切り出し）→ deletedAt → AuditLog（DELETE）。物理削除しない
-- 招待のときの重複チェック（純関数 classifyInviteEmail・テスト9件）: 行なし＝new／同じ会社・INVITED・deletedAt あり＝revive（その行を起こし直す・id と履歴が1本）／同じ会社・INVITED・deletedAt なし＝pending（「このアドレスには招待中です。「招待を再送」を使ってください」）／それ以外＝in_use（今までの「既に使われています」）
-- 取り消した人が入れる入口は、既存のチェックで全部ふさがっていることを実測した（受諾 invitations.ts は deletedAt なし＋INVITED、再設定 password-reset.ts は ACTIVE＋deletedAt なし、ログインはパスワードが乱数、jwt は deletedAt で null）
-- User は TENANT_MODELS の対象外（tenant-models.ts に明記）。そのため findUnique は deletedAt ありの行も返す。C-D4 はこれに依っている
-- schema・migration の変更なし
+## 3. 確定した設計（B-243）
+
+- 器: CompanySetting.securitySettings.rolePermissions.areas（settings と並ぶ名前空間）。AREA_KEYS = orders / cost / sales / delivery / accounting / masterTerms（src/lib/settings-visibility.ts）。既定は6つとも STAFF だけ hidden、ほかの役割は view。OWNER / ADMIN は常に見える。EXTERNAL・未ログインは常に見えない
+- 判定: src/lib/area-access.ts（checkArea＝Server Action・requireAreaPage＝layout とページ・canSeeAreaForSession＝画面の出し分け）。API（PDF）は 403
+- サイドバー: NavItem.area。項目が全部消えたセクションは見出しごと出さない（PR-3 で sidebar-nav.tsx を直した）
+- 「役割と権限」の「画面」の表で、オーナー・管理者が役割ごとに見る／隠すを切り替えられる（6行）
+- 慎太郎さん原文（決定の根拠・詳細はナレッジ claude/MEMO_INBOX-append-2026-10-04.md と -night.md）:
+  - 09:48「一般スタッフには非公開にしましょう。」／09:53「一般スタッフに発注権限自体を無しにしたいです。」／10:04「縫製仕様書は今まで通り出せるようにしてよい。」／10:08「はい、一度、見えない状態で進めて下さい。」
+  - 11:52「この内容でいいです。」（品番カルテは原価の部分だけ隠す）／11:56「Aでいいです。」（受注は画面ごと）／21:27「A」（納品は画面ごと）／22:51「マスター（クライアント・仕入先・工場など）の編集を任せる予定はありません。」
+- ブリーフ（repo とナレッジ claude/ に同じもの）: docs/specs/b-243-pr1〜pr4-implementation-brief-2026-10-04.md・docs/specs/b-257-implementation-brief-2026-10-04.md
+- Claude の判断で決めたこと（慎太郎さん未確認）: 原価が見えて発注が見えない役割などの組み合わせで、原価・請求の内訳の発注番号・納品書番号はそのまま出す（D2-7・D3-6）／ブランド・バイヤー・納品先・カラー等のマスターは対象外（D4-2）→ どちらも B-263
 
 ## 4. 実測した事実
 
-- users を参照する外部キーは3本（user_login_history CASCADE・sessions CASCADE・audit_logs SET NULL）。user_tokens は外部キーなし
-- dev で Radix の Select（SelectValue を子なしで使う形）が、ブラウザ拡張 Feedly の hydration のずれで空欄になった。ユーザー一覧だけ直した（他の画面は B-258）
-- 画面に古いタブが残っていても、サーバは今のログインの人の権限で判断する（経理の人で押した取り消しは「招待を取り消せるのはオーナーと管理者だけです」で止まった）
-- lsof -ti tcp:3001 で kill すると、localhost:3001 を開いている Chrome のタブのプロセスも止まる。-sTCP:LISTEN を付ける（スキルに反映）
-- dev の §6-10（read-only SQL）: +pms3 の id は取り消し前後で同じ（38cd307d…）。取り消し3回とも revokedTokens: 1。使える招待トークンは0本。AuditLog にトークンの値は無い。23:08 の2通目の招待メールは「招待を再送」によるもの
+- 一般スタッフ（dev-staff）が BOM の用尺を保存しても単価は残る（dev: 縫い糸 #60 スパン 0.02→0.03 で unitPrice 380 のまま・AuditLog の before/after とも 380）
+- 一般スタッフのサイドバーは「案件」と「マスター」だけになる（取引・経理の見出しごと消える）
+- 一覧の「未入力 N」バッジと詳細の「未入力」の案内は、取引条件を null にすると誤って出るので、masterTerms が見えない人には出さない（PR #185 の追加 commit 785442b）
+- 慎太郎さんの Mac の Claude Code（zsh）では `${PIPESTATUS[0]}` が空になり「tsc exit=」と出る。出力が空なら通っている
 
 ## 5. 完了状態
 
-- B-253: 完了（PR #180・squash 8d17a2e）。★本番の /settings/users の画面確認は、締めの時点で慎太郎さんから未報告
-- B-254: 完了（実装は PR #174 の 1070da0。本セッションは dev 確認のみ）
+- B-243: 完了（PR #181〜#183・#185）
+- B-257: 完了（PR #184）
 
 ## 6. 未マージ PR
 
-無し（2026-10-04 00:17 JST に gh pr list で確認）。
+無し（PR #185 のマージ後。締めの保存ブロックの STEP 0 で gh pr list を確認）。
 
 ## 7. dev / 本番 DB の状態（★この節が host ↔ 環境の唯一の正）
 
 | 環境 | host | 状態 |
 |---|---|---|
-| dev | hopper.proxy.rlwy.net:12921（postgres-development） | 確認用の User が増えた: 再 招待くん（shintaro1012+pms3・経理・有効・パスワードは慎太郎さんの手元。18:25 に招待→23:00 取り消し→23:04 再招待→23:08 再送→受諾→停止→再開）／テスト 四号くん（+pms4・取り消し済み）／テスト 五号くん（+pms5・役割オーナー・取り消し済み）。確認用 生産管理の役割が「管理者」のまま。★dev-staff@example.test のパスワードが分からなくなった（scripts/dev-create-test-users.ts を DEV_TEST_USER_PASSWORD を新しくして流し直せば戻る・未実施） |
-| 本番 | shuttle.proxy.rlwy.net:16099（postgres-production・内部名 postgres-ab6d） | 本セッションでは書き込みなし。migration の追加なし（60本のまま）。招待中の人はいない |
+| dev | hopper.proxy.rlwy.net:12921（postgres-development） | 確認用4人（dev-admin・dev-production・dev-staff・dev-owner2 @example.test）のパスワードは文字どおり `<新しいパスワード>`（< と > を含む・10-04 10:39 に流し直した）。rolePermissions は既定に戻した（6つとも一般スタッフ隠す）。振込先 × 一般スタッフ＝隠す（以前の確認の残り）。BOM の縫い糸 #60 スパンは 0.02 に戻した |
+| 本番 | shuttle.proxy.rlwy.net:16099（postgres-production・内部名 postgres-ab6d） | 本セッションでコードからの書き込みなし。migration 60本のまま。慎太郎さんが画面で 振込先 × 一般スタッフ＝隠す を保存した（22:32 の時点で確認）。User はオーナー1人（一般スタッフはまだいない） |
 
-- ★dev の .env に RESEND_API_KEY がある。dev の招待・再設定は本当にメールを送る
-- dev サーバは止まっている（00:17 に 3001 が空）
+- dev サーバは 3001 で動いたまま（PR-4 のブランチで起動。main と同じ中身）
 
 ## 8. 本日の文書
 
-- docs/specs/b-253-b-254-implementation-brief-2026-10-03.md（PR #180 で main に入った・183行。ナレッジ claude/ に同じ内容）
-- ナレッジ claude/MEMO_INBOX-append-2026-10-03-evening.md（10月中頃の運用予定・B-254 が実装済みだった件・案A の経緯。claude.ai 側で記入）
+- docs/specs/b-243-pr1-implementation-brief-2026-10-04.md（PR #181）・pr2（#182）・pr3（#183・100行）・pr4（#185・80行）・docs/specs/b-257-implementation-brief-2026-10-04.md（#184・44行）
+- ナレッジ claude/MEMO_INBOX-append-2026-10-04.md（M-044 B-243 の経緯・M-045・M-046）・claude/MEMO_INBOX-append-2026-10-04-night.md（PR-3・B-257・PR-4 の結果）。要点は docs/MEMO_INBOX.md の M-044〜M-046 に同期
 
 ## 9. 次にやること（優先順・冒頭に実態確認）
 
 | 順 | 内容 | ステップ | 規模 | 本番影響 |
 |---|---|---|---|---|
-| 0 | git log origin/main --oneline -5 / gh pr list --state open で実態確認。本番の /settings/users を開いて B-253 の表示を確かめる | — | 小 | 無し |
-| 1 | B-243 役割ごとの出し分けを原価・請求・入金・発注へ（★10月中頃にスタッフが使い始める前に、一般スタッフに原価などを見せてよいかを先に慎太郎さんに聞く） | 横断（基盤） | 大 | マージで本番反映 |
-| 2 | B-244 自分のプロフィール（表示名・パスワードの変更） | 横断（基盤） | 小〜中 | 同上 |
-| 3 | B-257・B-258（役割と権限の表のはみ出し・他画面の Select の空欄） | 横断（UI） | 小 | 同上 |
+| 0 | git log origin/main --oneline -5 / gh pr list --state open で実態確認 | — | 小 | 無し |
+| 1 | ★10月中頃から使うスタッフの役割を慎太郎さんに聞く（誰が一般スタッフか・ほかの役割か）。本番で招待する前に、その役割で見え方を dev で一度確かめる | 横断（運用） | 小 | 招待は本番の操作 |
+| 2 | B-244 自分のプロフィール（表示名・パスワードの変更） | 横断（基盤） | 小〜中 | マージで本番反映 |
+| 3 | B-258（他画面の Select が hydration のずれで空欄）・B-260（固定列の hover の色） | 横断（UI） | 小 | 同上 |
 | 4 | B-208 と B-250（発注書 PDF の字の欠け・分綴・C# 列の幅） | 8 / 11 / 12 | 小〜中 | 同上 |
 | 5 | B-249・B-251 | 4 / 8 | 小 | 同上 |
-| 6 | B-049 発注書のメール送付（src/lib/mail/ を使う）・B-256 到達の記録・B-259 受諾の通知 | 8. 発注 / 横断 | 中 | 同上 |
+| 6 | B-049 発注書のメール送付・B-256 到達の記録・B-259 受諾の通知・B-262 メモのメンション通知（src/lib/mail/ を共用） | 8. 発注 / 横断 | 中 | 同上 |
 | 7 | B-113・B-233 / B-234 / B-236 / B-237 / B-241・B-231 / B-232・B-215 | 11 / 12 / 横断 | 小〜中 | 同上 |
 | 8 | B-255・B-199（認証のセキュリティ） | 横断 | 小〜中 | 同上 |
 | 9 | B-242 運営者と shunya テナントの分離 | 横断 | 大 | 同上 |
 
 - ★手前の空きステップ: 10. 検品（B-150）が未着手のまま。6（B-171 / B-172）・1・2・13 も未着手
-- B-245・B-247 は着手順未定
-- ローカルのブランチが残っている（feat/b253-cancel-invitation を含む）。消すなら git grep -c 'cancelInvitation' origin/main -- src/lib/actions/users.ts で main に中身があることを確かめてから
+- B-245・B-247・B-261（サンプル修正案の AI 画像）・B-263（役割と権限の細分化）は着手順未定
+- ローカルのブランチが残っている（feat/b243-pr1〜pr4・fix/b257 など）。消すなら git grep で main に中身があることを確かめてから
 
 ## 10. ナレッジ登録状況
 
-- SESSION_HANDOVER.md: 本メモの push を確かめたあと、claude.ai 側で project_write して差し替える
-- BACKLOG.md: 本メモの前の commit（B-253・B-254 完了・B-257〜B-259 起票）の push を確かめたあと、claude.ai 側で差し替える
-- b-253-b-254-implementation-brief-2026-10-03.md: 登録済み（claude/ 配下・repo と同じ sha256 ccc3642d…）
-- MEMO_INBOX-append-2026-10-03-evening.md: claude.ai 側で記入済み
+- SESSION_HANDOVER.md・BACKLOG.md・MEMO_INBOX.md: 本メモの push を確かめたあと、claude.ai 側で project_write して差し替える
+- b-243-pr1〜pr4・b-257 の実装ブリーフ: 登録済み（claude/ 配下・repo と同じ内容）
+- MEMO_INBOX-append-2026-10-04.md・-night.md: claude.ai 側で記入済み
 
 ## 11. 注意点・残課題・教訓
 
-1. ★BACKLOG の定義を、それを書いた文書（ブリーフ §9）だけで信じない。B-254 は 09-28 に実装済みだったのに、10-03 のブリーフが MEMO_INBOX の記録を拾わず「未起票」と書き、締めで起票された。着手前に main の現物を grep して見つけた
-2. ★開いてもらう URL の直後に句点や文を続けない（/settings/users。dev で 404 になった）。スキルに反映
-3. ★役割を変えた確認は、人ごとにウィンドウを分け、ログインし直したら古いタブを閉じる。スキルに反映
-4. ★lsof で kill するときは -sTCP:LISTEN を付ける（Chrome のタブが落ちた）。スキルに反映
-5. ★dev で画面の値が空欄なら、左下の「Issue」とログの hydration の警告を先に見る。スキルに反映
-6. ★本番に貼る SQL は、ブロックの1行目に【本番：postgres-production】と貼る場所を書く
-7. ★B-172 が実装されるまで、EXTERNAL の User を本番に作らない
-8. ★新しく書くクエリは companyId と deletedAt: null を手書きする（AGENTS.md）。User は TENANT_MODELS の対象外
-9. ★M番号・B番号は repo の現物の最大+1 で振る（今は M-043・B-259）
-10. ★BACKLOG.md の最後の B 行の後ろは台帳の行ではない（B-125 のメモ）。新しい行は最後の B 行の直後に入れる
-11. Claude Code の commit trailer は Claude Fable 5.1 になることがある。履歴の書き換えはしない
-12. Claude Code に同じブロックが3回届いたことがあった（read-only で害なし）。貼る前にクリップボードの中身を確かめる
+1. ★出し分けで値を null にしたら、その値から計算する表示（「未入力」のバッジ・案内）も一緒に止める。止めないと「未入力」と誤って出て、編集できない人を編集へ誘導する（PR #185 で発見）
+2. ★サイドバーの項目を area で消すときは、見出しだけ残らないか一般スタッフの画面で見る（PR-3 で発見）
+3. ★表が横にはみ出す画面は、項目列を sticky で固定する。行が増えるたびにはみ出しは悪化する（B-257）
+4. ★「見る」にして確かめる確認は、戻しを別の手順で出す（本セッションは毎回そうした・戻し忘れなし）
+5. ★本番では「保存」を押さない確認を続ける。慎太郎さんが本番で振込先を「隠す」にしたのは本人の操作
+6. ★新しく書くクエリは companyId と deletedAt: null を手書きする（AGENTS.md）
+7. ★M番号・B番号は repo の現物の最大+1 で振る（今は M-046・B-263）
+8. ★BACKLOG.md の最後の B 行の後ろは台帳の行ではない（B-125 のメモ）。新しい行は最後の B 行の直後に入れる
+9. Claude Code の commit trailer は Claude Fable 5.1 になる。履歴の書き換えはしない
+10. ★B-172 が実装されるまで、EXTERNAL の User を本番に作らない
 
 ## 12. スキルの反映
 
-- 1件: shunya-pr-url-checklist に4節（URL を1行に単独で書く・役割ごとの確認はウィンドウを分ける・hydration のずれで値が空欄・lsof に -sTCP:LISTEN）と「やってはいけないこと」3行を追加。提案カードで保存。次のチャットから有効
+- 0件（本セッションの教訓は §11 に残した。スキルに足すほどの再発型の失敗は無かった）
 
 ## 13. B-番号の増減（本セッション）
 
-- 新規 3件: B-257（役割と権限の表のはみ出し）・B-258（他画面の Select が hydration のずれで空欄になりうる）・B-259（招待を受けたことを招待した人に知らせる）
-- 状態変更 2件: B-253 未着手 → 完了／B-254 未着手 → 完了（定義の誤りを訂正）
-- 取り下げ 0件／番号未採番の合意 0件（「他に気づいた点は」の回答は未着）
+- 新規 4件: B-260（固定列の hover の色）・B-261（サンプル修正案の AI 画像化・M-045）・B-262（メモのメンション通知・M-046）・B-263（役割と権限の細分化・ブリーフ §7 の繰り延べ）
+- 状態変更 2件: B-243 未着手 → 完了／B-257 未着手 → 完了
+- 取り下げ 0件／番号未採番の合意 0件（M-045・M-046 は B-261・B-262 で採番）
 
 ## 14. 繰り延べた要件
 
-- 3件（すべて採番）: ブリーフ §9 の未起票1件 → B-259。dev 確認で見つけた2件 → B-257・B-258
-- §9 のほかの行（取り消した招待の一覧・復元・他社で取り消されたアドレスの使い回し・停止とアーカイブで文を分ける）は「作らない」と決めたもの
+- 4件（すべて採番）: B-243 ブリーフの「作らないもの」（見えるが編集できない段階・番号の伏せ字・対象外のマスター・輸出書類と支払の行）→ B-263 にまとめた（輸出書類 B-110・支払 B-212 は既存）／B-257 の確認で見つけた hover の色 → B-260
 
 ## 15. ブランチ
 
-main のまま終える（CLOSE-AH）。
+main のまま終える（CLOSE-AI）。
 
-END-OF-HANDOVER-CLOSE-AH
+END-OF-HANDOVER-CLOSE-AI
