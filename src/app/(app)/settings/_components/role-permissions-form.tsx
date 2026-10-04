@@ -11,8 +11,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { updateRolePermissions } from "@/lib/actions/role-permissions"
 import { CONFIGURABLE_ROLES, ROLE_LABELS, type ConfigurableRole } from "@/lib/constants/user-roles"
 import {
+  AREA_HINTS,
+  AREA_KEYS,
+  AREA_LABELS,
   SETTINGS_SECTIONS,
   SETTINGS_SECTION_LABELS,
+  areaVisibilityFor,
+  type AreaKey,
   type RolePermissions,
   type SectionVisibility,
   type SettingsSection,
@@ -22,10 +27,13 @@ import {
  * B-205 PR-2（D-13・D-16・§4-7）: 「役割と権限」の表。文言はモック案B の原文。
  * - 列: 項目／オーナー／管理者／生産管理／経理／営業／デザイナー／一般スタッフ
  * - オーナー・管理者の列は「変更できる」（固定）。ほかは「見る／隠す」
- * - 行は設定の 4 項目だけ（原価・請求・入金・発注は B-243）。既定は全員「見る」
+ * - 行は設定の 4 項目。既定は全員「見る」
  * - オーナー・管理者以外は見るだけ（P2-D9）
+ * B-243 PR-1（C-D8・§2-11）: 同じ形の表「画面」を下に足す（行は「発注」）。初期値は保存値 → AREA_DEFAULTS → "view"（一般スタッフは最初から「隠す」）。
+ * 保存ボタンは1つで settings と areas を一緒に送る。横のはみ出しは B-257（今回は同じ書き方を写すだけ）
  */
 type Draft = Record<SettingsSection, Record<ConfigurableRole, SectionVisibility>>
+type AreaDraft = Record<AreaKey, Record<ConfigurableRole, SectionVisibility>>
 
 function toDraft(perms: RolePermissions): Draft {
   const d = {} as Draft
@@ -36,16 +44,26 @@ function toDraft(perms: RolePermissions): Draft {
   return d
 }
 
+function toAreaDraft(perms: RolePermissions): AreaDraft {
+  const d = {} as AreaDraft
+  for (const a of AREA_KEYS) {
+    d[a] = {} as Record<ConfigurableRole, SectionVisibility>
+    for (const r of CONFIGURABLE_ROLES) d[a][r] = areaVisibilityFor(perms, a, r)
+  }
+  return d
+}
+
 const VIS_LABELS: Record<SectionVisibility, string> = { view: "見る", hidden: "隠す" }
 
 export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissions; canManage: boolean }) {
   const router = useRouter()
   const [draft, setDraft] = useState<Draft>(() => toDraft(perms))
+  const [areaDraft, setAreaDraft] = useState<AreaDraft>(() => toAreaDraft(perms))
   const [isPending, startTransition] = useTransition()
 
   const save = () => {
     startTransition(async () => {
-      const r = await updateRolePermissions({ settings: draft })
+      const r = await updateRolePermissions({ settings: draft, areas: areaDraft })
       if (!r.ok) {
         toast.error(r.error)
         return
@@ -54,6 +72,39 @@ export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissio
       router.refresh()
     })
   }
+
+  const headerRow = (
+    <TableRow>
+      <TableHead className="min-w-[110px]">項目</TableHead>
+      <TableHead className="min-w-[90px]">{ROLE_LABELS.OWNER}</TableHead>
+      <TableHead className="min-w-[90px]">{ROLE_LABELS.ADMIN}</TableHead>
+      {CONFIGURABLE_ROLES.map((r) => (
+        <TableHead key={r} className="min-w-[110px]">
+          {ROLE_LABELS[r]}
+        </TableHead>
+      ))}
+    </TableRow>
+  )
+
+  const visibilityCell = (
+    value: SectionVisibility,
+    ariaLabel: string,
+    onChange: (v: SectionVisibility) => void,
+  ) =>
+    canManage ? (
+      <Select value={value} onValueChange={(v) => onChange(v as SectionVisibility)} disabled={isPending}>
+        <SelectTrigger className="h-8 w-[96px]" aria-label={ariaLabel}>
+          {/* B-258 の対策（PR #180 と同じ）: 表示する文字を直接渡す */}
+          <SelectValue>{VIS_LABELS[value]}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="view">{VIS_LABELS.view}</SelectItem>
+          <SelectItem value="hidden">{VIS_LABELS.hidden}</SelectItem>
+        </SelectContent>
+      </Select>
+    ) : (
+      VIS_LABELS[value]
+    )
 
   return (
     <Card>
@@ -64,18 +115,7 @@ export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissio
       <CardContent className="space-y-4">
         <div className="overflow-x-auto rounded-md border">
           <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="min-w-[110px]">項目</TableHead>
-                <TableHead className="min-w-[90px]">{ROLE_LABELS.OWNER}</TableHead>
-                <TableHead className="min-w-[90px]">{ROLE_LABELS.ADMIN}</TableHead>
-                {CONFIGURABLE_ROLES.map((r) => (
-                  <TableHead key={r} className="min-w-[110px]">
-                    {ROLE_LABELS[r]}
-                  </TableHead>
-                ))}
-              </TableRow>
-            </TableHeader>
+            <TableHeader>{headerRow}</TableHeader>
             <TableBody>
               {SETTINGS_SECTIONS.map((s) => (
                 <TableRow key={s}>
@@ -84,22 +124,8 @@ export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissio
                   <TableCell className="text-sm text-muted-foreground">変更できる</TableCell>
                   {CONFIGURABLE_ROLES.map((r) => (
                     <TableCell key={r} className="text-sm">
-                      {canManage ? (
-                        <Select
-                          value={draft[s][r]}
-                          onValueChange={(v) => setDraft({ ...draft, [s]: { ...draft[s], [r]: v as SectionVisibility } })}
-                          disabled={isPending}
-                        >
-                          <SelectTrigger className="h-8 w-[96px]" aria-label={`${SETTINGS_SECTION_LABELS[s]} × ${ROLE_LABELS[r]}`}>
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="view">{VIS_LABELS.view}</SelectItem>
-                            <SelectItem value="hidden">{VIS_LABELS.hidden}</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        VIS_LABELS[draft[s][r]]
+                      {visibilityCell(draft[s][r], `${SETTINGS_SECTION_LABELS[s]} × ${ROLE_LABELS[r]}`, (v) =>
+                        setDraft({ ...draft, [s]: { ...draft[s], [r]: v } }),
                       )}
                     </TableCell>
                   ))}
@@ -108,6 +134,36 @@ export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissio
             </TableBody>
           </Table>
         </div>
+
+        {/* B-243 PR-1（C-D8）: 画面の領域。行は「発注」 */}
+        <div>
+          <h3 className="mb-2 text-sm font-medium">画面</h3>
+          <div className="overflow-x-auto rounded-md border">
+            <Table>
+              <TableHeader>{headerRow}</TableHeader>
+              <TableBody>
+                {AREA_KEYS.map((a) => (
+                  <TableRow key={a}>
+                    <TableCell className="text-sm">
+                      <div className="font-medium">{AREA_LABELS[a]}</div>
+                      <div className="text-xs text-muted-foreground">{AREA_HINTS[a]}</div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">変更できる</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">変更できる</TableCell>
+                    {CONFIGURABLE_ROLES.map((r) => (
+                      <TableCell key={r} className="text-sm">
+                        {visibilityCell(areaDraft[a][r], `${AREA_LABELS[a]} × ${ROLE_LABELS[r]}`, (v) =>
+                          setAreaDraft({ ...areaDraft, [a]: { ...areaDraft[a], [r]: v } }),
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+
         {canManage ? (
           <div className="flex items-center justify-end gap-3">
             <span className="text-xs text-muted-foreground">変えた設定は、その役割の人が次に画面を開いたときに効きます</span>

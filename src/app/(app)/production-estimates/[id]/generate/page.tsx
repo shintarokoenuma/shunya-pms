@@ -2,6 +2,7 @@ import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
 import { ChevronLeft } from "lucide-react"
 import { auth } from "@/lib/auth"
+import { requireAreaPage } from "@/lib/area-access"
 import { Button } from "@/components/ui/button"
 import { getProductionOrderGenerationContext } from "@/lib/actions/production-estimates"
 import { listConvertedSalesOrdersForProduct } from "@/lib/actions/sales-orders"
@@ -16,6 +17,8 @@ export default async function GenerateProductionOrdersPage({
 }) {
   const session = await auth()
   if (!session?.user) redirect("/login")
+  // B-243 PR-1（§2-3）: 発注が見えない役割は /dashboard へ
+  await requireAreaPage("orders")
 
   const { id } = await params
   const result = await getProductionOrderGenerationContext(id)

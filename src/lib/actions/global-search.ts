@@ -2,6 +2,8 @@
 
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { getRolePermissions } from "@/lib/settings-visibility-db"
+import { canSeeArea } from "@/lib/settings-visibility"
 
 /**
  * B-095: グローバル検索（1窓統合・カテゴリ別）。
@@ -48,6 +50,8 @@ export async function globalSearch(query: string): Promise<GlobalSearchItem[]> {
   const companyId = session.user.companyId
   const c = contains(q)
   const upper = q.toUpperCase()
+  // B-243 PR-1（§2-9）: 発注が見えない役割は ③発注（PO・WO）の2本を実行しない（結果にも出ない）
+  const canSeeOrders = canSeeArea(await getRolePermissions(companyId), session.user.role, "orders")
 
   // 発注の「相手先名」検索用: マスターを名称/コードで引いて id 集合を得る。
   const [supMatches, facMatches, conMatches] = await Promise.all([
@@ -131,43 +135,49 @@ export async function globalSearch(query: string): Promise<GlobalSearchItem[]> {
       take: LIMIT,
       orderBy: { estimateNumber: "desc" },
     }),
-    // ③発注（PO・番号/タイトル/相手先名）
-    prisma.purchaseOrder.findMany({
-      where: {
-        companyId,
-        deletedAt: null,
-        OR: [
-          { poNumber: c },
-          { title: c },
-          ...(supIds.length ? [{ supplierId: { in: supIds } }] : []),
-        ],
-      },
-      select: { id: true, poNumber: true, title: true, supplierId: true },
-      take: LIMIT,
-      orderBy: { poNumber: "desc" },
-    }),
-    // ③発注（WO・番号/タイトル/相手先名）
-    prisma.workOrder.findMany({
-      where: {
-        companyId,
-        deletedAt: null,
-        OR: [
-          { woNumber: c },
-          { title: c },
-          ...(facIds.length ? [{ factoryId: { in: facIds } }] : []),
-          ...(conIds.length ? [{ contractorId: { in: conIds } }] : []),
-        ],
-      },
-      select: {
-        id: true,
-        woNumber: true,
-        title: true,
-        factoryId: true,
-        contractorId: true,
-      },
-      take: LIMIT,
-      orderBy: { woNumber: "desc" },
-    }),
+    // ③発注（PO・番号/タイトル/相手先名）。B-243 PR-1: 発注が見えない役割は実行しない
+    canSeeOrders
+      ? prisma.purchaseOrder.findMany({
+          where: {
+            companyId,
+            deletedAt: null,
+            OR: [
+              { poNumber: c },
+              { title: c },
+              ...(supIds.length ? [{ supplierId: { in: supIds } }] : []),
+            ],
+          },
+          select: { id: true, poNumber: true, title: true, supplierId: true },
+          take: LIMIT,
+          orderBy: { poNumber: "desc" },
+        })
+      : Promise.resolve([] as { id: string; poNumber: string; title: string | null; supplierId: string }[]),
+    // ③発注（WO・番号/タイトル/相手先名）。B-243 PR-1: 発注が見えない役割は実行しない
+    canSeeOrders
+      ? prisma.workOrder.findMany({
+          where: {
+            companyId,
+            deletedAt: null,
+            OR: [
+              { woNumber: c },
+              { title: c },
+              ...(facIds.length ? [{ factoryId: { in: facIds } }] : []),
+              ...(conIds.length ? [{ contractorId: { in: conIds } }] : []),
+            ],
+          },
+          select: {
+            id: true,
+            woNumber: true,
+            title: true,
+            factoryId: true,
+            contractorId: true,
+          },
+          take: LIMIT,
+          orderBy: { woNumber: "desc" },
+        })
+      : Promise.resolve(
+          [] as { id: string; woNumber: string; title: string | null; factoryId: string | null; contractorId: string | null }[],
+        ),
     // ④サンプル
     prisma.sampleProduction.findMany({
       where: {

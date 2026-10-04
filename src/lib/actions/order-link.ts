@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 
 /**
  * B-078-4: 発注（WO/PO）直アクセス作成時の「品番 → サンプル（任意）」紐付けピッカー用の候補。
@@ -26,6 +27,8 @@ export async function getOrderLinkOptions(): Promise<{
 }> {
   const session = await auth()
   if (!session?.user) return { products: [], samples: [] }
+  // B-243 PR-1（§2-4）: 発注が見えない役割には候補も返さない
+  if (!(await checkArea("orders")).ok) return { products: [], samples: [] }
   const companyId = session.user.companyId
 
   const [products, samples] = await Promise.all([

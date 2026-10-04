@@ -16,6 +16,7 @@ import {
 } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { checkPeriodLock } from "@/lib/period-close/lock"
 import { fromYmd, todayYmdJst, toYmd } from "@/lib/calc/invoice-period"
 import {
@@ -210,6 +211,9 @@ export async function getWorkOrderCreateContext(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const task = await prisma.progressTask.findFirst({
       where: { id: progressTaskId, companyId: sess.companyId, deletedAt: null },
@@ -330,6 +334,9 @@ export async function generateNextWoNumberPreview(): Promise<
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
     const preview = await computeNextWoNumber(
       prisma.workOrder,
       sess.companyId,
@@ -382,6 +389,9 @@ export async function listWorkOrders(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
     const parsed = workOrderListParamsSchema.parse(params)
 
     const skip = (parsed.page - 1) * parsed.pageSize
@@ -487,6 +497,9 @@ export async function listWorkOrdersByProgressTasks(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
     const ids = [...new Set(progressTaskIds.filter(Boolean))]
     if (ids.length === 0) return { ok: true, data: [] }
 
@@ -558,6 +571,9 @@ export async function getWorkOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const wo = await prisma.workOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -718,6 +734,9 @@ export async function createWorkOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const parsed = workOrderInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -928,6 +947,9 @@ export async function updateWorkOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const parsed = workOrderInputSchema.safeParse(input)
     if (!parsed.success) {
@@ -1032,6 +1054,9 @@ export async function deleteWorkOrder(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const existing = await prisma.workOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },
@@ -1094,6 +1119,9 @@ export async function updateWorkOrderStatus(
   try {
     const sess = await requireSession()
     if (!sess.ok) return sess
+    // B-243 PR-1（§2-4・C-D4）: 発注が見えない役割は止める
+    const area = await checkArea("orders")
+    if (!area.ok) return area
 
     const existing = await prisma.workOrder.findFirst({
       where: { id, companyId: sess.companyId, deletedAt: null },

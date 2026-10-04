@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth"
+import { checkArea } from "@/lib/area-access"
 import { getOrderPdfData } from "@/lib/pdf/order-data"
 import { getInvoicePdfData } from "@/lib/pdf/invoice-data"
 import { getDeliveryNotePdfData } from "@/lib/pdf/delivery-note-data"
@@ -62,6 +63,11 @@ export async function POST(req: Request) {
   const session = await auth()
   if (!session?.user) {
     return new Response("Unauthorized", { status: 401 })
+  }
+  // B-243 PR-1（§2-8・C-D5）: 発注が見えない役割は 403
+  const area = await checkArea("orders")
+  if (!area.ok) {
+    return new Response(area.error, { status: 403 })
   }
 
   const body = await req.json().catch(() => null)

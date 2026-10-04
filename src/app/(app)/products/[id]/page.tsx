@@ -40,7 +40,8 @@ import { getProductionEstimateSection } from "@/lib/actions/production-estimates
 import { SalesOrderSection } from "../_components/sales-order-section"
 import { getSalesOrderSectionForProduct } from "@/lib/actions/sales-orders"
 import { ProductOrdersSection } from "../_components/product-orders-section"
-import { getProductOrders } from "@/lib/actions/product-orders"
+import { getProductOrders, getProductWoSummaries } from "@/lib/actions/product-orders"
+import { canSeeAreaForSession } from "@/lib/area-access"
 import { SewingSpecDialogButton, type SewingSpecWoOption } from "../_components/sewing-spec-dialog"
 import { WORK_ORDER_TYPE_LABELS } from "@/lib/constants/work-order-types"
 import { kindLabel as sewingSpecKindLabel } from "@/lib/pdf/sewing-spec-format"
@@ -218,7 +219,12 @@ export default async function ProductDetailPage({
   // A-seed1: 量産見積（発行履歴＋基準サンプル有無）。
   const productionEstimateSection = await getProductionEstimateSection(id)
   const salesOrderSection = await getSalesOrderSectionForProduct(id)
-  const productOrders = await getProductOrders(id)
+  // B-243 PR-1（§2-5・C-D6）: 発注の一覧（金額あり・見えない役割は []）と、金額を含まない WO の要約（工場・縫製仕様書の宛先用）
+  const [productOrders, productWoSummaries, canSeeOrders] = await Promise.all([
+    getProductOrders(id),
+    getProductWoSummaries(id),
+    canSeeAreaForSession("orders"),
+  ])
 
   // QE-1: 量産原価ビュー用の入力（ROLL 反情報・PRODUCTION WoItem。read-only）。
   const productionCostResult = await getProductionCostInputs(id)
@@ -276,10 +282,11 @@ export default async function ProductDetailPage({
   // B-202 PR-1r: 品番・分類に出す「工場」は、この品番に紐づく量産の作業発注（WO・PRODUCTION）の発注先から導出する。
   //   Product に工場列は無い（R-6-1）。productOrders は既に取得済みなので新規クエリは足さない（R-6-10）。
   //   PATTERN / GRADING の WO は外注パタンナー（contractor）なので対象外。
+  //   B-243 PR-1: 発注が見えない役割でも出すため、金額を含まない productWoSummaries から作る
   const productionFactoryNames = [
     ...new Set(
-      productOrders
-        .filter((r) => r.kind === "WO" && r.workCategory === "PRODUCTION")
+      productWoSummaries
+        .filter((r) => r.workCategory === "PRODUCTION")
         .map((r) => r.counterpartyName)
         .filter((n) => n !== "—"),
     ),
@@ -291,8 +298,9 @@ export default async function ProductDetailPage({
 
   // B-054 PR-4c: 縫製仕様書の出力ダイアログに渡す宛先候補（WO のみ・取得済みの productOrders から。新規クエリは足さない）。
   //   作業の種類の表示名と区分の札はここ（サーバ側）で作る。絞り込み（D-34）はダイアログ側。
-  const sewingSpecWos: SewingSpecWoOption[] = productOrders
-    .filter((r) => r.kind === "WO" && r.workType !== null)
+  //   B-243 PR-1（C-D6）: 縫製仕様書は発注と切り離す。金額を含まない productWoSummaries から作る
+  const sewingSpecWos: SewingSpecWoOption[] = productWoSummaries
+    .filter((r) => r.workType !== null)
     .map((r) => ({
       id: r.id,
       number: r.number,
@@ -744,6 +752,7 @@ export default async function ProductDetailPage({
                       productId={item.id}
                       rows={productionEstimateSection.rows}
                       hasBaseSample={productionEstimateSection.hasBaseSample}
+                      canSeeOrders={canSeeOrders}
                     />
                   </CardContent>
                 </Card>
@@ -772,7 +781,8 @@ export default async function ProductDetailPage({
                     </CardContent>
                   </Card>
                 )}
-                <ProductOrdersSection rows={productOrders} />
+                {/* B-243 PR-1（§2-5）: 発注が見えるときだけ。見えないときは受注だけ（受注は PR-2） */}
+                {canSeeOrders && <ProductOrdersSection rows={productOrders} />}
               </div>
             ),
           },

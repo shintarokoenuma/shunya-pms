@@ -42,12 +42,15 @@ type Props = {
   productId: string
   rows: ProductionEstimateListRow[]
   hasBaseSample: boolean
+  /** B-243 PR-1（§2-7）: 発注が見える役割だけ「量産発注を生成」への入口を出す */
+  canSeeOrders: boolean
 }
 
 export function ProductionEstimateSection({
   productId,
   rows,
   hasBaseSample,
+  canSeeOrders,
 }: Props) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -234,18 +237,20 @@ export function ProductionEstimateSection({
                           <Pencil className="h-3.5 w-3.5" />
                         </Link>
                       </Button>
-                      {/* (B): 量産発注生成の入口。 */}
-                      <Button
-                        asChild
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        title="量産発注を生成"
-                      >
-                        <Link href={`/production-estimates/${r.id}/generate`}>
-                          <PackagePlus className="h-3.5 w-3.5" />
-                        </Link>
-                      </Button>
+                      {/* (B): 量産発注生成の入口。B-243 PR-1: 発注が見えるときだけ */}
+                      {canSeeOrders && (
+                        <Button
+                          asChild
+                          size="icon"
+                          variant="ghost"
+                          className="h-7 w-7"
+                          title="量産発注を生成"
+                        >
+                          <Link href={`/production-estimates/${r.id}/generate`}>
+                            <PackagePlus className="h-3.5 w-3.5" />
+                          </Link>
+                        </Button>
+                      )}
                       <Button
                         size="icon"
                         variant="ghost"

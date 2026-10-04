@@ -13,6 +13,7 @@ import { updateRolePermissionsSchema } from "@/lib/validators/role-permissions"
  * B-205 PR-2（D-13・D-16・D-20・P2-D7・P2-D9）: 「役割と権限」の Server Actions。
  * - 読みは誰でも（EXTERNAL は拒否）。書きは OWNER / ADMIN だけ（canManageCompany・画面だけで止めず action 側でも拒否）
  * - 保存先は CompanySetting.securitySettings.rolePermissions。★securitySettings の他のキーは残したまま書き戻す
+ * B-243 PR-1（§2-11）: areas（画面の領域）も同じ場所に保存する。areas が来なければ今の値を残す
  * - 行が無ければ upsert の create 側を COMPANY_SETTING_REQUIRED_JSON_DEFAULTS（{}）で埋める（B-202 PR-4 と同じ）
  * ★CompanySetting は TENANT_MODELS に無い。companyId で絞る
  */
@@ -70,9 +71,7 @@ export async function updateRolePermissions(input: unknown): Promise<ActionResul
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "入力内容に誤りがあります" }
     }
-    const next: RolePermissions = { settings: parsed.data.settings }
-
-    // 最新を読み直し、securitySettings の他のキーと rolePermissions の他の名前空間を残したまま settings だけ差し替える
+    // 最新を読み直し、securitySettings の他のキーと rolePermissions の他の名前空間を残したまま settings（と areas）を差し替える
     const row = await prisma.companySetting.findUnique({
       where: { companyId: sess.companyId },
       select: { id: true, securitySettings: true },
@@ -80,9 +79,11 @@ export async function updateRolePermissions(input: unknown): Promise<ActionResul
     const current = asObject(row?.securitySettings)
     const before = readRolePermissions(current)
     const currentRp = asObject(current.rolePermissions)
+    const areas = parsed.data.areas
+    const next: RolePermissions = { settings: parsed.data.settings, areas: areas ?? before.areas }
     const merged = {
       ...current,
-      rolePermissions: { ...currentRp, settings: next.settings },
+      rolePermissions: { ...currentRp, settings: next.settings, ...(areas ? { areas } : {}) },
     } as Prisma.InputJsonValue
 
     await prisma.companySetting.upsert({
