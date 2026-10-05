@@ -21,6 +21,7 @@ export function registerPdfFonts() {
     ],
   })
   // CJK の改行（禁則の簡易版）。日本語は単語境界が無いため文字単位で折り返す。
-  Font.registerHyphenationCallback((word) => Array.from(word))
+  // B-208（D-3）: 文字の間で折れるが「-」は出さない（請求書の NO_HYPHEN_BREAK と同じ形・invoice-rows.ts は import しない）
+  Font.registerHyphenationCallback((word) => Array.from(word).flatMap((c) => [c, ""]))
   registered = true
 }
