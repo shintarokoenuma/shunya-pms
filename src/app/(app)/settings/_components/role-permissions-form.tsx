@@ -74,9 +74,13 @@ export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissio
   }
 
   // B-257（D-1・D-3）: 項目の列は左に固定（横スクロールしても行名が残る・右端に線）。役割の列は最小幅を決めず中身に任せる
+  // B-260（D-1〜D-3）: 行に group を付け、固定セルには行の hover（bg-muted/50）と同じ見え方の色を color-mix で不透明に作って付ける
+  // （固定セルは横スクロールで下の列を隠すため不透明でなければならず、bg-muted/50 をそのまま付けると透ける）。Select を開いている間も同じ
+  const STICKY_ROW_BG =
+    "group-hover:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))] group-has-aria-expanded:bg-[color-mix(in_oklab,var(--muted)_50%,var(--card))]"
   const headerRow = (
-    <TableRow>
-      <TableHead className="sticky left-0 z-10 min-w-[110px] border-r bg-card">項目</TableHead>
+    <TableRow className="group">
+      <TableHead className={`sticky left-0 z-10 min-w-[110px] border-r bg-card ${STICKY_ROW_BG}`}>項目</TableHead>
       <TableHead>{ROLE_LABELS.OWNER}</TableHead>
       <TableHead>{ROLE_LABELS.ADMIN}</TableHead>
       {CONFIGURABLE_ROLES.map((r) => (
@@ -118,8 +122,8 @@ export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissio
             <TableHeader>{headerRow}</TableHeader>
             <TableBody>
               {SETTINGS_SECTIONS.map((s) => (
-                <TableRow key={s}>
-                  <TableCell className="sticky left-0 z-10 border-r bg-card text-sm font-medium">{SETTINGS_SECTION_LABELS[s]}</TableCell>
+                <TableRow key={s} className="group">
+                  <TableCell className={`sticky left-0 z-10 border-r bg-card text-sm font-medium ${STICKY_ROW_BG}`}>{SETTINGS_SECTION_LABELS[s]}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">変更できる</TableCell>
                   <TableCell className="text-sm text-muted-foreground">変更できる</TableCell>
                   {CONFIGURABLE_ROLES.map((r) => (
@@ -143,9 +147,9 @@ export function RolePermissionsForm({ perms, canManage }: { perms: RolePermissio
               <TableHeader>{headerRow}</TableHeader>
               <TableBody>
                 {AREA_KEYS.map((a) => (
-                  <TableRow key={a}>
+                  <TableRow key={a} className="group">
                     {/* B-257（D-2）: 項目の幅を決めて説明は折り返す。ラベルは1行のまま */}
-                    <TableCell className="sticky left-0 z-10 w-[168px] min-w-[168px] whitespace-normal border-r bg-card text-sm">
+                    <TableCell className={`sticky left-0 z-10 w-[168px] min-w-[168px] whitespace-normal border-r bg-card text-sm ${STICKY_ROW_BG}`}>
                       <div className="whitespace-nowrap font-medium">{AREA_LABELS[a]}</div>
                       <div className="text-xs text-muted-foreground">{AREA_HINTS[a]}</div>
                     </TableCell>
