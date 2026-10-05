@@ -64,12 +64,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     fontWeight: "bold",
   },
-  cName: { width: "26%", paddingHorizontal: 4 },
+  // B-250（D-5）: C# を 11% → 15%。原資は品名 26% → 24%・単位 11% → 9%（合計 100% のまま）
+  cName: { width: "24%", paddingHorizontal: 4 },
   cCode: { width: "15%", paddingHorizontal: 4 },
-  cColor: { width: "11%", paddingHorizontal: 4 },
+  cColor: { width: "15%", paddingHorizontal: 4 },
   // 数量(右寄せ)と単位(左寄せ)の間に視覚的な間隔を確保（「1        一式」と読める形）。
   cQty: { width: "11%", paddingLeft: 4, paddingRight: 14, textAlign: "right" },
-  cUnit: { width: "11%", paddingLeft: 12, paddingRight: 4, textAlign: "left" },
+  cUnit: { width: "9%", paddingLeft: 12, paddingRight: 4, textAlign: "left" },
   cPrice: { width: "13%", paddingHorizontal: 4, textAlign: "right" },
   cSub: { width: "13%", paddingHorizontal: 4, textAlign: "right" },
   mono: { fontFamily: PDF_FONT_FAMILY },
