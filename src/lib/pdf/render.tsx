@@ -7,6 +7,8 @@ import { PeQuotationDocument } from "./pe-quotation-document"
 import type { PeQuotationPdfData } from "./pe-quotation-data"
 import { SewingSpecDocument } from "./sewing-spec-document"
 import type { SewingSpecPdfData } from "./sewing-spec-data"
+import { planInputFromData, planSewingPages, type SewingSpecPlan } from "./sewing-spec-layout"
+import { loadSewingSpecMeasurer } from "./sewing-spec-measure"
 import { InvoiceDocument } from "./invoice-document"
 import type { InvoicePdfData } from "./invoice-data"
 import { DeliveryNoteDocument } from "./delivery-note-document"
@@ -53,9 +55,17 @@ export async function renderDeliveryNotePdfBuffer(dataList: DeliveryNotePdfData[
   return renderToBuffer(<DeliveryNoteDocument dataList={dataList} />)
 }
 
-/** B-054 PR-4a 縫製仕様書 PDF。route はこの Buffer をレスポンスに載せる。 */
+/** B-267: 縫製仕様書のページの計画（描画と同じフォントで行数を数える）。試し刷りで出力のページ数と突き合わせる */
+export async function planSewingSpecPdf(data: SewingSpecPdfData): Promise<SewingSpecPlan> {
+  const measurer = await loadSewingSpecMeasurer()
+  return planSewingPages(planInputFromData(data), measurer)
+}
+
+/** B-054 PR-4a 縫製仕様書 PDF。route はこの Buffer をレスポンスに載せる。B-267: 先にページの計画を立ててから描く */
 export async function renderSewingSpecPdfBuffer(
   data: SewingSpecPdfData,
+  plan?: SewingSpecPlan,
 ): Promise<Buffer> {
-  return renderToBuffer(<SewingSpecDocument data={data} />)
+  const resolved = plan ?? (await planSewingSpecPdf(data))
+  return renderToBuffer(<SewingSpecDocument data={data} plan={resolved} />)
 }
