@@ -20,9 +20,50 @@ import {
   type PlannedPage,
 } from "./sewing-spec-layout"
 import { loadSewingSpecMeasurer } from "./sewing-spec-measure"
+import { inflateSync } from "node:zlib"
+import React from "react"
+import { Document, Page, Text, View, renderToBuffer } from "@react-pdf/renderer"
+import { PDF_FONT_FAMILY } from "./fonts"
+import { CELL_PAD_H, FULL_LINE_HEIGHT, TABLE_FONT_SIZE } from "./sewing-spec-layout"
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`ASSERT FAILED: ${msg}`)
+}
+
+/**
+ * 描画した行数を数える（試作と同じ方法の node 版・1ページの PDF 用）: react-pdf（pdfkit）は run ごとに
+ * q … 1 0 0 1 dx dy cm … BT … TJ … ET … Q を出し、位置は cm の積み重ねで決まる。q/Q/cm を追って
+ * BT ごとの y を求め、その種類を数える（同じ行の run は y が同じ）。ページに Text が1つだけのときに使う
+ */
+function renderedLineCount(pdf: Buffer): number {
+  const s = pdf.toString("latin1")
+  const re = /stream\r?\n([\s\S]*?)\r?\nendstream/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(s))) {
+    let txt: string
+    try {
+      txt = inflateSync(Buffer.from(m[1], "latin1")).toString("latin1")
+    } catch {
+      continue
+    }
+    if (!/\bBT\b/.test(txt)) continue
+    const ops = txt.split(/\s+/)
+    const stack: number[] = []
+    let y = 0
+    const ys = new Set<number>()
+    for (let i = 0; i < ops.length; i += 1) {
+      const op = ops[i]
+      if (op === "q") stack.push(y)
+      else if (op === "Q") y = stack.pop() ?? y
+      else if (op === "cm" && i >= 6) {
+        const d = Number(ops[i - 3])
+        const f = Number(ops[i - 1])
+        y = d < 0 ? f - y : y + f
+      } else if (op === "BT") ys.add(Math.round(y * 100) / 100)
+    }
+    return ys.size
+  }
+  return 0
 }
 
 const LABELS = [
@@ -72,6 +113,16 @@ const conts = (pages: PlannedPage[]) => pages.filter((p): p is Cont => p.kind ==
     const parts2 = cb("AB").filter((p) => p !== "")
     assert(JSON.stringify(parts2) === JSON.stringify(["AB"]), "①-5' 幅に入るかたまりは割らない")
     assert(cb("AB")[1] === "", "①-6 かたまりの後ろに空の区切り（「-」を出さない形）")
+    // D-12 禁則: 行頭に来てはいけない字は直前に、行末に来てはいけない字は直後にくっつく
+    const t7 = tokenizeForWrap("本縫い 1.0cm で縫い合わせ。糸は地色 #60）")
+    assert(!t7.includes("。") && t7.includes("せ。"), `①-7 「。」は直前にくっつく: ${JSON.stringify(t7)}`)
+    // 「#」は英数字のかたまりの先頭になれない（D-10 の正規表現）ので「#」「60）」に分かれる。「）」は「60」にくっつく
+    assert(!t7.includes("）") && t7.includes("60）"), `①-7b 「）」は英数字のかたまりにもくっつく: ${JSON.stringify(t7)}`)
+    const t8 = tokenizeForWrap("資材部（担当 山田）、本社")
+    assert(!t8.includes("（") && t8.includes("（担"), `①-8 「（」は直後にくっつく: ${JSON.stringify(t8)}`)
+    assert(t8.includes("田）、"), `①-8b 「）、」は続けて直前にくっつく: ${JSON.stringify(t8)}`)
+    const t9 = tokenizeForWrap("あ\n。い（\nう")
+    assert(t9.includes("\n") && t9.includes("。") && t9.includes("（"), `①-9 改行の前後では禁則でくっつけない: ${JSON.stringify(t9)}`)
   }
 
   // ② countLines
@@ -83,6 +134,35 @@ const conts = (pages: PlannedPage[]) => pages.filter((p): p is Cont => p.kind ==
     assert(code >= 2, `②-3 幅より長い英数字のかたまりは文字の間で折れる: ${code}`)
     assert(m.countLines("", ACC_W.usage) === 1, "②-4 空は1行")
     assert(m.countLines("1行目\n2行目", ACC_W.spec) === 2, "②-5 改行は強制改行")
+
+    // ②-6 countLines の結果が描画と一致する（試作と同じ方法: 1ページに Text を1つ置き、行ごとの ET を数える）
+    const CASES: { text: string; w: number }[] = [
+      { text: "CB衿ぐり付け〜3.0cm下", w: SPEC_VALUE_W },
+      { text: LONG_JP, w: SPEC_VALUE_W },
+      { text: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-ABCDEFGHIJ", w: ACC_W.code },
+      { text: "第2ボタンに糸ループで取り付け。糸は地色 #60。\n2段目に注記", w: ACC_W.spec },
+      { text: "株式会社ナイトウ繊維商事 大阪本社 資材部（担当 山田・TEL 06-0000-0000）", w: ACC_W.supplier },
+      { text: "12.5m 2.1kg/反 ×3", w: ACC_W.usage },
+      { text: "身頃と袖は本縫い 1.0cm で縫い合わせ。糸は地色（#60）。裾は三つ折り、脇はロック。", w: ACC_W.spec },
+    ]
+    for (const [i, c] of CASES.entries()) {
+      const doc = React.createElement(
+        Document,
+        null,
+        React.createElement(
+          Page,
+          { size: [728.5, 1031.8], style: { fontFamily: PDF_FONT_FAMILY, fontSize: TABLE_FONT_SIZE, padding: 28 } },
+          React.createElement(
+            View,
+            { style: { width: c.w, paddingHorizontal: CELL_PAD_H } },
+            React.createElement(Text, { style: { lineHeight: FULL_LINE_HEIGHT }, hyphenationCallback: m.wrapFor(c.w) }, c.text),
+          ),
+        ),
+      )
+      const rendered = renderedLineCount(await renderToBuffer(doc))
+      const predicted = m.countLines(c.text, c.w)
+      assert(predicted === rendered, `②-6 行数が描画と一致: case ${i + 1} predicted=${predicted} rendered=${rendered} ${c.text.slice(0, 20)}`)
+    }
   }
 
   // ③-1 短い指示・付属3行 → つづき無し・色ごとの指定は1枚目・綴りの札なし
@@ -148,6 +228,27 @@ const conts = (pages: PlannedPage[]) => pages.filter((p): p is Cont => p.kind ==
       covered = e0
     }
     assert(covered === 3, `③-5''''' 付属3行がどこかに出る: ${JSON.stringify(ranges)}`)
+  }
+
+  // ③-7 D-5 の補足（追補 §2）: 仕様をつづきへ送ったら、1枚目に付属の行は出さず、全行をつづき側へ（仕様のつづき → 付属のつづき の順）
+  {
+    const rows = Array.from({ length: 20 }, (_, i) => row(`行 ${i + 1}`, i % 2 === 0 ? ["黒", "白"] : []))
+    const plan = planSewingPages(input({ instructions: instructions(11, LONG_JP + LONG_JP), accessories: rows }), m)
+    const main = mains(plan.pages)[0]
+    const cs = conts(plan.pages)
+    assert(main.instructionCount < 11 && main.instructionNote === "つづきは次のページ", "③-7 前提: 仕様が送られている")
+    assert(main.accessoryRange[0] === 0 && main.accessoryRange[1] === 0, `③-7b 1枚目の付属の行は 0: ${JSON.stringify(main.accessoryRange)}`)
+    assert(main.accessoryNote === "つづきは次のページ（付属 20 行）", `③-7c 案内: ${main.accessoryNote}`)
+    const firstInstr = cs.findIndex((c) => c.instructionRange !== null)
+    const firstAcc = cs.findIndex((c) => c.accessoryRange !== null)
+    assert(firstInstr === 0 && firstAcc >= firstInstr, `③-7d 仕様のつづきが付属のつづきより前: instr=${firstInstr} acc=${firstAcc}`)
+    let covered = 0
+    for (const c of cs) {
+      if (!c.accessoryRange) continue
+      assert(c.accessoryRange[0] === covered, `③-7e 付属の行が途切れない: ${JSON.stringify(c.accessoryRange)}`)
+      covered = c.accessoryRange[1]
+    }
+    assert(covered === 20, `③-7f 付属 20 行が全部つづきに出る: ${covered}`)
   }
 
   // ③-6 宛先が2つ（sewing を2つ）→ 宛先ごとに綴り・ページ番号は通し

@@ -393,12 +393,15 @@ function AccessoryTable({
   note,
   colorRefLabel,
   wrap,
+  noAccessories,
 }: {
   rows: SewingSpecAccessoryRow[]
   title: string
   note?: string | null
   colorRefLabel: ColorRefLabel
   wrap: SewingSpecPlan["wrap"]
+  /** 付属が1行も無い品番のときだけ「BOM が未登録です」を出す（行を全部つづきへ送った1枚目では出さない・D-5 の補足） */
+  noAccessories: boolean
 }) {
   return (
     <View>
@@ -413,9 +416,11 @@ function AccessoryTable({
           <Cell style={[styles.cell, styles.accSupplier]}>手配</Cell>
         </View>
         {rows.length === 0 ? (
-          <View style={styles.tr}>
-            <Text style={styles.cell}>BOM が未登録です</Text>
-          </View>
+          noAccessories ? (
+            <View style={styles.tr}>
+              <Text style={styles.cell}>BOM が未登録です</Text>
+            </View>
+          ) : null
         ) : (
           rows.map((r, i) => (
             <View key={i} style={styles.tr} wrap={false}>
@@ -622,6 +627,7 @@ function SewingMainPage({
         note={planned.accessoryNote}
         colorRefLabel={planned.colorSpec ? "色別（下表）" : "色別（別紙）"}
         wrap={wrap}
+        noAccessories={data.accessories.length === 0}
       />
       {planned.colorSpec ? <ColorSpecTable rows={data.accessories} colorwayNames={data.colorwayNames} /> : null}
     </Page>
@@ -668,6 +674,7 @@ function SewingContinuationPage({
           title="付属（つづき）"
           colorRefLabel={planned.colorSpec ? "色別（下表）" : "色別（別紙）"}
           wrap={wrap}
+          noAccessories={false}
         />
       ) : null}
       {planned.colorSpec ? <ColorSpecTable rows={data.accessories} colorwayNames={data.colorwayNames} /> : null}

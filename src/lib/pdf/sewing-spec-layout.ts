@@ -94,24 +94,44 @@ export function textWidthOf(cellWidth: number): number {
   return cellWidth - CELL_PAD_H * 2 - 0.5
 }
 
-// ---------------------------------------------------------------- 折り方（D-10）
+// ---------------------------------------------------------------- 折り方（D-10・D-12）
 const ALNUM_CHUNK = /[A-Za-z0-9][A-Za-z0-9._\-/#%+]*/g
+/** B-267 D-12: 行頭に来てはいけない字（直前のかたまりにくっつける） */
+const NO_HEAD = new Set(Array.from("、。，．・）」』】〕〉》！？：；"))
+/** B-267 D-12: 行末に来てはいけない字（直後のかたまりにくっつける） */
+const NO_TAIL = new Set(Array.from("（「『【〔〈《"))
 
 /**
- * 折ってよい単位に分ける。英数字のかたまりは1つ、それ以外（日本語・全角記号・空白・改行）は1文字ずつ。
- * 改行（\n）は1文字として返す（textkit が段落に分けるので、強制改行になる）
+ * 折ってよい単位に分ける。英数字のかたまりは1つ、それ以外（日本語・全角記号・空白）は1文字ずつ（D-10）。
+ * 禁則（D-12）: 行頭に来てはいけない字は直前の単位に、行末に来てはいけない字は直後の単位にくっつける（英数字のかたまりとも）。
+ * 改行（\n）は1文字のまま残し、どちらにもくっつけない（textkit が段落に分けるので、強制改行になる）
  */
 export function tokenizeForWrap(text: string): string[] {
-  const out: string[] = []
+  const raw: string[] = []
   let last = 0
   for (const m of text.matchAll(ALNUM_CHUNK)) {
     const i = m.index ?? 0
-    if (i > last) out.push(...Array.from(text.slice(last, i)))
-    out.push(m[0])
+    if (i > last) raw.push(...Array.from(text.slice(last, i)))
+    raw.push(m[0])
     last = i + m[0].length
   }
-  if (last < text.length) out.push(...Array.from(text.slice(last)))
-  return out
+  if (last < text.length) raw.push(...Array.from(text.slice(last)))
+  // 行頭禁則: 直前にくっつける（左から右）
+  const merged: string[] = []
+  for (const tok of raw) {
+    const prev = merged[merged.length - 1]
+    if (NO_HEAD.has(tok) && prev !== undefined && prev !== "\n") merged[merged.length - 1] = prev + tok
+    else merged.push(tok)
+  }
+  // 行末禁則: 直後にくっつける（右から左）
+  const out: string[] = []
+  for (let i = merged.length - 1; i >= 0; i -= 1) {
+    const tok = merged[i]
+    const next = out[out.length - 1]
+    if (NO_TAIL.has(tok) && next !== undefined && next !== "\n") out[out.length - 1] = tok + next
+    else out.push(tok)
+  }
+  return out.reverse()
 }
 
 export type WrapCallback = (word: string) => string[]
@@ -419,9 +439,16 @@ export function planSewingPages(input: PlanInput, m: Measurer): SewingSpecPlan {
       instructionCount -= 1
     }
     let used = fixedH + quantityAndSpecHeight(qtyH, specRowH.slice(0, instructionCount)) + ACC_HEAD_H + ACC_TAIL_H
-    // 付属: 入る行まで（最大 15）
+    // 付属: 入る行まで（最大 15）。D-5 の補足（追補 §2）: 仕様をつづきへ送ったときは1枚目に付属の行を出さず、全行をつづき側へ
+    // （読む順が「仕様のつづき → 付属」になるように。1枚目の付属の見出しと案内は残す）
+    const instructionsSpilled = instructionCount < input.instructions.length
     let accEnd = 0
-    while (accEnd < input.accessories.length && accEnd < MAIN_ACCESSORY_ROWS_MAX && used + accRowH[accEnd] <= PAGE_BODY_H) {
+    while (
+      !instructionsSpilled &&
+      accEnd < input.accessories.length &&
+      accEnd < MAIN_ACCESSORY_ROWS_MAX &&
+      used + accRowH[accEnd] <= PAGE_BODY_H
+    ) {
       used += accRowH[accEnd]
       accEnd += 1
     }
