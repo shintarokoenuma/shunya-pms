@@ -4,14 +4,15 @@
  *   npx tsx src/lib/pdf/sewing-spec-layout.test.ts
  *
  * 文字幅は同梱の全字版フォント（src/assets/fonts/NotoSansJP-Regular.ttf）を react-pdf の Font store 経由で読んで測る。
- * 対象: tokenizeForWrap（D-10）・countLines（textkit で数える）・planSewingPages（D-3〜D-8・D-11）
+ * 対象: tokenizeForWrap（D-10・D-12・D-13）・breakIntoLines / countLines（行を先に決める）・planSewingPages（D-3〜D-8・D-11）
  */
 
 import {
   ACC_W,
   MAIN_ACCESSORY_ROWS_MAX,
   SPEC_VALUE_W,
-  makeWrapCallback,
+  NO_BREAK_CALLBACK,
+  breakIntoLines,
   planSewingPages,
   tokenizeForWrap,
   type PlanAccessoryRow,
@@ -101,18 +102,18 @@ const conts = (pages: PlannedPage[]) => pages.filter((p): p is Cont => p.kind ==
 
   // ① tokenizeForWrap（D-10）
   {
-    const t1 = tokenizeForWrap("CB衿ぐり付け〜3.0cm下")
+    // 「下」が最後の1文字だと D-13 で「3.0cm」とつながるので、最後に2文字を足して確かめる
+    const t1 = tokenizeForWrap("CB衿ぐり付け〜3.0cm下まで")
     assert(t1.includes("3.0cm") && t1.includes("CB") && t1.includes("衿"), `①-1 3.0cm が1つのかたまり: ${JSON.stringify(t1)}`)
+    assert(JSON.stringify(tokenizeForWrap("CB衿ぐり付け〜3.0cm下").slice(-1)) === JSON.stringify(["3.0cm下"]), "①-1b 最後の1文字は英数字のかたまりともつなぐ（D-13）")
     assert(JSON.stringify(tokenizeForWrap("HT-ETB-27SS")) === JSON.stringify(["HT-ETB-27SS"]), "①-2 品番は1つのかたまり")
     assert(JSON.stringify(tokenizeForWrap("a\nb")) === JSON.stringify(["a", "\n", "b"]), "①-3 改行は1文字として残る")
     assert(JSON.stringify(tokenizeForWrap("")) === "[]", "①-4 空文字は空")
-    // かたまりが幅より長いときだけ文字に分ける
-    const cb = makeWrapCallback(30, (s) => m.widthOf(s))
-    const parts = cb("ABCDEFGHIJKLMNOP").filter((p) => p !== "")
-    assert(parts.length === 16 && parts[0] === "A", `①-5 幅より長いかたまりは1文字ずつ: ${parts.length}`)
-    const parts2 = cb("AB").filter((p) => p !== "")
-    assert(JSON.stringify(parts2) === JSON.stringify(["AB"]), "①-5' 幅に入るかたまりは割らない")
-    assert(cb("AB")[1] === "", "①-6 かたまりの後ろに空の区切り（「-」を出さない形）")
+    // かたまりが幅より長いときだけ文字で折る（D-10 の安全策）
+    const ls5 = breakIntoLines("ABCDEFGHIJKLMNOP", 30, (s) => m.widthOf(s))
+    assert(ls5.length > 1 && ls5.every((l) => m.widthOf(l) <= 30), `①-5 幅より長いかたまりは文字の間で折る: ${JSON.stringify(ls5)}`)
+    assert(JSON.stringify(breakIntoLines("AB", 30, (s) => m.widthOf(s))) === JSON.stringify(["AB"]), "①-5b 幅に入るかたまりは割らない")
+    assert(JSON.stringify(breakIntoLines("本縫い 1.0cm で", 30, (s) => m.widthOf(s))).includes("1.0cm"), "①-6 かたまりの途中では折らない")
     // D-12 禁則: 行頭に来てはいけない字は直前に、行末に来てはいけない字は直後にくっつく
     const t7 = tokenizeForWrap("本縫い 1.0cm で縫い合わせ。糸は地色 #60）")
     assert(!t7.includes("。") && t7.includes("せ。"), `①-7 「。」は直前にくっつく: ${JSON.stringify(t7)}`)
@@ -122,7 +123,14 @@ const conts = (pages: PlannedPage[]) => pages.filter((p): p is Cont => p.kind ==
     assert(!t8.includes("（") && t8.includes("（担"), `①-8 「（」は直後にくっつく: ${JSON.stringify(t8)}`)
     assert(t8.includes("田）、"), `①-8b 「）、」は続けて直前にくっつく: ${JSON.stringify(t8)}`)
     const t9 = tokenizeForWrap("あ\n。い（\nう")
-    assert(t9.includes("\n") && t9.includes("。") && t9.includes("（"), `①-9 改行の前後では禁則でくっつけない: ${JSON.stringify(t9)}`)
+    // 改行の直後の「。」は前にくっつかない。改行の直前の「（」は後ろにくっつかず、D-13 で前の「い」とつながる
+    assert(t9.includes("\n") && t9.includes("。") && t9.includes("い（"), `①-9 改行の前後では禁則でくっつけない: ${JSON.stringify(t9)}`)
+    // D-13: 最後の単位が1文字なら前の単位とつなぐ（改行の直前も）
+    const t10 = tokenizeForWrap("シャツ折り")
+    assert(t10[t10.length - 1] === "折り", `①-10 最後の1文字は前とつなぐ: ${JSON.stringify(t10)}`)
+    const t11 = tokenizeForWrap("タンブラー中温\n乾燥")
+    assert(t11.includes("中温") && t11[t11.length - 1] === "乾燥", `①-11 改行の直前でも同じ: ${JSON.stringify(t11)}`)
+    assert(JSON.stringify(tokenizeForWrap("A")) === JSON.stringify(["A"]), "①-12 1文字だけならそのまま")
   }
 
   // ② countLines
@@ -135,7 +143,7 @@ const conts = (pages: PlannedPage[]) => pages.filter((p): p is Cont => p.kind ==
     assert(m.countLines("", ACC_W.usage) === 1, "②-4 空は1行")
     assert(m.countLines("1行目\n2行目", ACC_W.spec) === 2, "②-5 改行は強制改行")
 
-    // ②-6 countLines の結果が描画と一致する（試作と同じ方法: 1ページに Text を1つ置き、行ごとの ET を数える）
+    // ②-6 countLines の結果が描画と一致する（FullCell と同じく fitText の文字列を NO_BREAK_CALLBACK で描き、行を数える）
     const CASES: { text: string; w: number }[] = [
       { text: "CB衿ぐり付け〜3.0cm下", w: SPEC_VALUE_W },
       { text: LONG_JP, w: SPEC_VALUE_W },
@@ -144,7 +152,14 @@ const conts = (pages: PlannedPage[]) => pages.filter((p): p is Cont => p.kind ==
       { text: "株式会社ナイトウ繊維商事 大阪本社 資材部（担当 山田・TEL 06-0000-0000）", w: ACC_W.supplier },
       { text: "12.5m 2.1kg/反 ×3", w: ACC_W.usage },
       { text: "身頃と袖は本縫い 1.0cm で縫い合わせ。糸は地色（#60）。裾は三つ折り、脇はロック。", w: ACC_W.spec },
+      { text: "縫製後に製品ワッシャー。畳み仕上げ・シャツ折り", w: SPEC_VALUE_W },
+      { text: "タンブラー中温", w: ACC_W.usage },
     ]
+    // D-13: 最後の行が1文字だけにならない
+    for (const c of CASES.slice(-2)) {
+      const ls = m.lines(c.text, c.w)
+      assert(ls.length >= 2 && Array.from(ls[ls.length - 1]).length >= 2, `②-7 最後の行が2文字以上: ${JSON.stringify(ls)}`)
+    }
     for (const [i, c] of CASES.entries()) {
       const doc = React.createElement(
         Document,
@@ -155,7 +170,7 @@ const conts = (pages: PlannedPage[]) => pages.filter((p): p is Cont => p.kind ==
           React.createElement(
             View,
             { style: { width: c.w, paddingHorizontal: CELL_PAD_H } },
-            React.createElement(Text, { style: { lineHeight: FULL_LINE_HEIGHT }, hyphenationCallback: m.wrapFor(c.w) }, c.text),
+            React.createElement(Text, { style: { lineHeight: FULL_LINE_HEIGHT }, hyphenationCallback: NO_BREAK_CALLBACK }, m.fitText(c.text, c.w)),
           ),
         ),
       )

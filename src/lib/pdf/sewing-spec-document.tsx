@@ -27,7 +27,8 @@ import {
   TH_H,
   type PlannedPage,
   type SewingSpecPlan,
-  type WrapCallback,
+  NO_BREAK_CALLBACK,
+  type FitText,
 } from "./sewing-spec-layout"
 
 registerPdfFonts()
@@ -244,14 +245,15 @@ function ColorCell({ style, children }: { style: object | object[]; children: st
 }
 
 /**
- * B-267 D-1・D-10: 全文のセル。「…」で切らず全文を折り返す。折り方（英数字のかたまりを折らない）は
- * ページの計画と同じ hyphenationCallback（plan.wrap）を渡し、計算と描画を一致させる
+ * B-267 D-1・D-10・D-12・D-13: 全文のセル。「…」で切らず全文を折り返す。
+ * 行はページの計画と同じ規則（plan.fit）で先に決めて "\n" でつないで渡し、react-pdf には折らせない（NO_BREAK_CALLBACK）。
+ * こうすると計算と描画の行が必ず一致する（react-pdf の hyphenationCallback は漢字／かなの境で分かれた run ごとにしか呼ばれないため）
  */
-function FullCell({ style, wrap, children }: { style: object | object[]; wrap: WrapCallback; children: string }) {
+function FullCell({ style, fit, children }: { style: object | object[]; fit: FitText; children: string }) {
   const s = Array.isArray(style) ? [styles.fullCell, ...style] : [styles.fullCell, style]
   return (
-    <Text style={s as never} hyphenationCallback={wrap}>
-      {children}
+    <Text style={s as never} hyphenationCallback={NO_BREAK_CALLBACK}>
+      {fit(children)}
     </Text>
   )
 }
@@ -327,13 +329,13 @@ function SkuMatrix({ data }: { data: SewingSpecPdfData }) {
 }
 
 /** 仕様（縫製指示）の行。項目名は1行固定、値は全文（B-267 D-1） */
-function InstructionRows({ rows, wrap }: { rows: SewingSpecPdfData["instructions"]; wrap: WrapCallback }) {
+function InstructionRows({ rows, fit }: { rows: SewingSpecPdfData["instructions"]; fit: FitText }) {
   return (
     <View style={styles.table}>
       {rows.map((it, i) => (
         <View key={i} style={styles.tr} wrap={false}>
           <Cell style={styles.specLabel}>{it.label}</Cell>
-          <FullCell style={styles.specValue} wrap={wrap}>
+          <FullCell style={styles.specValue} fit={fit}>
             {it.value}
           </FullCell>
         </View>
@@ -348,13 +350,13 @@ function QuantityAndSpec({
   page,
   instructions,
   instructionNote,
-  wrap,
+  fit,
 }: {
   data: SewingSpecPdfData
   page: SewingSpecPage
   instructions: SewingSpecPdfData["instructions"]
   instructionNote?: string | null
-  wrap: WrapCallback
+  fit: FitText
 }) {
   return (
     <View style={styles.twoCol}>
@@ -367,18 +369,18 @@ function QuantityAndSpec({
       </View>
       <View style={styles.col}>
         <SectionTitle title="仕様（縫製指示）" note={instructionNote} />
-        {instructions.length === 0 ? <Text style={styles.cell}>—</Text> : <InstructionRows rows={instructions} wrap={wrap} />}
+        {instructions.length === 0 ? <Text style={styles.cell}>—</Text> : <InstructionRows rows={instructions} fit={fit} />}
       </View>
     </View>
   )
 }
 
 /** B-267 D-5: つづきのページの先頭に出す「仕様（縫製指示）（つづき）」 */
-function InstructionContinuation({ rows, wrap }: { rows: SewingSpecPdfData["instructions"]; wrap: WrapCallback }) {
+function InstructionContinuation({ rows, fit }: { rows: SewingSpecPdfData["instructions"]; fit: FitText }) {
   return (
     <View>
       <Text style={styles.sectionTitle}>仕様（縫製指示）（つづき）</Text>
-      <InstructionRows rows={rows} wrap={wrap} />
+      <InstructionRows rows={rows} fit={fit} />
     </View>
   )
 }
@@ -392,14 +394,14 @@ function AccessoryTable({
   title,
   note,
   colorRefLabel,
-  wrap,
+  fit,
   noAccessories,
 }: {
   rows: SewingSpecAccessoryRow[]
   title: string
   note?: string | null
   colorRefLabel: ColorRefLabel
-  wrap: SewingSpecPlan["wrap"]
+  fit: SewingSpecPlan["fit"]
   /** 付属が1行も無い品番のときだけ「BOM が未登録です」を出す（行を全部つづきへ送った1枚目では出さない・D-5 の補足） */
   noAccessories: boolean
 }) {
@@ -424,13 +426,13 @@ function AccessoryTable({
         ) : (
           rows.map((r, i) => (
             <View key={i} style={styles.tr} wrap={false}>
-              <FullCell style={styles.accPart} wrap={wrap.accPart}>
+              <FullCell style={styles.accPart} fit={fit.accPart}>
                 {r.part}
               </FullCell>
-              <FullCell style={styles.accCode} wrap={wrap.accCode}>
+              <FullCell style={styles.accCode} fit={fit.accCode}>
                 {r.itemCode}
               </FullCell>
-              <FullCell style={styles.accSpec} wrap={wrap.accSpec}>
+              <FullCell style={styles.accSpec} fit={fit.accSpec}>
                 {r.spec}
               </FullCell>
               {r.colors.length > 0 ? (
@@ -440,10 +442,10 @@ function AccessoryTable({
                   {r.commonColor ? `全色共通（${r.commonColor}）` : "全色共通"}
                 </Cell>
               )}
-              <FullCell style={styles.accUsage} wrap={wrap.accUsage}>
+              <FullCell style={styles.accUsage} fit={fit.accUsage}>
                 {r.usage}
               </FullCell>
-              <FullCell style={styles.accSupplier} wrap={wrap.accSupplier}>
+              <FullCell style={styles.accSupplier} fit={fit.accSupplier}>
                 {r.supplier}
               </FullCell>
             </View>
@@ -579,14 +581,14 @@ function SewingMainPage({
   data,
   page,
   planned,
-  wrap,
+  fit,
   pageNo,
   pageTotal,
 }: {
   data: SewingSpecPdfData
   page: SewingSpecPage
   planned: Extract<PlannedPage, { kind: "sewing-main" }>
-  wrap: SewingSpecPlan["wrap"]
+  fit: SewingSpecPlan["fit"]
   pageNo: number
   pageTotal: number
 }) {
@@ -617,7 +619,7 @@ function SewingMainPage({
         page={page}
         instructions={instructions}
         instructionNote={planned.instructionNote}
-        wrap={wrap.specValue}
+        fit={fit.specValue}
       />
 
       {/* 6. 付属（案B）＋ 7. 色ごとの指定（入るときだけ。入らなければ最後のつづきページにまとめる） */}
@@ -626,7 +628,7 @@ function SewingMainPage({
         title="付属"
         note={planned.accessoryNote}
         colorRefLabel={planned.colorSpec ? "色別（下表）" : "色別（別紙）"}
-        wrap={wrap}
+        fit={fit}
         noAccessories={data.accessories.length === 0}
       />
       {planned.colorSpec ? <ColorSpecTable rows={data.accessories} colorwayNames={data.colorwayNames} /> : null}
@@ -642,14 +644,14 @@ function SewingContinuationPage({
   data,
   page,
   planned,
-  wrap,
+  fit,
   pageNo,
   pageTotal,
 }: {
   data: SewingSpecPdfData
   page: SewingSpecPage
   planned: Extract<PlannedPage, { kind: "sewing-cont" }>
-  wrap: SewingSpecPlan["wrap"]
+  fit: SewingSpecPlan["fit"]
   pageNo: number
   pageTotal: number
 }) {
@@ -667,13 +669,13 @@ function SewingContinuationPage({
         pageTotal={pageTotal}
         booklet={planned.booklet}
       />
-      {instructions.length > 0 ? <InstructionContinuation rows={instructions} wrap={wrap.specValueCont} /> : null}
+      {instructions.length > 0 ? <InstructionContinuation rows={instructions} fit={fit.specValueCont} /> : null}
       {planned.accessoryRange ? (
         <AccessoryTable
           rows={rows}
           title="付属（つづき）"
           colorRefLabel={planned.colorSpec ? "色別（下表）" : "色別（別紙）"}
-          wrap={wrap}
+          fit={fit}
           noAccessories={false}
         />
       ) : null}
@@ -691,14 +693,14 @@ function MeasurePage({
   data,
   page,
   planned,
-  wrap,
+  fit,
   pageNo,
   pageTotal,
 }: {
   data: SewingSpecPdfData
   page: SewingSpecPage
   planned: Extract<PlannedPage, { kind: "measure" }>
-  wrap: WrapCallback
+  fit: FitText
   pageNo: number
   pageTotal: number
 }) {
@@ -709,7 +711,7 @@ function MeasurePage({
     <Page size={B4_JIS} style={styles.page}>
       <HeaderBlock data={data} page={page} title={PAGE_TITLES.measure} pageNo={pageNo} pageTotal={pageTotal} />
       {/* B-267 D-11: 仕様3項目は全文。伸びた分は画像が縮む（採寸位置の絵型の高さは計画から） */}
-      <QuantityAndSpec data={data} page={page} instructions={instructions} wrap={wrap} />
+      <QuantityAndSpec data={data} page={page} instructions={instructions} fit={fit} />
       {second ? (
         <>
           <View style={[styles.sketchBoxFixed, { height: planned.firstSketchHeight ?? MEASURE_SKETCH_FALLBACK }]}>
@@ -832,15 +834,15 @@ export function SewingSpecDocument({ data, plan }: { data: SewingSpecPdfData; pl
         switch (p.kind) {
           case "sewing-main":
             return (
-              <SewingMainPage key={i} data={data} page={page} planned={p} wrap={plan.wrap} pageNo={pageNo} pageTotal={total} />
+              <SewingMainPage key={i} data={data} page={page} planned={p} fit={plan.fit} pageNo={pageNo} pageTotal={total} />
             )
           case "sewing-cont":
             return (
-              <SewingContinuationPage key={i} data={data} page={page} planned={p} wrap={plan.wrap} pageNo={pageNo} pageTotal={total} />
+              <SewingContinuationPage key={i} data={data} page={page} planned={p} fit={plan.fit} pageNo={pageNo} pageTotal={total} />
             )
           case "measure":
             return (
-              <MeasurePage key={i} data={data} page={page} planned={p} wrap={plan.wrap.specValue} pageNo={pageNo} pageTotal={total} />
+              <MeasurePage key={i} data={data} page={page} planned={p} fit={plan.fit.specValue} pageNo={pageNo} pageTotal={total} />
             )
           case "process":
             return <ProcessPage key={i} data={data} page={page} pageNo={pageNo} pageTotal={total} />

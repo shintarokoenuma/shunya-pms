@@ -1,21 +1,11 @@
-import layoutEngine, {
-  bidi,
-  fontSubstitution,
-  fromFragments,
-  justification,
-  linebreaker,
-  scriptItemizer,
-  textDecoration,
-  wordHyphenation,
-  type Attributes,
-} from "@react-pdf/textkit"
 import type { SewingSpecPageKind } from "./sewing-spec-format"
 import type { SewingSpecPdfData } from "./sewing-spec-data"
 
 /**
  * B-267: 縫製仕様書 PDF の「全文で折り返す」ための計算（純関数・React と prisma に依存しない）。
- * - 文字幅は react-pdf が使う fontkit のフォント（Font.getFont(...).data）で測り、行数は react-pdf と同じ textkit の
- *   layoutEngine（Knuth & Plass）で数える。描画と計算が同じ規則で折れることが、自動改ページを起こさない前提（B-267 D-7・D-9）
+ * - 文字幅は react-pdf が使う fontkit のフォント（Font.getFont(...).data）で測り、行は tokenizeForWrap の単位で左から詰めて
+ *   こちらで決める（breakIntoLines）。描画には行を "\n" でつないで渡し、react-pdf には折らせない（NO_BREAK_CALLBACK）。
+ *   計算と描画が同じ行になることが、自動改ページを起こさない前提（B-267 D-7・D-9）
  * - 英数字のかたまり（品番・寸法・番手）は途中で折らず、日本語は文字の間で折る。かたまりがセルの幅より長いときだけ
  *   そのかたまりを文字の間で折る（B-267 D-10）
  * - ページの計画（planSewingPages）: 1枚目に入る分を高さで決め、残りを「つづき」のページに送る（B-267 D-3〜D-8）
@@ -104,6 +94,7 @@ const NO_TAIL = new Set(Array.from("（「『【〔〈《"))
 /**
  * 折ってよい単位に分ける。英数字のかたまりは1つ、それ以外（日本語・全角記号・空白）は1文字ずつ（D-10）。
  * 禁則（D-12）: 行頭に来てはいけない字は直前の単位に、行末に来てはいけない字は直後の単位にくっつける（英数字のかたまりとも）。
+ * 最後の単位が1文字なら前の単位とつなぎ、1文字だけの行を残さない（D-13）。
  * 改行（\n）は1文字のまま残し、どちらにもくっつけない（textkit が段落に分けるので、強制改行になる）
  */
 export function tokenizeForWrap(text: string): string[] {
@@ -124,32 +115,83 @@ export function tokenizeForWrap(text: string): string[] {
     else merged.push(tok)
   }
   // 行末禁則: 直後にくっつける（右から左）
-  const out: string[] = []
+  const tailed: string[] = []
   for (let i = merged.length - 1; i >= 0; i -= 1) {
     const tok = merged[i]
-    const next = out[out.length - 1]
-    if (NO_TAIL.has(tok) && next !== undefined && next !== "\n") out[out.length - 1] = tok + next
+    const next = tailed[tailed.length - 1]
+    if (NO_TAIL.has(tok) && next !== undefined && next !== "\n") tailed[tailed.length - 1] = tok + next
+    else tailed.push(tok)
+  }
+  tailed.reverse()
+  // D-13: 最後の単位（語の末尾・改行の直前）が1文字なら、その前の単位とつなぐ（1文字だけの行を残さない）
+  const out: string[] = []
+  for (let i = 0; i < tailed.length; i += 1) {
+    const tok = tailed[i]
+    const isLast = i === tailed.length - 1 || tailed[i + 1] === "\n"
+    const prev = out[out.length - 1]
+    if (isLast && tok !== "\n" && Array.from(tok).length === 1 && prev !== undefined && prev !== "\n") out[out.length - 1] = prev + tok
     else out.push(tok)
   }
-  return out.reverse()
+  return out
 }
 
 export type WrapCallback = (word: string) => string[]
+/**
+ * react-pdf に渡す hyphenationCallback: 語の途中では折らない。
+ * ★行はこちらで先に決めて "\n" で渡す（fitText）。react-pdf の scriptItemizer は漢字／かな／カナの境で run を分け、
+ * hyphenationCallback は run ごとの語しか受け取れない（「折」「り」が別の語になる）ため、callback では D-12・D-13 を守れない
+ */
+export const NO_BREAK_CALLBACK: WrapCallback = (word) => [word]
 
 /**
- * hyphenationCallback の工場。tokenizeForWrap の単位の後ろでだけ折れる（かたまりの後ろに "" を挟むのは、
- * 請求書の NO_HYPHEN_BREAK と同じく折り返しに「-」を出さないため）。
- * かたまり1つがセルの幅より長いときだけ、そのかたまりを1文字ずつに分ける
+ * 1段落（改行なし）を tokenizeForWrap の単位で左から詰めて行に分ける（D-10・D-12・D-13）。
+ * - 単位1つが幅より長いときだけ、その単位を文字の間で折る（D-10 の安全策）
+ * - reserve: 行の末尾に付ける "\n" の字送り（textkit は段落末の "\n" を .notdef・9pt 幅の字として数える）。
+ *   文字列全体の最後の行だけは "\n" が付かないので、isLastParagraph のときは「残り全部が幅に入るなら最後の行」として reserve を取らない
  */
-export function makeWrapCallback(widthPt: number, widthOf: (s: string) => number): WrapCallback {
-  return (word) => {
-    const parts: string[] = []
-    for (const tok of tokenizeForWrap(word)) {
-      if (tok.length > 1 && widthOf(tok) > widthPt) parts.push(...Array.from(tok))
-      else parts.push(tok)
-    }
-    return parts.flatMap((p) => [p, ""])
+export function breakParagraph(
+  paragraph: string,
+  widthPt: number,
+  widthOf: (s: string) => number,
+  reserve = 0,
+  isLastParagraph = true,
+): string[] {
+  const limit = widthPt - reserve
+  // 幅より長い単位は文字に分けておく（limit 基準・保守的）
+  const units: string[] = []
+  for (const unit of tokenizeForWrap(paragraph)) {
+    if (unit === "\n") continue
+    if (Array.from(unit).length > 1 && widthOf(unit) > limit) units.push(...Array.from(unit))
+    else units.push(unit)
   }
+  if (units.length === 0) return [""]
+  const lines: string[] = []
+  let i = 0
+  while (i < units.length) {
+    if (isLastParagraph) {
+      const rest = units.slice(i).join("")
+      if (widthOf(rest) <= widthPt) {
+        lines.push(rest)
+        break
+      }
+    }
+    let cur = ""
+    while (i < units.length && (cur === "" || widthOf(cur + units[i]) <= limit)) {
+      cur += units[i]
+      i += 1
+    }
+    lines.push(cur)
+  }
+  return lines
+}
+
+/**
+ * 文字列を "\n" の段落ごとに breakParagraph で行に分ける（空は [""]）。
+ * newlineWidth は "\n" の字送り（最後の行以外に付く・見落とすと描画側が行末で折って「-」を入れる・実測）
+ */
+export function breakIntoLines(text: string, widthPt: number, widthOf: (s: string) => number, newlineWidth = 0): string[] {
+  const paragraphs = text.split("\n")
+  return paragraphs.flatMap((p, idx) => breakParagraph(p, widthPt, widthOf, newlineWidth, idx === paragraphs.length - 1))
 }
 
 // ---------------------------------------------------------------- 測り方
@@ -159,61 +201,33 @@ export type FontkitLike = {
   layout: (s: string) => { advanceWidth: number }
 }
 
+export type FitText = (text: string) => string
+
 export type Measurer = {
   /** 文字列の幅（pt・fontSize は表の文字の大きさ） */
   widthOf: (s: string, fontSize?: number) => number
-  /** 全文のセルが何行になるか（react-pdf と同じ textkit で数える・1 以上） */
+  /** 折った後の各行の文字列（描画も同じ行を "\n" で受け取る） */
+  lines: (text: string, cellWidth: number, fontSize?: number) => string[]
+  /** 全文のセルが何行になるか（1 以上） */
   countLines: (text: string, cellWidth: number, fontSize?: number) => number
-  /** 全文のセルに渡す hyphenationCallback */
-  wrapFor: (cellWidth: number, fontSize?: number) => WrapCallback
+  /** セルに渡す文字列（行を "\n" でつないだもの） */
+  fitText: (text: string, cellWidth: number, fontSize?: number) => string
+  /** 列ごとの fitText */
+  fitFor: (cellWidth: number, fontSize?: number) => FitText
 }
-
-const engine = layoutEngine({
-  bidi,
-  linebreaker,
-  justification,
-  textDecoration,
-  scriptItemizer,
-  wordHyphenation,
-  fontSubstitution,
-})
 
 export function createMeasurer(font: FontkitLike): Measurer {
   const widthOf = (s: string, fontSize = TABLE_FONT_SIZE) =>
     s.length === 0 ? 0 : (font.layout(s).advanceWidth / font.unitsPerEm) * fontSize
-  const wrapCache = new Map<string, WrapCallback>()
-  const wrapFor = (cellWidth: number, fontSize = TABLE_FONT_SIZE) => {
-    const key = `${cellWidth}:${fontSize}`
-    let cb = wrapCache.get(key)
-    if (!cb) {
-      const w = textWidthOf(cellWidth)
-      cb = makeWrapCallback(w, (s) => widthOf(s, fontSize))
-      wrapCache.set(key, cb)
-    }
-    return cb
+  const lines = (text: string, cellWidth: number, fontSize = TABLE_FONT_SIZE): string[] => {
+    if (!text) return [""]
+    return breakIntoLines(text, textWidthOf(cellWidth), (s) => widthOf(s, fontSize), widthOf("\n", fontSize))
   }
-  const countLines = (text: string, cellWidth: number, fontSize = TABLE_FONT_SIZE) => {
-    if (!text) return 1
-    const w = textWidthOf(cellWidth)
-    const attributes = {
-      font: [font],
-      fontSize,
-      lineHeight: fontSize * FULL_LINE_HEIGHT,
-      direction: "ltr",
-      align: "left",
-      color: "black",
-    } as unknown as Attributes
-    const attributed = fromFragments([{ string: text, attributes }])
-    const container = { x: 0, y: 0, width: w, height: Infinity }
-    const paragraphs = engine(attributed, container, {
-      // @react-pdf/layout の getLayoutOptions と同じ
-      shrinkWhitespaceFactor: { before: -0.5, after: -0.5 },
-      hyphenationCallback: wrapFor(cellWidth, fontSize),
-    } as never)
-    const n = paragraphs.reduce((acc, p) => acc + p.length, 0)
-    return Math.max(1, n)
-  }
-  return { widthOf, countLines, wrapFor }
+  const countLines = (text: string, cellWidth: number, fontSize = TABLE_FONT_SIZE) =>
+    Math.max(1, lines(text, cellWidth, fontSize).length)
+  const fitText = (text: string, cellWidth: number, fontSize = TABLE_FONT_SIZE) => lines(text, cellWidth, fontSize).join("\n")
+  const fitFor = (cellWidth: number, fontSize = TABLE_FONT_SIZE): FitText => (text) => fitText(text, cellWidth, fontSize)
+  return { widthOf, lines, countLines, fitText, fitFor }
 }
 
 // ---------------------------------------------------------------- 高さの見積もり
@@ -287,16 +301,16 @@ export type PlannedPage =
 
 export type SewingSpecPlan = {
   pages: PlannedPage[]
-  /** 全文のセルに渡す hyphenationCallback（列ごと） */
-  wrap: {
-    specValue: WrapCallback
+  /** 全文のセルに渡す文字列を作る（列ごと・行を "\n" でつないだもの） */
+  fit: {
+    specValue: FitText
     /** つづきのページの仕様の値（全幅） */
-    specValueCont: WrapCallback
-    accPart: WrapCallback
-    accCode: WrapCallback
-    accSpec: WrapCallback
-    accUsage: WrapCallback
-    accSupplier: WrapCallback
+    specValueCont: FitText
+    accPart: FitText
+    accCode: FitText
+    accSpec: FitText
+    accUsage: FitText
+    accSupplier: FitText
   }
 }
 
@@ -523,14 +537,14 @@ export function planSewingPages(input: PlanInput, m: Measurer): SewingSpecPlan {
 
   return {
     pages,
-    wrap: {
-      specValue: m.wrapFor(SPEC_VALUE_W),
-      specValueCont: m.wrapFor(SPEC_VALUE_CONT_W),
-      accPart: m.wrapFor(ACC_W.part),
-      accCode: m.wrapFor(ACC_W.code),
-      accSpec: m.wrapFor(ACC_W.spec),
-      accUsage: m.wrapFor(ACC_W.usage),
-      accSupplier: m.wrapFor(ACC_W.supplier),
+    fit: {
+      specValue: m.fitFor(SPEC_VALUE_W),
+      specValueCont: m.fitFor(SPEC_VALUE_CONT_W),
+      accPart: m.fitFor(ACC_W.part),
+      accCode: m.fitFor(ACC_W.code),
+      accSpec: m.fitFor(ACC_W.spec),
+      accUsage: m.fitFor(ACC_W.usage),
+      accSupplier: m.fitFor(ACC_W.supplier),
     },
   }
 }
