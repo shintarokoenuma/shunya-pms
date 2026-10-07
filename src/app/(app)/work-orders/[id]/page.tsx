@@ -169,6 +169,15 @@ export default async function WorkOrderDetailPage({
                 : "—"
             }
           />
+          {/* B-269 D-4: 合計数量（この作業発注の枚数）。空なら明細の合計を添えて「未入力」 */}
+          <Row
+            label="合計数量"
+            value={
+              wo.totalQuantity != null
+                ? `${fmt(wo.totalQuantity)} 枚`
+                : `未入力（明細の合計 ${fmt(wo.items.reduce((a, it) => a + Number(it.quantity), 0))} 枚）`
+            }
+          />
           <Row
             label="紐付け（ラウンド/タスク）"
             value={

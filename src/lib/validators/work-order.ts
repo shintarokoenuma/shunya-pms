@@ -37,6 +37,21 @@ const optionalDateString = z
   .default(null)
   .transform((v) => (v === "" || v === null ? null : v))
 
+/** B-269 D-3: 合計数量（枚）。任意・1以上の整数。空文字/null → null */
+const totalQuantityField = z
+  .union([z.string(), z.number(), z.null()])
+  .optional()
+  .default(null)
+  .transform((v, ctx) => {
+    if (v === "" || v === null || v === undefined) return null
+    const n = typeof v === "number" ? v : Number(v)
+    if (!Number.isInteger(n) || n < 1) {
+      ctx.addIssue({ code: "custom", message: "合計数量は1以上の整数で入力してください" })
+      return z.NEVER
+    }
+    return n
+  })
+
 /** 数量（> 0） */
 const quantityField = z
   .union([z.string(), z.number()])
@@ -101,6 +116,8 @@ export const workOrderInputSchema = z
     // B-054 D-17: 職出し予定日（希望納期と同じ形）
     plannedStartDate: optionalDateString,
     expectedDeliveryDate: optionalDateString,
+    // B-269 D-1/D-3: 合計数量（この作業発注の枚数）。明細の数量の合計ではない。生成は totalQty を入れ、人が直せる
+    totalQuantity: totalQuantityField,
     // 品番（直アクセス作成時に選択・§4-1(d) 案件化強制）。sample 経由なら省略可（action で導出）。
     productId: optionalRelationId,
     // 起点（進行チェックリスト）からの引き継ぎ

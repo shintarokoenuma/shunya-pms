@@ -794,6 +794,7 @@ export async function createWorkOrder(
                 currency: data.currency,
                 plannedStartDate,
                 expectedDeliveryDate: deliveryDate,
+                totalQuantity: data.totalQuantity, // B-269 D-1
                 orderDate: fromYmd(orderYmd),
                 status: WorkOrderStatus.DRAFT,
                 createdByUserId: sess.userId,
@@ -1001,6 +1002,7 @@ export async function updateWorkOrder(
             currency: data.currency,
             plannedStartDate,
             expectedDeliveryDate: deliveryDate,
+            totalQuantity: data.totalQuantity, // B-269 D-3: フォームの値で上書き（明細から自動計算しない）
             progressTaskId: data.progressTaskId,
             samplProductionId: data.sampleProductionId,
           },

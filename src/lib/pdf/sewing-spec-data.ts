@@ -4,6 +4,7 @@ import { loadSketchForPdf, type PdfImage } from "./sketch-image"
 import {
   kindLabel,
   quantityMode,
+  resolveOrderQuantity,
   type SewingSpecPageKind,
   type SewingSpecPageSpec,
   type SewingSpecQuantityMode,
@@ -391,6 +392,7 @@ export async function getSewingSpecPdfData(
         plannedStartDate: true,
         expectedDeliveryDate: true,
         patternVersionId: true,
+        totalQuantity: true, // B-269 D-5
         items: { orderBy: { itemOrder: "asc" }, select: { quantity: true, unit: true } },
       },
     })
@@ -466,7 +468,7 @@ export async function getSewingSpecPdfData(
       kindLabel: kindLabel(wo.workCategory, wo.sampleRound),
       workType: wo.workType,
       workTypeLabel: WORK_ORDER_TYPE_LABELS[wo.workType],
-      orderQuantity: wo.items.reduce((a, it) => a + it.quantity, 0),
+      orderQuantity: resolveOrderQuantity(wo.totalQuantity, wo.items), // B-269 D-5: 合計数量 ?? 明細の合計
       orderUnit: wo.items[0]?.unit ?? "枚",
       quantityMode: quantityMode(wo.workCategory),
       patternLabel: pv

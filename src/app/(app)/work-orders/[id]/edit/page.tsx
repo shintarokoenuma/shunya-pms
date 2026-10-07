@@ -58,6 +58,8 @@ export default async function EditWorkOrderPage({
     currency: wo.currency,
     plannedStartDate: toDateInput(wo.plannedStartDate),
     expectedDeliveryDate: toDateInput(wo.expectedDeliveryDate),
+    // B-269 D-3: 合計数量（空なら空欄）
+    totalQuantity: wo.totalQuantity ?? "",
     // 既存の紐付けを保持（refine: productId || sampleProductionId を満たす）
     productId: wo.productId,
     progressTaskId: wo.progressTaskId,
