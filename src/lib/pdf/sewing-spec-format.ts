@@ -132,3 +132,15 @@ export type SewingSpecQuantityMode = "sku-matrix" | "wo-total-only"
 export function quantityMode(workCategory: string): SewingSpecQuantityMode {
   return workCategory === "PRODUCTION" ? "sku-matrix" : "wo-total-only"
 }
+
+/**
+ * B-269 D-5: 「この発注 N 枚」の N。WO の合計数量（totalQuantity）があればそれ、空なら明細の quantity の合計。
+ * ★B-054 addendum v0.2 D-27「WO 明細の quantity の合計」をこの形に置き換える（生成した WO は工程ごとの明細を持ち、合計すると工程の数だけ倍になるため）
+ */
+export function resolveOrderQuantity(
+  totalQuantity: number | null | undefined,
+  items: ReadonlyArray<{ quantity: number }>,
+): number {
+  if (totalQuantity != null) return totalQuantity
+  return items.reduce((a, it) => a + it.quantity, 0)
+}

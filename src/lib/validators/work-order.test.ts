@@ -11,6 +11,7 @@
  * ③ PRODUCTION・1 行のみ → OK（比較対象なし）
  * ④ 非 PRODUCTION（SAMPLE）・数量不一致 → OK（B-074 は PRODUCTION 限定・既存 WO へ影響なし）
  * ⑤ PATTERN・数量不一致 → OK（同上）
+ * ⑥ B-269 D-3: 合計数量（totalQuantity）: 省略/空文字/null → null、"570"/570 → 570、0・負数・小数・文字 → エラー
  */
 import { WorkOrderType, WorkOrderCategory } from "@prisma/client"
 import { workOrderInputSchema } from "./work-order"
@@ -88,4 +89,32 @@ function item(quantity: number, desc = "縫製"): Item {
   passed++
 })()
 
-console.log(`✓ work-order validator (B-074): ${passed}/5 ケース PASS`)
+// ⑥ B-269 D-3: 合計数量（任意・1以上の整数・空は null）
+;(() => {
+  const ok = (v: unknown) =>
+    workOrderInputSchema.safeParse({ ...base(WorkOrderCategory.PRODUCTION, [item(570, "縫製工賃")]), totalQuantity: v })
+  const r0 = workOrderInputSchema.safeParse(base(WorkOrderCategory.PRODUCTION, [item(570, "縫製工賃")]))
+  assert(r0.success && r0.data.totalQuantity === null, "⑥-1 省略は null")
+  const r1 = ok("")
+  assert(r1.success && r1.data.totalQuantity === null, "⑥-2 空文字は null")
+  const r2 = ok(null)
+  assert(r2.success && r2.data.totalQuantity === null, "⑥-3 null は null")
+  const r3 = ok("570")
+  assert(r3.success && r3.data.totalQuantity === 570, "⑥-4 文字列 570 は 570")
+  const r4 = ok(600)
+  assert(r4.success && r4.data.totalQuantity === 600, "⑥-5 数値 600 は 600")
+  for (const bad of ["0", 0, -1, "1.5", "abc"]) {
+    const r = ok(bad)
+    assert(!r.success, `⑥-6 ${JSON.stringify(bad)} は失敗すべき`)
+    if (!r.success) {
+      const issue = r.error.issues.find((i) => i.path.includes("totalQuantity"))
+      assert(
+        issue?.message === "合計数量は1以上の整数で入力してください",
+        `⑥-6 ${JSON.stringify(bad)} のメッセージ: ${issue?.message}`,
+      )
+    }
+  }
+  passed++
+})()
+
+console.log(`✓ work-order validator (B-074 / B-269): ${passed}/6 ケース PASS`)

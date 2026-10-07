@@ -6,7 +6,7 @@
  * 対象: parseSewingSpecPages（クエリの解釈・画像の上限・重複）・kindLabel（区分の札）・quantityMode（数量の出し方）
  */
 
-import { parseSewingSpecPages, kindLabel, quantityMode } from "./sewing-spec-format"
+import { parseSewingSpecPages, kindLabel, quantityMode, resolveOrderQuantity } from "./sewing-spec-format"
 
 function assert(cond: boolean, msg: string): void {
   if (!cond) throw new Error(`ASSERT FAILED: ${msg}`)
@@ -117,6 +117,18 @@ let passed = 0
   for (const c of ["SAMPLE", "ADDITIONAL", "REWORK", "PATTERN", "GRADING", ""]) {
     assert(quantityMode(c) === "wo-total-only", `⑤ ${c || "(空)"} は wo-total-only`)
   }
+  passed++
+})()
+
+// ⑥ resolveOrderQuantity（B-269 D-5）: 合計数量があればそれ、空なら明細の合計
+;(() => {
+  const three = [{ quantity: 570 }, { quantity: 570 }, { quantity: 570 }]
+  assert(resolveOrderQuantity(570, three) === 570, "⑥-1 合計数量 570 があれば 570（明細 3 行 ×570 でも）")
+  assert(resolveOrderQuantity(null, three) === 1710, "⑥-2 合計数量が null なら明細の合計 1710（従来どおり）")
+  assert(resolveOrderQuantity(undefined, three) === 1710, "⑥-3 undefined も明細の合計")
+  assert(resolveOrderQuantity(600, three) === 600, "⑥-4 人が直した 600 が優先")
+  assert(resolveOrderQuantity(null, [{ quantity: 50 }]) === 50, "⑥-5 手入力 WO（1 行）は同じ値")
+  assert(resolveOrderQuantity(null, []) === 0, "⑥-6 明細なしは 0")
   passed++
 })()
 

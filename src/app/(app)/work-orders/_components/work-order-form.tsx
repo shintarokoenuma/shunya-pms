@@ -149,6 +149,7 @@ export function WorkOrderForm(props: Props) {
           currency: Currency.JPY,
           plannedStartDate: "",
           expectedDeliveryDate: "",
+          totalQuantity: "",
           progressTaskId: context.progressTaskId ?? null,
           sampleProductionId: context.sampleProductionId ?? null,
           processingTypeId: context.processingTypeId ?? null,
@@ -610,6 +611,35 @@ export function WorkOrderForm(props: Props) {
                       ref={field.ref}
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* B-269 D-3/D-7: 合計数量（枚）。生成した WO は自動で入った値が出て、人が直せる */}
+            <FormField
+              control={form.control}
+              name="totalQuantity"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>合計数量（枚）</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      inputMode="numeric"
+                      min={1}
+                      step={1}
+                      className="md:w-[200px]"
+                      value={field.value ?? ""}
+                      onChange={(e) => field.onChange(e.target.value)}
+                      onBlur={field.onBlur}
+                      name={field.name}
+                      ref={field.ref}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    工場に頼む枚数です。量産発注の生成では自動で入ります。空のときは、縫製仕様書で明細の数量を合計して出します。
+                  </FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

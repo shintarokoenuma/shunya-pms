@@ -400,6 +400,7 @@ export async function generateProductionOrders(
       currency: ctx.pe.currency,
       plannedStartDate: null, // B-054 D-17: 生成時は未設定（WO 編集で入れる）
       expectedDeliveryDate: null,
+      totalQuantity: totalQty, // B-269 D-2: この作業発注の枚数（Σ入力数量）。明細は工程の内訳
       productId: ctx.pe.productId,
       progressTaskId: null,
       sampleProductionId: null,
