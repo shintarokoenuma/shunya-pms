@@ -97,4 +97,15 @@
 
 - main のまま終える（feature ブランチへ戻さない）
 
+## 13. 締めの後の片付け（2026-10-08 09時台・ナレッジ側）
+
+- 慎太郎さん原文（09:10）: 「不要なものは削除して。BACKLOGは差し替えでいいんだよね？（過去のは全て削除してる）」
+- BACKLOG.md は差し替えで正しい（ナレッジに1件だけ・10/8 の版）。BACKLOG_EVIDENCE.md は過去の記録を固定して残す別の文書なので消さない
+- 慎太郎さんがナレッジに登録・差し替え: b-267-addendum-2026-10-06.md（新規・ナレッジ上はルート直下）・BACKLOG.md・MEMO_INBOX.md（10/8 の版）。古い MEMO_INBOX.md（10/5 の版）は慎太郎さんが削除した（09:13 の報告）
+- claude.ai 側で削除（project_delete・09時台）: claude/MEMO_INBOX-append-2026-09-25.md（冒頭に「M-040 として統合済み・以後は読まない」と明記）／claude/MEMO_INBOX-append-2026-10-07.md（MEMO_INBOX.md の M-053〜M-055 と同じ中身）。★§5・§8 にある「claude/MEMO_INBOX-append-2026-10-07.md」は削除済み。内容は MEMO_INBOX.md の M-053〜M-055 を正とする
+- 残した append: 9/26・9/27・9/28・10/4・10/4夜・10/5・10/5午前・10/5午後・10/6。MEMO_INBOX.md には要約だけで、原文の全文はこちらにある（MEMO_INBOX.md に「正本はナレッジの append」と書いてある）
+- ★未同期（次の締めで M-056 以降として repo docs/MEMO_INBOX.md に入れる）: claude/MEMO_INBOX-append-2026-10-01.md（取引先マスターの取り込みの決めごと・中身を読んで MEMO_INBOX に無いことを確認）／10-02・10-03・10-03-evening（中身は未読・MEMO_INBOX に参照が無い）
+- ナレッジには同じ名前の重複がほかにもある（b-170-implementation-brief-2026-09-07.md・SALES_ORDER_QUANTITY_DESIGN.md・sku-pr1-implementation-brief-2026-06-21.md・product-sample-spec-confirmation-v1_0-2026-06-03.md が各2件）。片付けるかは未決
+- shunya-environment-safety-check の提案カードが保存されたかは、このメモの時点で未確認
+
 END-OF-HANDOVER-CLOSE-AL
