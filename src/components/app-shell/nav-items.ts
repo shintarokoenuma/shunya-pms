@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   Coins,
   Factory,
+  FileInput,
   FileText,
   FolderTree,
   Hammer,
@@ -93,6 +94,8 @@ export const NAV_SECTIONS: NavSection[] = [
     accent: "trade",
     items: [
       { label: "請求", href: "/invoices", icon: FileText, enabled: true, area: "accounting" },
+      // B-212 PR-1（P1-D3）: 仕入先・工場の請求書（買う側）。領域は purchases（D-8）
+      { label: "仕入請求書", href: "/supplier-invoices", icon: FileInput, enabled: true, area: "purchases" },
       { label: "入金", href: "/payments", icon: Banknote, enabled: true, area: "accounting" },
       { label: "締め", href: "/closings", icon: Lock, enabled: true, area: "accounting" },
     ],
