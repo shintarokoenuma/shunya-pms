@@ -4,7 +4,7 @@
  * - 入金の行は、期間の窓の入金のうち「請求書より前に記録された」ものの合計が paymentReceivedAmount と一致するときだけ
  *   1件ずつ出す。一致しないとき（発行後に入金を取消した等・B-225）は1行「〔御入金〕期間内の入金合計」にまとめる。
  *   ★6枠と明細が食い違わないことを優先する（D-35: 発行済みは再計算しない）。
- * - 紙面の固定文言に ※ ～ は使わない（フォントに無い）。DB の値の ～（U+FF5E）は 〜（U+301C）に置き換える。
+ * - DB の値の ～（U+FF5E）は 〜（U+301C）に置き換える（表記をそろえるため。B-208 の全字版フォントで ※ ～ も出せる・B-268 D-6）。
  */
 
 export type InvoiceLineInput = {
@@ -66,7 +66,7 @@ export const NO_HYPHEN_BREAK = (word: string): string[] => Array.from(word).flat
 /** B-109 PR-4（P4-D21）: 語を割らない＝その Text の中では折り返さない（品番に使う）。 */
 export const NO_BREAK = (word: string): string[] => [word]
 
-/** DB 由来の文字列を PDF 用に整える（フォントに無い ～ を 〜 に）。 */
+/** DB 由来の文字列を PDF 用に整える（～ を 〜 に・表記をそろえるため。全字版フォントでは ～ も出せる・B-268 D-6）。 */
 export function pdfText(s: string | null | undefined): string {
   if (!s) return ""
   return s.replace(/～/g, "〜")

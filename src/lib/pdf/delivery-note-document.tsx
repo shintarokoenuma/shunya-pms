@@ -3,6 +3,7 @@ import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import { issuerAddressLine, issuerTelFaxLine, labelMail } from "@/lib/company-issuer"
 import type { DeliveryNotePdfData } from "./delivery-note-data"
 import { NO_BREAK, NO_HYPHEN_BREAK, numText, yenText, ymdSlash } from "./invoice-rows"
+import { DELIVERY_TEXT_W, type PdfWrap } from "./pdf-wrap"
 
 registerPdfFonts()
 
@@ -64,7 +65,13 @@ const styles = StyleSheet.create({
   footer: { position: "absolute", bottom: 28, left: 36, right: 36, flexDirection: "row", justifyContent: "space-between", fontSize: 8, color: "#666" },
 })
 
-function DeliveryNotePage({ data }: { data: DeliveryNotePdfData }) {
+/** B-268: 品名の横の札（前受金／前受金充当）の幅ぶんを品名の欄から引く（fontSize 7・padding 2×2・border 0.5×2・marginLeft 4） */
+function kindTagWidth(wrap: PdfWrap, lineKind: string | null | undefined): number {
+  if (!lineKind) return 0
+  return wrap.widthOf(lineKind === "DEPOSIT" ? "前受金" : "前受金充当", 7) + 2 * 2 + 0.5 * 2 + 4
+}
+
+function DeliveryNotePage({ data, wrap }: { data: DeliveryNotePdfData; wrap: PdfWrap }) {
   const amounts = data.showAmounts
   return (
     <Page size="A4" style={styles.page} wrap>
@@ -77,7 +84,10 @@ function DeliveryNotePage({ data }: { data: DeliveryNotePdfData }) {
         <View style={styles.docMeta}>
           <Text style={styles.docNumber}>{data.deliveryNumber}</Text>
           <Text>納品日　{ymdSlash(data.deliveryDate)}</Text>
-          {data.soNumbers.length > 0 ? <Text hyphenationCallback={NO_HYPHEN_BREAK}>受注　{data.soNumbers.join("、")}</Text> : null}
+          {/* B-268 D-2: 受注番号の列挙は行を先に決めて折らせない（番号の途中で折れない） */}
+          {data.soNumbers.length > 0 ? (
+            <Text hyphenationCallback={NO_BREAK}>{wrap.text(`受注　${data.soNumbers.join("、")}`, DELIVERY_TEXT_W.soLine)}</Text>
+          ) : null}
         </View>
       </View>
 
@@ -115,16 +125,22 @@ function DeliveryNotePage({ data }: { data: DeliveryNotePdfData }) {
         </View>
         {data.items.map((it, i) => (
           <View style={styles.tr} key={i} wrap={false}>
-            <Text hyphenationCallback={NO_BREAK} style={styles.cCode}>{it.itemCode ?? ""}</Text>
+            {/* B-268 D-2: 品番・品名・色・サイズは行を先に決めて折らせない */}
+            <Text hyphenationCallback={NO_BREAK} style={styles.cCode}>{wrap.text(it.itemCode ?? "", DELIVERY_TEXT_W.code)}</Text>
             <View style={[amounts ? styles.cName : styles.cNameWide, { flexDirection: "row", alignItems: "center" }]}>
-              {/* P4-D21: 品名の列を狭めたので、タグと重ならないよう品名側を折り返す */}
-              <Text hyphenationCallback={NO_HYPHEN_BREAK} style={{ flex: 1 }}>{it.productName}</Text>
+              {/* P4-D21: 品名の列を狭めたので、タグと重ならないよう品名側を折り返す（札の幅ぶんを引いて行を決める） */}
+              <Text hyphenationCallback={NO_BREAK} style={{ flex: 1 }}>
+                {wrap.text(
+                  it.productName,
+                  (amounts ? DELIVERY_TEXT_W.name : DELIVERY_TEXT_W.nameWide) - kindTagWidth(wrap, it.lineKind),
+                )}
+              </Text>
               {it.lineKind ? (
                 <Text style={styles.kindTag}>{it.lineKind === "DEPOSIT" ? "前受金" : "前受金充当"}</Text>
               ) : null}
             </View>
-            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cColor}>{it.colorName ?? ""}</Text>
-            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cSize}>{it.size ?? ""}</Text>
+            <Text hyphenationCallback={NO_BREAK} style={styles.cColor}>{wrap.text(it.colorName ?? "", DELIVERY_TEXT_W.color)}</Text>
+            <Text hyphenationCallback={NO_BREAK} style={styles.cSize}>{wrap.text(it.size ?? "", DELIVERY_TEXT_W.size)}</Text>
             <Text style={styles.cQty}>
               {numText(it.quantity)} {it.unit}
             </Text>
@@ -177,11 +193,11 @@ function DeliveryNotePage({ data }: { data: DeliveryNotePdfData }) {
   )
 }
 
-export function DeliveryNoteDocument({ dataList }: { dataList: DeliveryNotePdfData[] }) {
+export function DeliveryNoteDocument({ dataList, wrap }: { dataList: DeliveryNotePdfData[]; wrap: PdfWrap }) {
   return (
     <Document>
       {dataList.map((data, i) => (
-        <DeliveryNotePage key={i} data={data} />
+        <DeliveryNotePage key={i} data={data} wrap={wrap} />
       ))}
     </Document>
   )
