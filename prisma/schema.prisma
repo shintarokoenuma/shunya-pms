@@ -49,15 +49,15 @@ model Company {
   contractEndDate   DateTime? @map("contract_end_date")
 
   // 住所・連絡先
-  postalCode String? @map("postal_code") @db.VarChar(20)
-  address    String? @db.Text
-  phone      String? @db.VarChar(50)
-  email      String? @db.VarChar(255)
-  website    String? @db.VarChar(255)
+  postalCode  String? @map("postal_code") @db.VarChar(20)
+  address     String? @db.Text
+  phone       String? @db.VarChar(50)
+  email       String? @db.VarChar(255)
+  website     String? @db.VarChar(255)
   // B-205 PR-1（spec v1.0 D-2・D-15）: FAX は番号だけ（「FAX:」は帳票側で付ける）
-  fax        String? @db.VarChar(50)
+  fax         String? @db.VarChar(50)
   // B-205 PR-1（D-2）: 振込先 { bankName, branchName, accountType, accountNumber, accountHolder }（Invoice.bankInfo と同じ5キー）
-  bankAccount Json? @map("bank_account")
+  bankAccount Json?   @map("bank_account")
 
   // 設定
   defaultLanguage Language @default(JA) @map("default_language")
@@ -236,13 +236,13 @@ model UserToken {
   companyId String @map("company_id")
   userId    String @map("user_id")
 
-  purpose   UserTokenPurpose
-  tokenHash String    @unique @map("token_hash") @db.VarChar(64) // SHA-256 の16進
-  expiresAt DateTime  @map("expires_at")
-  usedAt    DateTime? @map("used_at")
-  revokedAt DateTime? @map("revoked_at")
+  purpose         UserTokenPurpose
+  tokenHash       String           @unique @map("token_hash") @db.VarChar(64) // SHA-256 の16進
+  expiresAt       DateTime         @map("expires_at")
+  usedAt          DateTime?        @map("used_at")
+  revokedAt       DateTime?        @map("revoked_at")
   // 招待した人。再設定は null
-  createdByUserId String? @map("created_by_user_id")
+  createdByUserId String?          @map("created_by_user_id")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -476,9 +476,9 @@ enum PaymentTermType {
 }
 
 enum TaxRoundingMode {
-  TRUNCATE      // 切り捨て（既定）
+  TRUNCATE // 切り捨て（既定）
   ROUND_HALF_UP // 四捨五入
-  CEILING       // 切り上げ
+  CEILING // 切り上げ
 }
 
 enum OwnershipType {
@@ -1926,9 +1926,9 @@ model ModelCode {
   brandId String @map("brand_id")
 
   // 基本情報
-  modelName   String  @map("model_name") @db.VarChar(255) // モデル名
-  modelNameEn String? @map("model_name_en") @db.VarChar(255)
-  description String? @db.Text
+  modelName     String  @map("model_name") @db.VarChar(255) // モデル名
+  modelNameEn   String? @map("model_name_en") @db.VarChar(255)
+  description   String? @db.Text
   // B-054 D-13: 型紙そのものに振った番号（例 16sy-082）。版（v1/v2）ではない。一意制約なし。
   //   品番作成時の自動生成では社内品番を初期値にし、型番編集で書き換える。
   patternNumber String? @map("pattern_number") @db.VarChar(50)
@@ -6103,7 +6103,9 @@ model DeliveryNote {
   @@map("delivery_notes")
 }
 
-/** B-109 PR-3: 納品書明細の行の種類（前受金）。通常の行は null。 */
+/**
+ * B-109 PR-3: 納品書明細の行の種類（前受金）。通常の行は null。
+ */
 enum DeliveryLineKind {
   DEPOSIT // 前受金の請求行
   DEPOSIT_APPLIED // 前受金の充当行（マイナス）
@@ -6361,8 +6363,8 @@ model Invoice {
 
   // B-109 PR-2c: 繰越型の合計請求書（D-24・D-29）。★端数処理は Invoice に持たない（D-35）
   // 請求の期間は導出ではなく保存する（発行済みの期間が締め日の設定変更や手直しで後からズレないように）
-  periodStartDate DateTime @map("period_start_date") @db.Date // 請求期間の始まり（前回の締め日の翌日）
-  periodEndDate   DateTime @map("period_end_date") @db.Date   // 請求期間の終わり（締め日）
+  periodStartDate       DateTime @map("period_start_date") @db.Date // 請求期間の始まり（前回の締め日の翌日）
+  periodEndDate         DateTime @map("period_end_date") @db.Date // 請求期間の終わり（締め日）
   previousBalanceAmount Decimal? @map("previous_balance_amount") @db.Decimal(15, 2) // 前回御請求額
   paymentReceivedAmount Decimal? @map("payment_received_amount") @db.Decimal(15, 2) // 御入金額（期間内の入金合計）
   carriedForwardAmount  Decimal? @map("carried_forward_amount") @db.Decimal(15, 2) // 繰越金額（前回御請求額 − 御入金額）
@@ -9914,4 +9916,164 @@ model PeriodClose {
 enum PeriodCloseStatus {
   CLOSED // 締め中
   REOPENED // 解除済み
+}
+
+// =============================================================================
+// B-212 PR-1: 仕入先・工場・外注先から受け取った請求書（買う側の請求）
+// 仕様確認書 v1.1（docs/specs/b-212-supplier-invoice-spec-confirmation-v1_1-2026-10-08.md）D-1〜D-10・
+// 実装ブリーフ P1-D1。Invoice（クライアント宛ての売上請求書）とは共用しない（D-10）。
+// ★TENANT_MODELS には入れない。companyId / deletedAt: null は action で手書きする（payments.ts と同じ）
+// =============================================================================
+
+/// B-212: 仕入先・工場・外注先などから受け取った請求書（1書類＝1行）
+model SupplierInvoice {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+
+  // 社内の番号 SIV-2026-0001（採番は action・deletedAt で絞らない）
+  invoiceNumber String @map("invoice_number") @db.VarChar(50)
+
+  // 相手先（マスターに当たったときだけ counterpartId。当たらなければ OTHER・null）
+  counterpartType        CounterpartType @map("counterpart_type")
+  counterpartId          String?         @map("counterpart_id")
+  counterpartNameRaw     String          @map("counterpart_name_raw") @db.VarChar(255) // CSV の相手先名（読み取ったまま）
+  counterpartCodeRaw     String?         @map("counterpart_code_raw") @db.VarChar(50) // CSV の相手先コード（B-070 の名寄せ）
+  counterpartCategoryRaw String?         @map("counterpart_category_raw") @db.VarChar(20) // CSV の相手先区分
+  registrationNumber     String?         @map("registration_number") @db.VarChar(20) // 登録番号 T+13桁
+
+  // 書類
+  documentType   String    @map("document_type") @db.VarChar(50)
+  documentNumber String    @map("document_number") @db.VarChar(100)
+  periodMonth    String    @map("period_month") @db.VarChar(7) // YYYY-MM（締め日の月・D-3）
+  issueDate      DateTime? @map("issue_date") @db.Date
+  closingDate    DateTime? @map("closing_date") @db.Date
+  dueDate        DateTime? @map("due_date") @db.Date
+
+  // 金額（外貨はそのまま・円は支払の段で・D-7）
+  subtotal    Decimal? @db.Decimal(15, 2)
+  taxAmount   Decimal? @map("tax_amount") @db.Decimal(15, 2)
+  totalAmount Decimal  @map("total_amount") @db.Decimal(15, 2)
+  currency    Currency @default(JPY)
+
+  // 計上／参照（D-4）。参照の書類は対の一括請求書の書類No を持つ
+  postingType          SupplierInvoicePostingType @map("posting_type")
+  pairedDocumentNumber String?                    @map("paired_document_number") @db.VarChar(100)
+
+  // 取り込み元
+  source         SupplierInvoiceSource @default(B070_CSV)
+  importBatchId  String?               @map("import_batch_id") // 1回の取り込みで共通の uuid
+  importFileName String?               @map("import_file_name") @db.VarChar(255)
+  sourceFileName String?               @map("source_file_name") @db.VarChar(255) // 原本 PDF の名前（CSV の原本ファイル）
+
+  notes           String? @db.Text
+  createdByUserId String? @map("created_by_user_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  lines SupplierInvoiceLine[]
+
+  @@unique([companyId, invoiceNumber])
+  @@index([companyId, periodMonth])
+  @@index([companyId, counterpartType, counterpartId])
+  @@index([companyId, documentNumber])
+  @@map("supplier_invoices")
+}
+
+/// B-212: 受け取った請求書の明細
+model SupplierInvoiceLine {
+  id                String @id @default(uuid())
+  supplierInvoiceId String @map("supplier_invoice_id")
+
+  lineNo     Int       @map("line_no")
+  slipDate   DateTime? @map("slip_date") @db.Date
+  slipNumber String?   @map("slip_number") @db.VarChar(100)
+
+  // 読み取ったまま
+  targetRaw   String? @map("target_raw") @db.VarChar(255) // 投入先（D-1）
+  itemCodeRaw String? @map("item_code_raw") @db.VarChar(100)
+  itemName    String? @map("item_name") @db.VarChar(255)
+
+  quantity    Decimal? @db.Decimal(15, 4)
+  unit        String?  @db.VarChar(20)
+  unitPrice   Decimal? @map("unit_price") @db.Decimal(15, 4)
+  amount      Decimal  @db.Decimal(15, 2) // 金額（税抜・外貨はそのまま D-7）
+  taxCategory String?  @map("tax_category") @db.VarChar(20)
+
+  // 品番への当て（D-1・D-5）。productId / costCategoryId は scalar（@relation なし・house style）
+  productId      String?                     @map("product_id")
+  matchStatus    SupplierInvoiceMatchStatus  @map("match_status")
+  matchedBy      SupplierInvoiceMatchSource? @map("matched_by")
+  costCategoryId String?                     @map("cost_category_id") // 品番なしの費用の費目（D-6）
+
+  // 送料の統計用（D-6・読めるときだけ）
+  packageCount Int?     @map("package_count")
+  pieceCount   Int?     @map("piece_count")
+  weightKg     Decimal? @map("weight_kg") @db.Decimal(10, 3)
+
+  sourcePage Int?    @map("source_page")
+  memo       String? @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  supplierInvoice SupplierInvoice @relation(fields: [supplierInvoiceId], references: [id], onDelete: Cascade)
+
+  @@index([supplierInvoiceId, lineNo])
+  @@index([productId])
+  @@index([costCategoryId])
+  @@map("supplier_invoice_lines")
+}
+
+/// B-212 D-5: 人が当てた対応（相手先・品番）を覚える。覚えた対応で当てた行は人が確かめる（RULE_PENDING）
+model SupplierInvoiceMatchRule {
+  id        String @id @default(uuid())
+  companyId String @map("company_id")
+
+  ruleType              SupplierInvoiceRuleType @map("rule_type")
+  scopeCounterpartType  CounterpartType?        @map("scope_counterpart_type") // PRODUCT のときの相手先（相手先ごとに分ける）
+  scopeCounterpartId    String?                 @map("scope_counterpart_id")
+  sourceKey             String                  @map("source_key") @db.VarChar(255) // 正規化した文字（normalizeKey）
+  targetCounterpartType CounterpartType?        @map("target_counterpart_type") // COUNTERPART のとき
+  targetId              String                  @map("target_id") // 相手先 id か productId
+
+  createdByUserId String? @map("created_by_user_id")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([companyId, ruleType, sourceKey])
+  @@map("supplier_invoice_match_rules")
+}
+
+enum SupplierInvoicePostingType {
+  COUNTED // 計上（集計に入れる）
+  REFERENCE // 明細参照（計上しない・内訳と原本の追跡用・D-4）
+}
+
+enum SupplierInvoiceSource {
+  B070_CSV // B-070 の月次 CSV
+  MANUAL // 手入力（PR-1 では器だけ）
+}
+
+enum SupplierInvoiceMatchStatus {
+  MATCHED // 品番に当たり確定（自動の完全一致・人が選んだ・人が確認した）
+  RULE_PENDING // 覚えた対応で当てた。人が確認するまで確定しない（D-5）
+  UNMATCHED // 未一致（候補が複数のときも含む）
+  NO_PRODUCT // 品番なし（その他経費・D-6）
+}
+
+enum SupplierInvoiceMatchSource {
+  CLIENT_PRODUCT_CODE // 先方品番
+  PRODUCT_CODE // 社内品番
+  PATTERN_NUMBER // パターンナンバー（ModelCode.patternNumber）
+  RULE // 覚えた対応
+  MANUAL // 人が選んだ
+}
+
+enum SupplierInvoiceRuleType {
+  COUNTERPART // 相手先名・コード → 仕入先／工場／外注先
+  PRODUCT // 投入先 → 品番
 }
