@@ -23,9 +23,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode
 }>) {
+  // suppressHydrationWarning: ブラウザ拡張（Feedly の data-feedly-mini など）が <html>/<body> に後から足す属性のずれだけを黙らせる。子の要素の hydration のずれは今までどおり警告される
   return (
-    <html lang="ja" className={cn("font-sans", inter.variable)}>
-      <body>
+    <html lang="ja" className={cn("font-sans", inter.variable)} suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <NextAuthSessionProvider>{children}</NextAuthSessionProvider>
         <Toaster richColors position="top-right" />
       </body>
