@@ -103,7 +103,7 @@ export function SupplierInvoiceDetailEditor({ detail, options }: { detail: Suppl
                   <TableCell className="font-mono text-xs">{l.targetRaw ?? "—"}</TableCell>
                   <TableCell className="text-sm">{l.itemName ?? "—"}{l.itemCodeRaw ? <span className="ml-1 text-xs text-muted-foreground">{l.itemCodeRaw}</span> : null}{l.memo ? <span className="block text-xs text-muted-foreground">{l.memo}</span> : null}</TableCell>
                   <TableCell className="text-right text-sm tabular-nums">{fmtNum(l.quantity)}{l.unit ? ` ${l.unit}` : ""}</TableCell>
-                  <TableCell className="text-right text-sm tabular-nums">{fmtNum(l.unitPrice)}</TableCell>
+                  <TableCell className="text-right text-sm tabular-nums">{fmtAmount(l.unitPrice, detail.currency)}</TableCell>
                   <TableCell className="text-right text-sm tabular-nums">{fmtAmount(l.amount, detail.currency)}</TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">
@@ -139,7 +139,7 @@ export function SupplierInvoiceDetailEditor({ detail, options }: { detail: Suppl
                       <SelectTrigger className="w-[210px]" aria-label={`行 ${l.lineNo} の費目`}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value={NONE}>費目なし</SelectItem>
-                        {options.costCategories.map((cc) => <SelectItem key={cc.id} value={cc.id}>{cc.level === 2 ? "　" : ""}{cc.categoryCode} {cc.categoryName}</SelectItem>)}
+                        {options.costCategories.map((cc) => <SelectItem key={cc.id} value={cc.id}>{cc.level === 2 ? "　" : ""}{cc.categoryName}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </TableCell>

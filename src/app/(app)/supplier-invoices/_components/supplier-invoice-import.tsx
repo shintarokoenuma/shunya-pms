@@ -1,9 +1,9 @@
 "use client"
 
-import { useMemo, useState, useTransition } from "react"
+import { useMemo, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { AlertTriangle, Loader2 } from "lucide-react"
+import { AlertTriangle, FileUp, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -80,6 +80,7 @@ function lineBadge(line: PreviewLine, choice: LineChoice): { label: string; vari
 export function SupplierInvoiceImport() {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [fileName, setFileName] = useState("")
   const [csvText, setCsvText] = useState("")
   const [preview, setPreview] = useState<SupplierInvoicePreview | null>(null)
@@ -88,7 +89,10 @@ export function SupplierInvoiceImport() {
   const cpOptions = useMemo(() => (preview ? counterpartOptions(preview.options) : []), [preview])
   const productLabel = useMemo(() => new Map((preview?.options.products ?? []).map((p) => [p.id, `${p.productCode}　${p.productName}`])), [preview])
 
-  const onFile = async (f: File | null) => {
+  // FIX-1: 読み取った後に input の value を消す（同じファイルを選び直しても onChange が発火するように）
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null
+    e.target.value = ""
     if (!f) return
     setFileName(f.name)
     setCsvText(await f.text())
@@ -147,11 +151,15 @@ export function SupplierInvoiceImport() {
     <div className="space-y-6">
       {/* ① ファイルを選ぶ */}
       <div className="flex flex-col gap-3 rounded-md border p-4 sm:flex-row sm:items-center">
-        <input type="file" accept=".csv,text/csv" onChange={(e) => onFile(e.target.files?.[0] ?? null)} className="text-sm" aria-label="CSV ファイル" disabled={isPending} />
+        {/* FIX-1: 素の <input type="file"> は文字だけに見えて押せると気づけないので、見えなくしてボタンから開く */}
+        <input ref={fileInputRef} type="file" accept=".csv,text/csv" onChange={onFile} className="sr-only" aria-label="CSV ファイル" disabled={isPending} tabIndex={-1} />
+        <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isPending}>
+          <FileUp className="mr-1 h-4 w-4" />CSV ファイルを選ぶ
+        </Button>
+        {fileName ? <span className="text-sm">{fileName}</span> : <span className="text-sm text-muted-foreground">まだ選ばれていません</span>}
         <Button type="button" onClick={read} disabled={isPending || !csvText}>
           {isPending && !preview ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}読み取る
         </Button>
-        {fileName ? <span className="text-sm text-muted-foreground">{fileName}</span> : null}
       </div>
 
       {preview ? (
@@ -270,7 +278,7 @@ export function SupplierInvoiceImport() {
                             <TableCell className="font-mono text-xs">{l.targetRaw ?? "—"}</TableCell>
                             <TableCell className="text-sm">{l.itemName ?? "—"}{l.itemCodeRaw ? <span className="ml-1 text-xs text-muted-foreground">{l.itemCodeRaw}</span> : null}</TableCell>
                             <TableCell className="text-right text-sm tabular-nums">{fmtNum(l.quantity)}{l.unit ? ` ${l.unit}` : ""}</TableCell>
-                            <TableCell className="text-right text-sm tabular-nums">{fmtNum(l.unitPrice)}</TableCell>
+                            <TableCell className="text-right text-sm tabular-nums">{fmtAmount(l.unitPrice, d.currency)}</TableCell>
                             <TableCell className="text-right text-sm tabular-nums">{fmtAmount(l.amount, d.currency)}</TableCell>
                             <TableCell>
                               <div className="flex flex-col gap-1">
@@ -309,7 +317,7 @@ export function SupplierInvoiceImport() {
                                 <SelectTrigger className="w-[210px]" aria-label={`行 ${l.lineNo} の費目`}><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value={NONE}>費目なし</SelectItem>
-                                  {preview.options.costCategories.map((cc) => <SelectItem key={cc.id} value={cc.id}>{cc.level === 2 ? "　" : ""}{cc.categoryCode} {cc.categoryName}</SelectItem>)}
+                                  {preview.options.costCategories.map((cc) => <SelectItem key={cc.id} value={cc.id}>{cc.level === 2 ? "　" : ""}{cc.categoryName}</SelectItem>)}
                                 </SelectContent>
                               </Select>
                               {l.costCategoryUnresolved ? <p className="mt-1 text-xs text-amber-700">CSV の費目「{l.costCategoryRaw}」はマスターに当たりません</p> : null}

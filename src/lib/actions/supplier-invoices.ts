@@ -718,7 +718,7 @@ export async function getSupplierInvoice(id: string): Promise<ActionResult<Suppl
         : Promise.resolve([]),
     ])
     const productLabel = new Map(products.map((p) => [p.id, `${p.productCode} ${p.productName}`]))
-    const costLabel = new Map(costs.map((c) => [c.id, `${c.categoryCode} ${c.categoryName}`]))
+    const costLabel = new Map(costs.map((c) => [c.id, c.categoryName])) // FIX-1: 費目は名前で出す（コードは出さない）
     const ymd = (d: Date | null) => (d ? toYmd(d) : null)
     return {
       ok: true,

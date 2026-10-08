@@ -1,4 +1,5 @@
 import type { CounterpartType, SupplierInvoiceMatchSource, SupplierInvoiceMatchStatus, SupplierInvoicePostingType } from "@prisma/client"
+import { formatMoney, formatQuantity } from "@/lib/supplier-invoice/format"
 
 /** B-212 PR-1: 仕入請求書の画面の語 */
 export const POSTING_TYPE_LABELS: Record<SupplierInvoicePostingType, string> = {
@@ -42,22 +43,17 @@ export const COUNTERPART_TYPE_LABELS: Record<Extract<CounterpartType, "SUPPLIER"
   OTHER: "相手先なし",
 }
 
-/** 金額の表示: JPY は ¥・整数、外貨は通貨コード＋小数2桁。外貨には「（円は未確定）」を添える（D-7） */
-export function fmtAmount(amount: string | number | null | undefined, currency: string): string {
-  if (amount == null || amount === "") return "—"
-  const n = typeof amount === "number" ? amount : Number(amount)
-  if (!Number.isFinite(n)) return String(amount)
-  if (currency === "JPY") {
-    const abs = Math.abs(Math.round(n)).toLocaleString("ja-JP")
-    return n < 0 ? `−¥${abs}` : `¥${abs}`
-  }
-  return `${currency} ${n.toLocaleString("ja-JP", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+/**
+ * 金額（金額税抜・単価・書類の税抜／消費税／税込）の表示: JPY は ¥＋小数なし、外貨は通貨コード＋小数 2 桁（FIX-1）。
+ * 文字列のまま整形する（Decimal を Number にしない）。確認画面・一覧・詳細で同じものを使う。外貨には画面側で「（円は未確定）」を添える（D-7）
+ */
+export function fmtAmount(amount: string | null | undefined, currency: string): string {
+  return formatMoney(amount, currency)
 }
 
-export function fmtNum(v: string | number | null | undefined): string {
-  if (v == null || v === "") return "—"
-  const n = typeof v === "number" ? v : Number(v)
-  return Number.isFinite(n) ? n.toLocaleString("ja-JP", { maximumFractionDigits: 4 }) : String(v)
+/** 数量の表示: 末尾の 0 を落として 3 桁区切り（文字列のまま） */
+export function fmtNum(v: string | null | undefined): string {
+  return formatQuantity(v)
 }
 
 export function fmtYmdSlash(s: string | null | undefined): string {
