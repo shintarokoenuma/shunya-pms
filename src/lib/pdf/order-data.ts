@@ -2,6 +2,7 @@ import { Prisma, Currency } from "@prisma/client"
 import { prisma } from "@/lib/prisma"
 import { primaryProductCode } from "@/lib/utils/product-code"
 import { getCompanyIssuer, type CompanyIssuer } from "@/lib/company-issuer"
+import { formatDesignCode } from "@/lib/design-code"
 
 /**
  * S-4c-2: 発注書 PDF 用に PO/WO を正規化した型。
@@ -10,7 +11,11 @@ import { getCompanyIssuer, type CompanyIssuer } from "@/lib/company-issuer"
 export type OrderPdfItem = {
   itemName: string
   itemCode: string | null
+  /** B-266 D-1/D-2: デザイン番号（表示用に整えた後・"D/# D-1"）。WO は常に null */
+  designCode: string | null
   colorCode: string | null
+  /** B-266 D-3: カラーウェイ名（PoItem.productColorwayId から・名前だけ）。色番が無いときの C# 欄。WO は常に null */
+  colorwayName: string | null
   quantity: number
   unit: string
   unitPrice: number | null
@@ -134,6 +139,18 @@ export async function getOrderPdfData(
     const materialIds = [
       ...new Set(items.map((i) => i.materialId).filter((v): v is string => !!v)),
     ]
+    // B-266 D-3: カラーウェイ名（画面 purchase-orders/[id]/page.tsx と同じく companyId で絞って引く）
+    const colorwayIds = [
+      ...new Set(items.map((i) => i.productColorwayId).filter((v): v is string => !!v)),
+    ]
+    const colorwayName = new Map<string, string>()
+    if (colorwayIds.length > 0) {
+      const cws = await prisma.productColorway.findMany({
+        where: { id: { in: colorwayIds }, companyId },
+        select: { id: true, colorwayName: true },
+      })
+      for (const c of cws) colorwayName.set(c.id, c.colorwayName)
+    }
     const matName = new Map<string, string>()
     const matCode = new Map<string, string>()
     if (materialIds.length > 0) {
@@ -165,7 +182,11 @@ export async function getOrderPdfData(
         itemCode:
           it.supplierItemCode ||
           (it.materialId ? matCode.get(it.materialId) ?? null : null),
+        designCode: formatDesignCode(it.designCode),
         colorCode: it.colorCode || null,
+        colorwayName: it.productColorwayId
+          ? colorwayName.get(it.productColorwayId) ?? null
+          : null,
         quantity: dec(it.quantity) ?? 0,
         unit: it.unit,
         unitPrice: dec(it.unitPrice),
@@ -223,7 +244,9 @@ export async function getOrderPdfData(
     items: items.map((it) => ({
       itemName: it.workDescription,
       itemCode: null,
+      designCode: null, // WoItem にデザイン番号は無い（B-266）
       colorCode: it.colorCode || null,
+      colorwayName: null,
       quantity: it.quantity,
       unit: it.unit,
       unitPrice: dec(it.unitPrice),

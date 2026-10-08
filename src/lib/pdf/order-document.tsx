@@ -74,6 +74,8 @@ const styles = StyleSheet.create({
   cPrice: { width: "13%", paddingHorizontal: 4, textAlign: "right" },
   cSub: { width: "13%", paddingHorizontal: 4, textAlign: "right" },
   mono: { fontFamily: PDF_FONT_FAMILY },
+  // B-266 D-1: 品番の欄の2段目（デザイン番号）。小さめ・薄い色
+  cCodeSub: { fontSize: 7, color: "#666", marginTop: 1 },
   totalRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
@@ -148,7 +150,8 @@ function OrderPage({ data }: { data: OrderPdfData }) {
         <View style={styles.table}>
           <View style={styles.th} fixed>
             <Text style={styles.cName}>品名</Text>
-            <Text style={styles.cCode}>品番</Text>
+            {/* B-266 D-1: 発注書（PO）だけ「品番 / D/#」。作業発注書はデザイン番号を持たない */}
+            <Text style={styles.cCode}>{data.docKind === "PO" ? "品番 / D/#" : "品番"}</Text>
             <Text style={styles.cColor}>C#</Text>
             <Text style={styles.cQty}>数量</Text>
             <Text style={styles.cUnit}>単位</Text>
@@ -158,9 +161,16 @@ function OrderPage({ data }: { data: OrderPdfData }) {
           {data.items.map((it, i) => (
             <View style={styles.tr} key={i} wrap={false}>
               <Text style={styles.cName}>{it.itemName}</Text>
-              <Text style={[styles.cCode, styles.mono]}>{it.itemCode ?? "—"}</Text>
+              {/* B-266 D-1: 1段目＝品番、2段目＝デザイン番号（小さく薄く）。品番が無ければデザイン番号を1段目に。どちらも無ければ「—」 */}
+              <View style={styles.cCode}>
+                <Text style={styles.mono}>{it.itemCode ?? it.designCode ?? "—"}</Text>
+                {it.itemCode && it.designCode ? (
+                  <Text style={[styles.mono, styles.cCodeSub]}>{it.designCode}</Text>
+                ) : null}
+              </View>
+              {/* B-266 D-3: 色番 → 無ければカラーウェイ名 → 無ければ「—」 */}
               <Text style={styles.cColor}>
-                {formatColorCode(it.colorCode) ?? "—"}
+                {formatColorCode(it.colorCode) ?? it.colorwayName ?? "—"}
               </Text>
               <Text style={styles.cQty}>{it.quantity.toLocaleString("ja-JP")}</Text>
               <Text style={styles.cUnit}>{it.unit}</Text>
