@@ -8,7 +8,8 @@ import {
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import { issuerTelFaxLine, labelMail, labelPostal } from "@/lib/company-issuer"
 import type { QuotationPdfData } from "./quotation-data"
-import { NO_BREAK_CALLBACK, QUOTATION_TEXT_W, type PdfWrap } from "./pdf-wrap"
+import { QUOTATION_TEXT_W, type PdfWrap } from "./pdf-wrap"
+import { Lines } from "./pdf-lines"
 
 registerPdfFonts()
 
@@ -155,10 +156,8 @@ export function QuotationDocument({ data, wrap }: { data: QuotationPdfData; wrap
           </View>
           {data.productRows.map((r, i) => (
             <View style={styles.tr} key={i} wrap={false}>
-              {/* B-268 D-2: 品名の欄は行を先に決めて折らせない */}
-              <Text style={styles.cName} hyphenationCallback={NO_BREAK_CALLBACK}>
-                {wrap.text(r.productLabel, QUOTATION_TEXT_W.name)}
-              </Text>
+              {/* B-268 D-2: 品名の欄は行を先に決め、1行ずつ Text で描く（折らせない） */}
+              <Lines lines={wrap.lines(r.productLabel, QUOTATION_TEXT_W.name)} style={styles.cName} />
               <Text style={styles.cQty}>
                 {r.quantity.toLocaleString("ja-JP")}
               </Text>
@@ -188,9 +187,7 @@ export function QuotationDocument({ data, wrap }: { data: QuotationPdfData; wrap
               </View>
               {data.initialCostRows.map((r, i) => (
                 <View style={styles.tr} key={i} wrap={false}>
-                  <Text style={styles.icLabel} hyphenationCallback={NO_BREAK_CALLBACK}>
-                    {wrap.text(r.label, QUOTATION_TEXT_W.label)}
-                  </Text>
+                  <Lines lines={wrap.lines(r.label, QUOTATION_TEXT_W.label)} style={styles.icLabel} />
                   <Text style={styles.icAmount}>{yen(r.amountJpy)}</Text>
                 </View>
               ))}

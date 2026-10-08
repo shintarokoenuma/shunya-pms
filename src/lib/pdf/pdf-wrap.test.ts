@@ -30,6 +30,7 @@ let passed = 0
   const m = await loadPdfMeasurer()
   const wrap = pdfWrapOf(m)
   const lines = (text: string, w: number, fs?: number) => wrap.text(text, w, fs).split("\n")
+  const lines2 = (text: string, w: number, fs?: number) => wrap.lines(text, w, fs) // 1行ずつ Text で描く形（改行の字送りなし）
 
   // ① 文字幅の定数（A4 595.28 − 36×2 = 523.28）
   {
@@ -131,11 +132,37 @@ let passed = 0
     const label = "品名: "
     const value = "リネン開襟シャツ ロングネームのテスト（27SS）"
     const w = m.widthOf(label + value) - 1
-    const rest = wrapAfterLabel(wrap, label, value, w)
-    const ls = rest.split("\n")
+    const ls = wrapAfterLabel(wrap, label, value, w)
     assert(ls.length === 2 && ls.join("") === value, `⑧-1 見出しを除いた値が2行: ${JSON.stringify(ls)}`)
     assert(m.widthOf(label + ls[0]) <= w, "⑧-2 先頭行は見出しを含めて幅に入る")
-    assert(wrapAfterLabel(wrap, label, "短い", 500) === "短い", "⑧-3 入るならそのまま")
+    assert(JSON.stringify(wrapAfterLabel(wrap, label, "短い", 500)) === JSON.stringify(["短い"]), "⑧-3 入るならそのまま1行")
+    passed++
+  }
+
+  // ⑩ dev INV-2026-0004（追加 commit）: 「BLACK×襟BLUEDENIM・S」を請求書の色・サイズの欄（66.76pt）で → 「BLUEDENIM」が割れない。
+  //    禁則の「・」と D-13 の「S」がくっついた「BLUEDENIM・S」が幅を超えるときは、くっつける前の境目で分け直す（入るなら禁則を守る）
+  {
+    const text = "BLACK×襟BLUEDENIM・S"
+    for (const [name, fn] of [["text", lines], ["lines", lines2]] as const) {
+      const ls = fn(text, INVOICE_TEXT_W.color)
+      assert(ls.some((l) => l.includes("BLUEDENIM")), `⑩-1 ${name}: BLUEDENIM が割れない: ${JSON.stringify(ls)}`)
+      assert(ls.join("") === text, `⑩-2 ${name}: 文字は欠けない`)
+      assert(ls.every((l) => m.widthOf(l) <= INVOICE_TEXT_W.color), `⑩-3 ${name}: どの行も幅に入る`)
+    }
+    assert(JSON.stringify(lines2(text, INVOICE_TEXT_W.color)) === JSON.stringify(["BLACK×襟", "BLUEDENIM・S"]), `⑩-4 lines: ${JSON.stringify(lines2(text, INVOICE_TEXT_W.color))}`)
+    // 禁則・D-13 は入るなら守る: 「・S」が BLUEDENIM と一緒に入る幅なら1単位のまま
+    assert(tokenizeForWrap("BLUEDENIM・S").join("|") === "BLUEDENIM・S", "⑩-5 幅に関係なく単位は BLUEDENIM・S")
+    const parts = splitLongUnit("BLUEDENIM・S", m.widthOf("BLUEDENIM") + 1, (s) => m.widthOf(s))
+    assert(parts.join("|") === "BLUEDENIM|・|S", `⑩-6 幅を超えたらくっつける前の境目で分ける: ${parts.join("|")}`)
+    passed++
+  }
+
+  // ⑪ lines（改行の字送りなし）は text（字送りあり）より詰めて入る: 幅ぎりぎりの文字列が1行に入る
+  {
+    const text = "SO-2026-0002・ABC"
+    const w = m.widthOf(text) + 0.5
+    assert(lines2(text, w).length === 1, `⑪-1 lines は幅いっぱい使える: ${JSON.stringify(lines2(text, w))}`)
+    assert(lines2("", 50).length === 1 && lines2("", 50)[0] === "", "⑪-2 空は [\"\"]")
     passed++
   }
 

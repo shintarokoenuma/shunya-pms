@@ -97,7 +97,8 @@ const NO_TAIL = new Set(Array.from("（「『【〔〈《"))
  * 最後の単位が1文字なら前の単位とつなぎ、1文字だけの行を残さない（D-13）。
  * 改行（\n）は1文字のまま残し、どちらにもくっつけない（textkit が段落に分けるので、強制改行になる）
  */
-export function tokenizeForWrap(text: string): string[] {
+/** 禁則・D-13 でくっつける前の単位: 英数字のかたまりは1つ、それ以外は1文字ずつ */
+function rawUnits(text: string): string[] {
   const raw: string[] = []
   let last = 0
   for (const m of text.matchAll(ALNUM_CHUNK)) {
@@ -107,6 +108,11 @@ export function tokenizeForWrap(text: string): string[] {
     last = i + m[0].length
   }
   if (last < text.length) raw.push(...Array.from(text.slice(last)))
+  return raw
+}
+
+export function tokenizeForWrap(text: string): string[] {
+  const raw = rawUnits(text)
   // 行頭禁則: 直前にくっつける（左から右）
   const merged: string[] = []
   for (const tok of raw) {
@@ -144,15 +150,23 @@ export type WrapCallback = (word: string) => string[]
 export const NO_BREAK_CALLBACK: WrapCallback = (word) => [word]
 
 /**
- * B-268 D-4: 幅より長い単位（英数字のかたまり）を小さく分ける。まず「-」「/」「_」の直後で分け（区切りは前の部分の末尾に残す）、
- * それでも幅に入らない部分だけ文字に分ける。幅に入る単位はそのまま返す
+ * B-268 D-4: 幅より長い単位を小さく分ける。幅に入る単位はそのまま返す。順番は
+ *   1. 禁則・D-13 でくっつける前の単位の境目（英数字のかたまりは割らない。禁則・D-13 は「入るなら守る」扱い・dev INV-2026-0004 の「BLUEDENIM・S」）
+ *   2. それでも入らない英数字のかたまりは「-」「/」「_」の直後（区切りは前の部分の末尾に残す）
+ *   3. それでも入らない部分だけ文字の間
  */
 export function splitLongUnit(unit: string, limit: number, widthOf: (s: string) => number): string[] {
   if (Array.from(unit).length <= 1 || widthOf(unit) <= limit) return [unit]
   const out: string[] = []
-  for (const part of unit.split(/(?<=[-/_])/)) {
-    if (Array.from(part).length > 1 && widthOf(part) > limit) out.push(...Array.from(part))
-    else out.push(part)
+  for (const piece of rawUnits(unit)) {
+    if (Array.from(piece).length <= 1 || widthOf(piece) <= limit) {
+      out.push(piece)
+      continue
+    }
+    for (const part of piece.split(/(?<=[-/_])/)) {
+      if (Array.from(part).length > 1 && widthOf(part) > limit) out.push(...Array.from(part))
+      else out.push(part)
+    }
   }
   return out
 }
@@ -227,18 +241,22 @@ export type Measurer = {
   fitText: (text: string, cellWidth: number, fontSize?: number) => string
   /** 列ごとの fitText */
   fitFor: (cellWidth: number, fontSize?: number) => FitText
-  /** B-268 D-3: 文字が入る幅（pt）を直接受けて行に分ける（セルの余白は呼ぶ側が引く）。帳票共通の入口 */
-  wrap: (text: string, textWidthPt: number, fontSize?: number) => string[]
-  /** wrap の行を "\n" でつないだもの（NO_BREAK_CALLBACK の Text に渡す） */
+  /**
+   * B-268 D-3: 文字が入る幅（pt）を直接受けて行に分ける（セルの余白は呼ぶ側が引く）。帳票共通の入口。
+   * reserveNewline: 行を "\n" でつないで1つの Text に渡すなら true（改行の字送りぶんを最後の行以外から引く）。
+   * 1行ずつ別の Text で描くなら false（改行の字が無いので幅いっぱい使える）
+   */
+  wrap: (text: string, textWidthPt: number, fontSize?: number, reserveNewline?: boolean) => string[]
+  /** wrap の行を "\n" でつないだもの（NO_BREAK_CALLBACK の Text に渡す・reserveNewline は常に true） */
   wrapText: (text: string, textWidthPt: number, fontSize?: number) => string
 }
 
 export function createMeasurer(font: FontkitLike): Measurer {
   const widthOf = (s: string, fontSize = TABLE_FONT_SIZE) =>
     s.length === 0 ? 0 : (font.layout(s).advanceWidth / font.unitsPerEm) * fontSize
-  const wrap = (text: string, textWidthPt: number, fontSize = TABLE_FONT_SIZE): string[] => {
+  const wrap = (text: string, textWidthPt: number, fontSize = TABLE_FONT_SIZE, reserveNewline = true): string[] => {
     if (!text) return [""]
-    return breakIntoLines(text, textWidthPt, (s) => widthOf(s, fontSize), widthOf("\n", fontSize))
+    return breakIntoLines(text, textWidthPt, (s) => widthOf(s, fontSize), reserveNewline ? widthOf("\n", fontSize) : 0)
   }
   const wrapText = (text: string, textWidthPt: number, fontSize = TABLE_FONT_SIZE) => wrap(text, textWidthPt, fontSize).join("\n")
   const lines = (text: string, cellWidth: number, fontSize = TABLE_FONT_SIZE): string[] =>

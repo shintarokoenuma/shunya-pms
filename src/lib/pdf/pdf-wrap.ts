@@ -48,14 +48,23 @@ export const DELIVERY_TEXT_W = {
   soLine: A4_CONTENT_W - 150,
 }
 
-/** 帳票の部品に渡す折り返し: text は行を "\n" でつないだ文字列を返す（fontSize の既定は 9） */
+/**
+ * 帳票の部品に渡す折り返し（fontSize の既定は 9）:
+ * - lines: 行の配列。1行ずつ別の Text で描く（pdf-lines.tsx の Lines）。改行の字が無いので字送りは引かない
+ * - text: 行を "\n" でつないだ文字列（1つの Text に渡す形・改行の字送りを引く）。★U+000A が NotoSansJP に無く予備の Helvetica が載るため、帳票では lines を使う
+ */
 export type PdfWrap = {
+  lines: (text: string, textWidthPt: number, fontSize?: number) => string[]
   text: (text: string, textWidthPt: number, fontSize?: number) => string
   widthOf: Measurer["widthOf"]
 }
 
 export function pdfWrapOf(m: Measurer): PdfWrap {
-  return { text: m.wrapText, widthOf: m.widthOf }
+  return {
+    lines: (text, textWidthPt, fontSize) => m.wrap(text, textWidthPt, fontSize, false),
+    text: m.wrapText,
+    widthOf: m.widthOf,
+  }
 }
 
 export async function loadPdfWrap(): Promise<PdfWrap> {
@@ -63,10 +72,11 @@ export async function loadPdfWrap(): Promise<PdfWrap> {
 }
 
 /**
- * 見出し付きの行（「品名: 〜」）: 見出しを含めて行に分け、見出しの後ろだけを返す（描画側は見出しを別の Text で前に置く）。
- * 先頭の行は必ず見出しで始まるので、その分を切る。万一そうでなければ値をそのまま返す（折り方は react-pdf 任せになるだけ）
+ * 見出し付きの行（「品名: 〜」）: 見出しを含めて行に分け、先頭の行から見出しを除いた行の配列を返す
+ * （描画側は先頭の行の前に見出しを別の Text で置き、2行目以降は Lines と同じく1行ずつ Text にする）。
+ * 先頭の行は必ず見出しで始まるので、その分を切る。万一そうでなければ値を1行で返す（折り方は react-pdf 任せになるだけ）
  */
-export function wrapAfterLabel(wrap: PdfWrap, label: string, value: string, textWidthPt: number, fontSize?: number): string {
-  const t = wrap.text(label + value, textWidthPt, fontSize)
-  return t.startsWith(label) ? t.slice(label.length) : value
+export function wrapAfterLabel(wrap: PdfWrap, label: string, value: string, textWidthPt: number, fontSize?: number): string[] {
+  const ls = wrap.lines(label + value, textWidthPt, fontSize)
+  return ls[0].startsWith(label) ? [ls[0].slice(label.length), ...ls.slice(1)] : [value]
 }

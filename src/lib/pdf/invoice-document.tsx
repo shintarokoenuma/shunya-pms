@@ -1,8 +1,9 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import type { InvoicePdfData } from "./invoice-data"
-import { NO_BREAK, NO_HYPHEN_BREAK, mdSlash, numText, yenText, ymdSlash } from "./invoice-rows"
+import { NO_HYPHEN_BREAK, mdSlash, numText, yenText, ymdSlash } from "./invoice-rows"
 import { INVOICE_TEXT_W, type PdfWrap } from "./pdf-wrap"
+import { Lines } from "./pdf-lines"
 
 registerPdfFonts()
 
@@ -141,21 +142,17 @@ function InvoicePage({ data, wrap }: { data: InvoicePdfData; wrap: PdfWrap }) {
         {data.rows.map((r, i) => (
           <View style={styles.tr} key={i} wrap={false}>
             <Text style={styles.cDate}>{mdSlash(r.date)}</Text>
-            {/* B-268 D-2: 伝票番号・品番・品名・摘要・色/サイズは行を先に決めて折らせない */}
-            <Text hyphenationCallback={NO_BREAK} style={styles.cDoc}>{wrap.text(r.docNumber ?? "", INVOICE_TEXT_W.doc)}</Text>
+            {/* B-268 D-2: 伝票番号・品番・品名・摘要・色/サイズは行を先に決め、1行ずつ Text で描く（折らせない） */}
+            <Lines lines={wrap.lines(r.docNumber ?? "", INVOICE_TEXT_W.doc)} style={styles.cDoc} />
             {r.kind === "item" ? (
               <View style={styles.cName}>
-                {r.itemCode ? (
-                  <Text hyphenationCallback={NO_BREAK} style={styles.cItemCode}>{wrap.text(r.itemCode, INVOICE_TEXT_W.name, 7.5)}</Text>
-                ) : null}
-                <Text hyphenationCallback={NO_BREAK}>{wrap.text(r.itemName, INVOICE_TEXT_W.name)}</Text>
+                {r.itemCode ? <Lines lines={wrap.lines(r.itemCode, INVOICE_TEXT_W.name, 7.5)} textStyle={styles.cItemCode} /> : null}
+                <Lines lines={wrap.lines(r.itemName, INVOICE_TEXT_W.name)} />
               </View>
             ) : (
-              <Text hyphenationCallback={NO_BREAK} style={styles.cName}>{wrap.text(r.description, INVOICE_TEXT_W.name)}</Text>
+              <Lines lines={wrap.lines(r.description, INVOICE_TEXT_W.name)} style={styles.cName} />
             )}
-            <Text hyphenationCallback={NO_BREAK} style={styles.cColor}>
-              {wrap.text(r.kind === "item" ? r.colorSize : "", INVOICE_TEXT_W.color)}
-            </Text>
+            <Lines lines={wrap.lines(r.kind === "item" ? r.colorSize : "", INVOICE_TEXT_W.color)} style={styles.cColor} />
             <Text style={styles.cQty}>{r.kind === "item" ? numText(r.quantity) : ""}</Text>
             <Text style={styles.cPrice}>{r.kind === "item" ? numText(r.unitPrice) : ""}</Text>
             <Text style={styles.cAmt}>{numText(r.amount)}</Text>

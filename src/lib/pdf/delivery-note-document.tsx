@@ -2,8 +2,9 @@ import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import { issuerAddressLine, issuerTelFaxLine, labelMail } from "@/lib/company-issuer"
 import type { DeliveryNotePdfData } from "./delivery-note-data"
-import { NO_BREAK, NO_HYPHEN_BREAK, numText, yenText, ymdSlash } from "./invoice-rows"
+import { NO_HYPHEN_BREAK, numText, yenText, ymdSlash } from "./invoice-rows"
 import { DELIVERY_TEXT_W, type PdfWrap } from "./pdf-wrap"
+import { Lines } from "./pdf-lines"
 
 registerPdfFonts()
 
@@ -84,10 +85,8 @@ function DeliveryNotePage({ data, wrap }: { data: DeliveryNotePdfData; wrap: Pdf
         <View style={styles.docMeta}>
           <Text style={styles.docNumber}>{data.deliveryNumber}</Text>
           <Text>納品日　{ymdSlash(data.deliveryDate)}</Text>
-          {/* B-268 D-2: 受注番号の列挙は行を先に決めて折らせない（番号の途中で折れない） */}
-          {data.soNumbers.length > 0 ? (
-            <Text hyphenationCallback={NO_BREAK}>{wrap.text(`受注　${data.soNumbers.join("、")}`, DELIVERY_TEXT_W.soLine)}</Text>
-          ) : null}
+          {/* B-268 D-2: 受注番号の列挙は行を先に決め、1行ずつ Text で描く（番号の途中で折れない） */}
+          {data.soNumbers.length > 0 ? <Lines lines={wrap.lines(`受注　${data.soNumbers.join("、")}`, DELIVERY_TEXT_W.soLine)} /> : null}
         </View>
       </View>
 
@@ -125,22 +124,23 @@ function DeliveryNotePage({ data, wrap }: { data: DeliveryNotePdfData; wrap: Pdf
         </View>
         {data.items.map((it, i) => (
           <View style={styles.tr} key={i} wrap={false}>
-            {/* B-268 D-2: 品番・品名・色・サイズは行を先に決めて折らせない */}
-            <Text hyphenationCallback={NO_BREAK} style={styles.cCode}>{wrap.text(it.itemCode ?? "", DELIVERY_TEXT_W.code)}</Text>
+            {/* B-268 D-2: 品番・品名・色・サイズは行を先に決め、1行ずつ Text で描く（折らせない） */}
+            <Lines lines={wrap.lines(it.itemCode ?? "", DELIVERY_TEXT_W.code)} style={styles.cCode} />
             <View style={[amounts ? styles.cName : styles.cNameWide, { flexDirection: "row", alignItems: "center" }]}>
               {/* P4-D21: 品名の列を狭めたので、タグと重ならないよう品名側を折り返す（札の幅ぶんを引いて行を決める） */}
-              <Text hyphenationCallback={NO_BREAK} style={{ flex: 1 }}>
-                {wrap.text(
+              <Lines
+                lines={wrap.lines(
                   it.productName,
                   (amounts ? DELIVERY_TEXT_W.name : DELIVERY_TEXT_W.nameWide) - kindTagWidth(wrap, it.lineKind),
                 )}
-              </Text>
+                style={{ flex: 1 }}
+              />
               {it.lineKind ? (
                 <Text style={styles.kindTag}>{it.lineKind === "DEPOSIT" ? "前受金" : "前受金充当"}</Text>
               ) : null}
             </View>
-            <Text hyphenationCallback={NO_BREAK} style={styles.cColor}>{wrap.text(it.colorName ?? "", DELIVERY_TEXT_W.color)}</Text>
-            <Text hyphenationCallback={NO_BREAK} style={styles.cSize}>{wrap.text(it.size ?? "", DELIVERY_TEXT_W.size)}</Text>
+            <Lines lines={wrap.lines(it.colorName ?? "", DELIVERY_TEXT_W.color)} style={styles.cColor} />
+            <Lines lines={wrap.lines(it.size ?? "", DELIVERY_TEXT_W.size)} style={styles.cSize} />
             <Text style={styles.cQty}>
               {numText(it.quantity)} {it.unit}
             </Text>
