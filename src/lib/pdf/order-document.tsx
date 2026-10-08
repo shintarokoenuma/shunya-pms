@@ -9,6 +9,8 @@ import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import { issuerTelFaxLine, labelMail, labelPostal } from "@/lib/company-issuer"
 import { formatColorCode } from "@/lib/color-code"
 import type { OrderPdfData } from "./order-data"
+import { NO_BREAK_CALLBACK, ORDER_TEXT_W, wrapAfterLabel, type PdfWrap } from "./pdf-wrap"
+import { Lines } from "./pdf-lines"
 
 registerPdfFonts()
 
@@ -98,8 +100,8 @@ function fmtDate(d: Date | null): string {
   return new Date(d).toLocaleDateString("ja-JP")
 }
 
-/** 発注書1件ぶんの Page。単票（OrderDocument）と縦積み（OrderDocumentMulti）で共有。 */
-function OrderPage({ data }: { data: OrderPdfData }) {
+/** 発注書1件ぶんの Page。単票（OrderDocument）と縦積み（OrderDocumentMulti）で共有。B-268: 明細と対象品番の行は wrap で先に決める */
+function OrderPage({ data, wrap }: { data: OrderPdfData; wrap: PdfWrap }) {
   const c = data.currency
   return (
     <Page size="A4" style={styles.page} wrap>
@@ -123,15 +125,22 @@ function OrderPage({ data }: { data: OrderPdfData }) {
                     {data.target.brandName}
                   </Text>
                 ) : null}
-                <Text style={styles.targetLine}>
-                  <Text style={styles.targetLabel}>品名: </Text>
-                  {data.target.productName}
-                  {data.target.season ? `（${data.target.season}）` : ""}
-                </Text>
-                <Text style={styles.targetLine}>
-                  <Text style={styles.targetLabel}>品番: </Text>
-                  {data.target.itemNumber}
-                </Text>
+                {/* B-268 D-2: 品名・品番は見出しを含めて行を先に決める（ブランドは対象外）。2行目以降は1行ずつ Text */}
+                {[
+                  ["品名: ", `${data.target.productName}${data.target.season ? `（${data.target.season}）` : ""}`],
+                  ["品番: ", data.target.itemNumber],
+                ].map(([label, value]) => {
+                  const [first, ...rest] = wrapAfterLabel(wrap, label, value, ORDER_TEXT_W.target)
+                  return (
+                    <View key={label}>
+                      <Text style={styles.targetLine} hyphenationCallback={NO_BREAK_CALLBACK}>
+                        <Text style={styles.targetLabel}>{label}</Text>
+                        {first}
+                      </Text>
+                      <Lines lines={rest} textStyle={styles.targetLine} />
+                    </View>
+                  )
+                })}
               </View>
             ) : null}
             {data.title ? <Text style={styles.orderToHint}>{data.title}</Text> : null}
@@ -160,18 +169,17 @@ function OrderPage({ data }: { data: OrderPdfData }) {
           </View>
           {data.items.map((it, i) => (
             <View style={styles.tr} key={i} wrap={false}>
-              <Text style={styles.cName}>{it.itemName}</Text>
+              {/* B-268 D-1/D-2: 品名・品番・D/#・C# は行を先に決め、1行ずつ Text で描く（react-pdf には折らせない） */}
+              <Lines lines={wrap.lines(it.itemName, ORDER_TEXT_W.name)} style={styles.cName} />
               {/* B-266 D-1: 1段目＝品番、2段目＝デザイン番号（小さく薄く）。品番が無ければデザイン番号を1段目に。どちらも無ければ「—」 */}
               <View style={styles.cCode}>
-                <Text style={styles.mono}>{it.itemCode ?? it.designCode ?? "—"}</Text>
+                <Lines lines={wrap.lines(it.itemCode ?? it.designCode ?? "—", ORDER_TEXT_W.code)} textStyle={styles.mono} />
                 {it.itemCode && it.designCode ? (
-                  <Text style={[styles.mono, styles.cCodeSub]}>{it.designCode}</Text>
+                  <Lines lines={wrap.lines(it.designCode, ORDER_TEXT_W.code, 7)} textStyle={[styles.mono, styles.cCodeSub]} />
                 ) : null}
               </View>
               {/* B-266 D-3: 色番 → 無ければカラーウェイ名 → 無ければ「—」 */}
-              <Text style={styles.cColor}>
-                {formatColorCode(it.colorCode) ?? it.colorwayName ?? "—"}
-              </Text>
+              <Lines lines={wrap.lines(formatColorCode(it.colorCode) ?? it.colorwayName ?? "—", ORDER_TEXT_W.color)} style={styles.cColor} />
               <Text style={styles.cQty}>{it.quantity.toLocaleString("ja-JP")}</Text>
               <Text style={styles.cUnit}>{it.unit}</Text>
               <Text style={styles.cPrice}>{yen(c, it.unitPrice)}</Text>
@@ -197,10 +205,10 @@ function OrderPage({ data }: { data: OrderPdfData }) {
   )
 }
 
-export function OrderDocument({ data }: { data: OrderPdfData }) {
+export function OrderDocument({ data, wrap }: { data: OrderPdfData; wrap: PdfWrap }) {
   return (
     <Document>
-      <OrderPage data={data} />
+      <OrderPage data={data} wrap={wrap} />
     </Document>
   )
 }
@@ -209,11 +217,11 @@ export function OrderDocument({ data }: { data: OrderPdfData }) {
  * B-086: 複数発注書を1つの PDF に縦積み（発注ごとに改ページ・案B）。
  * 各ページは独立した正式発注書のため宛先（仕入先/工場/外注先）の混在を許容する。
  */
-export function OrderDocumentMulti({ dataList }: { dataList: OrderPdfData[] }) {
+export function OrderDocumentMulti({ dataList, wrap }: { dataList: OrderPdfData[]; wrap: PdfWrap }) {
   return (
     <Document>
       {dataList.map((data, i) => (
-        <OrderPage key={i} data={data} />
+        <OrderPage key={i} data={data} wrap={wrap} />
       ))}
     </Document>
   )

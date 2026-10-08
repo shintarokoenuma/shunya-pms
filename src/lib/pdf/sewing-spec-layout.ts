@@ -86,8 +86,8 @@ export function textWidthOf(cellWidth: number): number {
 
 // ---------------------------------------------------------------- 折り方（D-10・D-12）
 const ALNUM_CHUNK = /[A-Za-z0-9][A-Za-z0-9._\-/#%+]*/g
-/** B-267 D-12: 行頭に来てはいけない字（直前のかたまりにくっつける） */
-const NO_HEAD = new Set(Array.from("、。，．・）」』】〕〉》！？：；"))
+/** B-267 D-12: 行頭に来てはいけない字（直前のかたまりにくっつける）。B-268: 長音「ー」・小書きの仮名・「々」を足す（本番 PO-2026-0009 の「べ｜ーカー」） */
+const NO_HEAD = new Set(Array.from("、。，．・）」』】〕〉》！？：；ーァィゥェォッャュョヮヵヶぁぃぅぇぉっゃゅょゎ々"))
 /** B-267 D-12: 行末に来てはいけない字（直後のかたまりにくっつける） */
 const NO_TAIL = new Set(Array.from("（「『【〔〈《"))
 
@@ -97,7 +97,8 @@ const NO_TAIL = new Set(Array.from("（「『【〔〈《"))
  * 最後の単位が1文字なら前の単位とつなぎ、1文字だけの行を残さない（D-13）。
  * 改行（\n）は1文字のまま残し、どちらにもくっつけない（textkit が段落に分けるので、強制改行になる）
  */
-export function tokenizeForWrap(text: string): string[] {
+/** 禁則・D-13 でくっつける前の単位: 英数字のかたまりは1つ、それ以外は1文字ずつ */
+function rawUnits(text: string): string[] {
   const raw: string[] = []
   let last = 0
   for (const m of text.matchAll(ALNUM_CHUNK)) {
@@ -107,6 +108,11 @@ export function tokenizeForWrap(text: string): string[] {
     last = i + m[0].length
   }
   if (last < text.length) raw.push(...Array.from(text.slice(last)))
+  return raw
+}
+
+export function tokenizeForWrap(text: string): string[] {
+  const raw = rawUnits(text)
   // 行頭禁則: 直前にくっつける（左から右）
   const merged: string[] = []
   for (const tok of raw) {
@@ -144,8 +150,30 @@ export type WrapCallback = (word: string) => string[]
 export const NO_BREAK_CALLBACK: WrapCallback = (word) => [word]
 
 /**
+ * B-268 D-4: 幅より長い単位を小さく分ける。幅に入る単位はそのまま返す。順番は
+ *   1. 禁則・D-13 でくっつける前の単位の境目（英数字のかたまりは割らない。禁則・D-13 は「入るなら守る」扱い・dev INV-2026-0004 の「BLUEDENIM・S」）
+ *   2. それでも入らない英数字のかたまりは「-」「/」「_」の直後（区切りは前の部分の末尾に残す）
+ *   3. それでも入らない部分だけ文字の間
+ */
+export function splitLongUnit(unit: string, limit: number, widthOf: (s: string) => number): string[] {
+  if (Array.from(unit).length <= 1 || widthOf(unit) <= limit) return [unit]
+  const out: string[] = []
+  for (const piece of rawUnits(unit)) {
+    if (Array.from(piece).length <= 1 || widthOf(piece) <= limit) {
+      out.push(piece)
+      continue
+    }
+    for (const part of piece.split(/(?<=[-/_])/)) {
+      if (Array.from(part).length > 1 && widthOf(part) > limit) out.push(...Array.from(part))
+      else out.push(part)
+    }
+  }
+  return out
+}
+
+/**
  * 1段落（改行なし）を tokenizeForWrap の単位で左から詰めて行に分ける（D-10・D-12・D-13）。
- * - 単位1つが幅より長いときだけ、その単位を文字の間で折る（D-10 の安全策）
+ * - 単位1つが幅より長いときだけ、その単位を区切りの直後→文字の間の順で折る（D-10 の安全策・B-268 D-4）
  * - reserve: 行の末尾に付ける "\n" の字送り（textkit は段落末の "\n" を .notdef・9pt 幅の字として数える）。
  *   文字列全体の最後の行だけは "\n" が付かないので、isLastParagraph のときは「残り全部が幅に入るなら最後の行」として reserve を取らない
  */
@@ -157,12 +185,11 @@ export function breakParagraph(
   isLastParagraph = true,
 ): string[] {
   const limit = widthPt - reserve
-  // 幅より長い単位は文字に分けておく（limit 基準・保守的）
+  // 幅より長い単位は小さく分けておく（limit 基準・保守的・B-268 D-4）
   const units: string[] = []
   for (const unit of tokenizeForWrap(paragraph)) {
     if (unit === "\n") continue
-    if (Array.from(unit).length > 1 && widthOf(unit) > limit) units.push(...Array.from(unit))
-    else units.push(unit)
+    units.push(...splitLongUnit(unit, limit, widthOf))
   }
   if (units.length === 0) return [""]
   const lines: string[] = []
@@ -214,20 +241,31 @@ export type Measurer = {
   fitText: (text: string, cellWidth: number, fontSize?: number) => string
   /** 列ごとの fitText */
   fitFor: (cellWidth: number, fontSize?: number) => FitText
+  /**
+   * B-268 D-3: 文字が入る幅（pt）を直接受けて行に分ける（セルの余白は呼ぶ側が引く）。帳票共通の入口。
+   * reserveNewline: 行を "\n" でつないで1つの Text に渡すなら true（改行の字送りぶんを最後の行以外から引く）。
+   * 1行ずつ別の Text で描くなら false（改行の字が無いので幅いっぱい使える）
+   */
+  wrap: (text: string, textWidthPt: number, fontSize?: number, reserveNewline?: boolean) => string[]
+  /** wrap の行を "\n" でつないだもの（NO_BREAK_CALLBACK の Text に渡す・reserveNewline は常に true） */
+  wrapText: (text: string, textWidthPt: number, fontSize?: number) => string
 }
 
 export function createMeasurer(font: FontkitLike): Measurer {
   const widthOf = (s: string, fontSize = TABLE_FONT_SIZE) =>
     s.length === 0 ? 0 : (font.layout(s).advanceWidth / font.unitsPerEm) * fontSize
-  const lines = (text: string, cellWidth: number, fontSize = TABLE_FONT_SIZE): string[] => {
+  const wrap = (text: string, textWidthPt: number, fontSize = TABLE_FONT_SIZE, reserveNewline = true): string[] => {
     if (!text) return [""]
-    return breakIntoLines(text, textWidthOf(cellWidth), (s) => widthOf(s, fontSize), widthOf("\n", fontSize))
+    return breakIntoLines(text, textWidthPt, (s) => widthOf(s, fontSize), reserveNewline ? widthOf("\n", fontSize) : 0)
   }
+  const wrapText = (text: string, textWidthPt: number, fontSize = TABLE_FONT_SIZE) => wrap(text, textWidthPt, fontSize).join("\n")
+  const lines = (text: string, cellWidth: number, fontSize = TABLE_FONT_SIZE): string[] =>
+    wrap(text, textWidthOf(cellWidth), fontSize)
   const countLines = (text: string, cellWidth: number, fontSize = TABLE_FONT_SIZE) =>
     Math.max(1, lines(text, cellWidth, fontSize).length)
   const fitText = (text: string, cellWidth: number, fontSize = TABLE_FONT_SIZE) => lines(text, cellWidth, fontSize).join("\n")
   const fitFor = (cellWidth: number, fontSize = TABLE_FONT_SIZE): FitText => (text) => fitText(text, cellWidth, fontSize)
-  return { widthOf, lines, countLines, fitText, fitFor }
+  return { widthOf, lines, countLines, fitText, fitFor, wrap, wrapText }
 }
 
 // ---------------------------------------------------------------- 高さの見積もり

@@ -135,10 +135,9 @@ function todayJst(): string {
 }
 
 /**
- * 同梱の NotoSansJP サブセットに無い文字を、同じ意味でフォントにある文字へ置き換える（PDF 表示専用・DB は触らない）。
- * ★2026-09-21 fontTools 実測: U+FF5E（～ 全角チルダ）・U+203B（※）は cmap に無く、U+301C（〜）はある。
- *   縫製指示の既定候補（sewing-instruction.ts）と dev の値は U+FF5E を使っている。
- *   フォントの差し替えは発注書・見積書にも影響するため別番号で扱う。
+ * DB 由来の文字列を PDF 用に整える（PDF 表示専用・DB は触らない）: 全角チルダ ～（U+FF5E）を波ダッシュ 〜（U+301C）に置き換える。
+ * B-208（2026-10-05）で同梱フォントを全字版にしたので ～ も ※ も出せるが、縫製指示の既定候補（sewing-instruction.ts）と
+ * dev の値が ～ を使っているため、紙面の表記をそろえる目的で置き換えだけ残している（B-268 D-6）
  */
 function pdfText(s: string): string {
   return s.replace(/～/g, "〜")

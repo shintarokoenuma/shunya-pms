@@ -1,7 +1,9 @@
 import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import type { InvoicePdfData } from "./invoice-data"
-import { NO_BREAK, NO_HYPHEN_BREAK, mdSlash, numText, yenText, ymdSlash } from "./invoice-rows"
+import { NO_HYPHEN_BREAK, mdSlash, numText, yenText, ymdSlash } from "./invoice-rows"
+import { INVOICE_TEXT_W, type PdfWrap } from "./pdf-wrap"
+import { Lines } from "./pdf-lines"
 
 registerPdfFonts()
 
@@ -12,7 +14,8 @@ registerPdfFonts()
  * - 取消は「取消」、再発行は「再発行（元: …）」（P4-D10）。ドラフトにも印は付けない（P4-D11）
  * - 表の見出しは各ページに繰り返す。フッタに番号とページ（P4-D18）
  * - 品番は折り返さない（P4-D21）。「品番 / 品名」の欄は上段に品番（小さく）・下段に品名
- * ★固定文言に ※ ～ は使わない（フォントに無い）
+ * - B-268: 明細の伝票番号・品番・品名・摘要・色/サイズは行を先に決めて（pdf-wrap.ts）NO_BREAK の Text に渡す
+ * ★固定文言の ※ ～ は B-208 の全字版フォントで出せる（以前は出せなかった名残で使っていない）
  */
 const styles = StyleSheet.create({
   page: {
@@ -73,7 +76,7 @@ function Box({ label, value, total = false }: { label: string; value: number; to
   )
 }
 
-function InvoicePage({ data }: { data: InvoicePdfData }) {
+function InvoicePage({ data, wrap }: { data: InvoicePdfData; wrap: PdfWrap }) {
   const monthTotal = data.subtotal + data.totalTaxAmount
   const showReduced = data.taxableAmount8 != null && data.taxableAmount8 !== 0
   return (
@@ -139,16 +142,17 @@ function InvoicePage({ data }: { data: InvoicePdfData }) {
         {data.rows.map((r, i) => (
           <View style={styles.tr} key={i} wrap={false}>
             <Text style={styles.cDate}>{mdSlash(r.date)}</Text>
-            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cDoc}>{r.docNumber ?? ""}</Text>
+            {/* B-268 D-2: 伝票番号・品番・品名・摘要・色/サイズは行を先に決め、1行ずつ Text で描く（折らせない） */}
+            <Lines lines={wrap.lines(r.docNumber ?? "", INVOICE_TEXT_W.doc)} style={styles.cDoc} />
             {r.kind === "item" ? (
               <View style={styles.cName}>
-                {r.itemCode ? <Text hyphenationCallback={NO_BREAK} style={styles.cItemCode}>{r.itemCode}</Text> : null}
-                <Text hyphenationCallback={NO_HYPHEN_BREAK}>{r.itemName}</Text>
+                {r.itemCode ? <Lines lines={wrap.lines(r.itemCode, INVOICE_TEXT_W.name, 7.5)} textStyle={styles.cItemCode} /> : null}
+                <Lines lines={wrap.lines(r.itemName, INVOICE_TEXT_W.name)} />
               </View>
             ) : (
-              <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cName}>{r.description}</Text>
+              <Lines lines={wrap.lines(r.description, INVOICE_TEXT_W.name)} style={styles.cName} />
             )}
-            <Text hyphenationCallback={NO_HYPHEN_BREAK} style={styles.cColor}>{r.kind === "item" ? r.colorSize : ""}</Text>
+            <Lines lines={wrap.lines(r.kind === "item" ? r.colorSize : "", INVOICE_TEXT_W.color)} style={styles.cColor} />
             <Text style={styles.cQty}>{r.kind === "item" ? numText(r.quantity) : ""}</Text>
             <Text style={styles.cPrice}>{r.kind === "item" ? numText(r.unitPrice) : ""}</Text>
             <Text style={styles.cAmt}>{numText(r.amount)}</Text>
@@ -213,11 +217,11 @@ function InvoicePage({ data }: { data: InvoicePdfData }) {
   )
 }
 
-export function InvoiceDocument({ dataList }: { dataList: InvoicePdfData[] }) {
+export function InvoiceDocument({ dataList, wrap }: { dataList: InvoicePdfData[]; wrap: PdfWrap }) {
   return (
     <Document>
       {dataList.map((data, i) => (
-        <InvoicePage key={i} data={data} />
+        <InvoicePage key={i} data={data} wrap={wrap} />
       ))}
     </Document>
   )

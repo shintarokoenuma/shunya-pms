@@ -2,6 +2,8 @@ import { Document, Page, View, Text, StyleSheet } from "@react-pdf/renderer"
 import { PDF_FONT_FAMILY, registerPdfFonts } from "./fonts"
 import { issuerTelFaxLine, labelMail, labelPostal } from "@/lib/company-issuer"
 import type { PeQuotationPdfData } from "./pe-quotation-data"
+import { QUOTATION_TEXT_W, type PdfWrap } from "./pdf-wrap"
+import { Lines } from "./pdf-lines"
 
 registerPdfFonts()
 
@@ -105,7 +107,7 @@ function fmtDate(d: Date | null): string {
   return new Date(d).toLocaleDateString("ja-JP")
 }
 
-export function PeQuotationDocument({ data }: { data: PeQuotationPdfData }) {
+export function PeQuotationDocument({ data, wrap }: { data: PeQuotationPdfData; wrap: PdfWrap }) {
   return (
     <Document>
       <Page size="A4" style={styles.page} wrap>
@@ -142,7 +144,8 @@ export function PeQuotationDocument({ data }: { data: PeQuotationPdfData }) {
           </View>
           {data.productRows.map((r, i) => (
             <View style={styles.tr} key={i} wrap={false}>
-              <Text style={styles.cName}>{r.productLabel}</Text>
+              {/* B-268 D-2: 品名の欄は行を先に決め、1行ずつ Text で描く（折らせない） */}
+              <Lines lines={wrap.lines(r.productLabel, QUOTATION_TEXT_W.name)} style={styles.cName} />
               <Text style={styles.cQty}>
                 {r.quantity.toLocaleString("ja-JP")}
               </Text>
@@ -167,7 +170,7 @@ export function PeQuotationDocument({ data }: { data: PeQuotationPdfData }) {
               </View>
               {data.separateRows.map((r, i) => (
                 <View style={styles.tr} key={i} wrap={false}>
-                  <Text style={styles.icLabel}>{r.label}</Text>
+                  <Lines lines={wrap.lines(r.label, QUOTATION_TEXT_W.label)} style={styles.icLabel} />
                   <Text style={styles.icAmount}>{yen(r.amountJpy)}</Text>
                 </View>
               ))}
