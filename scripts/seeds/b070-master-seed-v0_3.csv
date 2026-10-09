@@ -1,0 +1,542 @@
+﻿code,name,target,types,status,isIndividual,kubun,notes
+0010000,㈱ノルコーポレーション,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010010,㈱ＢＡＬ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010020,㈱リアルポイント ROBITA'S,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010030,BRIGHTEN,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010040,㈱ハスコ・エンタープライズ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010050,㈲ＨＯＳＵ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010060,㈱ファブフォー Fab4,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010070,reload,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010080,㈱アンカー,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010090,㈱カタチ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010100,㈱メディコム・トイ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010110,㈱ジンジャー,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010120,SLaK　ヨネヤマ　シンサク,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010130,A STORE ROBOT原宿　ミヤザキ ヨウジュ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010140,丸目 龍介様,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010150,若森大輔　iCON,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010160,一窯　㈱ﾃｨｰﾌｫｰ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010170,KIDLE HIGH&LOW,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010180,Backyard Builders,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010190,LIVE IN FAB EARTH(L.I.F.E)　ｵｵﾔﾅｵﾀｶ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010200,ワラジビーチサンダルジャパン㈱,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010210,HERREI,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010230,SEMBL,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010240,"Launch co., ltd",SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010250,ジェントル タカハシ  コウジ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010260,小路苑,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010270,㈱デニス東京,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010280,RIGURU JAPAN ﾓﾘﾑﾗﾐﾎ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010290,A-bonD Japan,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010300,PORTAILLE,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010310,㈱WM,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010320,中丸ジーンズ ナカマルタツノリ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010330,㈱トマト(製品),SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010340,㈲ジレ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010350,Winiche&co.,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010360,OMERSA,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010370,㈲HOMESTEAD,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010380,陳列美術品製作所,SUPPLIER,OTHER,ACTIVE,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010390,DERU GERMANY,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010440,JF by NAOTO TOSHIDA/SKR,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010550,RIVER MADE　カワギシシンタロウ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010560,ETHIC&TROPHIC,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010570,株式会社PARIS-TEXAS,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010580,株式会社シゲジン,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010590,有限会社ティッピラグ,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010600,㈱上野商会,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010610,㈱meanｓwhile,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010620,M80 SK8 SHOP,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010630,RECOUTURE,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010640,㈱SN4,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010650,㈱アーテス,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010660,㈱74,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010670,イケガミ帽子工房,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010680,SUI WORKS,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010690,㈱インクファクトリー,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010700,㈱ブレインバース,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010710,DeckersJapan合同会社,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010720,㈲john soi,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010730,中島　佳徳,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010740,㈱グッドスミス,SUPPLIER,OTHER,ACTIVE,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010750,アメアスポーツジャパン㈱,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010760,COSTS,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010770,志鎌英明,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010780,㈱フェイス,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0010790,株式会社ブルーベリー,SUPPLIER,OTHER,PAUSED,false,001,B-070名寄せマスターv0.3から登録。区分001 製品仕入先
+0020010,㈱フロア,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020020,㈱アサヒヤ,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020030,㈱ＡＬＰＥＧＡ,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020040,森谷　理恵,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020050,ＢＯＬＳＯ,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020060,青木縫製㈲,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020070,㈲アクティブソーイング,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020080,㈱廣瀬商会,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020090,㈱アイ・エム・ジー,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020100,㈱ディビジョンナイン,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020110,美東㈲,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020120,ラトルスネイク,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020130,㈲アルファ,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020140,㈱ナニワ,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020150,㈱久慈ソーイング,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020160,レオット,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020170,㈱ジューン・ファースト,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020180,㈲インアンドイン,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020190,㈲タカユウ,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020200,ユキノ縫製　モギカツユキ,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020210,㈲メンズカワムラ,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020220,㈱華凛灯,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020230,丸栄タワー,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020240,プランナイン㈱,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020250,㈱アイソトープ,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020260,㈲スパイラル,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020270,㈱Ｓｅｖｆｓ,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020280,（株）せとうちホールディングス,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020290,後藤典子,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020300,河村センイ株式会社,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020310,SKAT,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020320,THEE FUCKTORY,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020330,株式会社High tide,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020340,株式会社WAYFARER,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020350,㈱菊ち服飾,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020360,アルクロワークス㈱,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020370,㈱ミオタ,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020380,㈱SADAOMIX,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020390,BULL and TERRIER,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020400,株式会社エムシープロジェクト,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020410,AND.TOMMY,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0020420,U.d.s.㈱,FACTORY,SEWING,PAUSED,false,002,B-070名寄せマスターv0.3から登録。区分002 布帛工場
+0030000,㈲山下ニット,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0030010,名古路ニット㈱,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0030011,堀越莫大小,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0030020,㈱ビリーブ,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0030030,㈱ブリックインターナショナル,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0030040,紺忠企画㈱,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0030041,紺忠企画㈱　東京支店,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0030050,株式会社ノンノン,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0030060,有限会社ビーティティビー,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0030070,寺島繊維株式会社,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0030080,㈲齋藤繊維,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0030090,㈲ジェイ・エイ・イー,FACTORY,CUTTING,PAUSED,false,003,B-070名寄せマスターv0.3から登録。区分003 カット工場
+0040000,ニット工房編むーる,FACTORY,KNITTING,ACTIVE,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040010,ダンデリンク,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040020,佐川急便東かがわ市営業所止まり ﾀﾞﾝﾃﾞﾘﾝｸ,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040030,ホリゾン㈱,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040040,谷添ニット,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040050,㈱テラウチ,FACTORY,KNITTING,ACTIVE,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040060,㈲布宮メリヤス工業所,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040070,マルトメリヤス㈲,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040080,Lumos Appear　福井繊維,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040090,㈱福岡ニット,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040100,杉友ニット㈱,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040110,株式会社bona success,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040120,株式会社ディスカバーリンクせとうち,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040130,株式会社　ニットマテリアル,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040140,株式会社アマレーロ,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040150,株式会社川島メリヤス製造所,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040160,㈱フロンティア,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040170,塚野メリヤス（株）,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場。表記ゆれ:塚野メリヤス㈱
+0040180,㈱サンローレル,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040190,太陽毛絲紡績㈱,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0040200,富士工業㈱,FACTORY,KNITTING,PAUSED,false,004,B-070名寄せマスターv0.3から登録。区分004 ニット工場
+0050000,㈲クリエイティブクラン,FACTORY,OTHER,PAUSED,false,005,B-070名寄せマスターv0.3から登録。区分005 レザー工場
+0050010,㈱永和インターナショナル,FACTORY,OTHER,PAUSED,false,005,B-070名寄せマスターv0.3から登録。区分005 レザー工場
+0050020,㈱A.I.C,FACTORY,OTHER,PAUSED,false,005,B-070名寄せマスターv0.3から登録。区分005 レザー工場
+0060000,株式会社SEEP,FACTORY,OTHER,PAUSED,false,006,B-070名寄せマスターv0.3から登録。区分006 鞄、靴工場
+0060010,㈲チルファクトリー,FACTORY,OTHER,PAUSED,false,006,B-070名寄せマスターv0.3から登録。区分006 鞄、靴工場
+0060020,㈱サラブレイス,FACTORY,OTHER,PAUSED,false,006,B-070名寄せマスターv0.3から登録。区分006 鞄、靴工場
+0060030,㈱イクオリティ,FACTORY,OTHER,PAUSED,false,006,B-070名寄せマスターv0.3から登録。区分006 鞄、靴工場
+0060040,(株)KONG FUNG JAPAN,FACTORY,OTHER,PAUSED,false,006,B-070名寄せマスターv0.3から登録。区分006 鞄、靴工場
+0060050,㈱エーストレーディング,FACTORY,OTHER,PAUSED,false,006,B-070名寄せマスターv0.3から登録。区分006 鞄、靴工場
+0060060,㈱リフト,FACTORY,OTHER,PAUSED,false,006,B-070名寄せマスターv0.3から登録。区分006 鞄、靴工場
+0070010,㈲寺川コーポレーション,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070020,㈱ニット船冨,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070040,㈱桑原,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070060,(合)カラコロモ,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070070,Dan Van Hoa,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070080,㈱フォーディーアール,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070090,㈱幸伸,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070100,アンエプリ㈱,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070110,(株)アプロ,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070120,株式会社LWC,FACTORY,SEWING,ACTIVE,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070130,㈱マニューヴァ,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070140,KTBジャパン,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070150,KIM TUYEN BINH co.ltd,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070160,DNA TRADING co.ltd,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070170,BAGU DESIGN HYEJI YANG,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070180,SHUNYA VN,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070200,サンウエル タイランド,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070210,INSPECT VIETNAMサービス㈲,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070220,TAN DAI NGOC CO..LTD,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070230,SHANGHAI WANGSHENGJIE TRADE CO.LTD,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070240,㈱WEIRD LABO,FACTORY,SEWING,ACTIVE,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070250,TIANJIN LIHO GROUP ANIMAL BY-PRODUCTS,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0070260,TRUST ONE INC COMPANY LIMITED,FACTORY,SEWING,PAUSED,false,007,B-070名寄せマスターv0.3から登録。区分007 海外工場
+0080000,アトリエねむ,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0080010,㈲あすには,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0080011,ラグレシアス㈱,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0080020,Maison mole,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0080030,㈱ターグ,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0080040,㈲ヨレ,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0080050,立花竜誠,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0080060,㈱レオパール,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0080070,㈱サトーサンプリングルーム,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0080080,㈱フューチャーブランド,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0080090,㈱Good Things,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0080100,㈱ｻﾞ・ﾘｱﾙﾏｯｺｲｽﾞ・ｲﾝﾀｰﾅｼｮﾅﾙ,FACTORY,SAMPLE_MAKING,PAUSED,false,008,B-070名寄せマスターv0.3から登録。区分008 ｻﾝﾌﾟﾙ工場
+0090000,㈱アルチザナル・スピリット,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090010,㈱アルテックラボ 東京ショールーム,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090020,㈱ＷＨＯＶＡＬ,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090030,㈲加瀬加工所,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090040,石川染工㈱,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090050,㈱黒沼染工場,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090060,㈲オールドニュー,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090070,㈱杉屋ダイワークス,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090080,株式会社ワールドインダストリー富山,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090090,福井プレス　福井伸,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090100,株式会社ヒジラボ,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場。表記ゆれ:㈱ヒジラボ
+0090110,㈱内田染工場,FACTORY,DYEING,ACTIVE,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090120,備南染工㈱,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090130,D.C.I　㈱,FACTORY,DYEING,PAUSED,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0090140,株式会社ナック,FACTORY,DYEING,ACTIVE,false,009,B-070名寄せマスターv0.3から登録。区分009 染加工工場
+0100000,㈱シージェーピーグラフィックス,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100010,㈱パワー,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100020,TCIC JAPAN㈱,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100030,㈲マルプリント,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100040,㈱ナンバープラスジャパン,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100050,CHASSE,FACTORY,PRINTING|EMBROIDERY,ACTIVE,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100060,㈱プリズマ,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100070,㈱アートワールド,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100080,㈲ＤＤプロジェクト,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100090,㈱タートルエコーズ,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100100,㈱尾崎スクリーン,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100110,友星テクニクス㈲,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100120,㈱橋場グランド社,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100130,㈱チャンピオン,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100140,㈱ユー・コーポレーション,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100150,蔵本プロセス,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100160,㈲丸昇,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0100170,㈱Coke works,FACTORY,PRINTING|EMBROIDERY,PAUSED,false,010,B-070名寄せマスターv0.3から登録。区分010 刺繍ﾌﾟﾘﾝﾄ
+0110000,Ｄｉｚｍ（ディズム）,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110010,㈲セトセラミック,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110020,㈱タトゥーロ,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110030,白草毛織㈱,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110040,㈱４４３プランニング,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110050,㈱米澤高周波,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110060,㈱オオバ,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110070,アンカンパニー㈱,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110080,rongo rongo,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110090,PLEST,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110100,株式会社福富,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場。表記ゆれ:㈱福富
+0110110,㈲ユナイテッド・ハーツ,FACTORY,OTHER,ACTIVE,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110120,株式会社 プラーナル,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110130,COSMO LIQUID　近藤,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110140,合同会社NODYGOLD,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0110150,㈱成光ネクタイ,FACTORY,OTHER,PAUSED,false,011,B-070名寄せマスターv0.3から登録。区分011 小物工場
+0120000,㈱ロン・リバイス,FACTORY,OTHER,PAUSED,false,012,B-070名寄せマスターv0.3から登録。区分012 修正工場
+0120010,㈲小啓修正織物,FACTORY,OTHER,PAUSED,false,012,B-070名寄せマスターv0.3から登録。区分012 修正工場
+0120020,㈲フォロー,FACTORY,OTHER,PAUSED,false,012,B-070名寄せマスターv0.3から登録。区分012 修正工場
+0120030,㈲オーク物流,FACTORY,OTHER,PAUSED,false,012,B-070名寄せマスターv0.3から登録。区分012 修正工場
+0120040,株式会社 桑原　修正,FACTORY,OTHER,PAUSED,false,012,B-070名寄せマスターv0.3から登録。区分012 修正工場
+0130000,㈲シーグランド,FACTORY,FINISHING,PAUSED,false,013,B-070名寄せマスターv0.3から登録。区分013 ﾌﾟﾚｽ、仕上
+0130020,アイム・ケイ㈱,FACTORY,FINISHING,PAUSED,false,013,B-070名寄せマスターv0.3から登録。区分013 ﾌﾟﾚｽ、仕上
+0130030,㈲ティー・エフ・シー,FACTORY,FINISHING,ACTIVE,false,013,B-070名寄せマスターv0.3から登録。区分013 ﾌﾟﾚｽ、仕上
+0130040,社会福祉法人　就労支援施設　ゆに,FACTORY,FINISHING,PAUSED,false,013,B-070名寄せマスターv0.3から登録。区分013 ﾌﾟﾚｽ、仕上
+0130050,㈲スドーファッション,FACTORY,FINISHING,PAUSED,false,013,B-070名寄せマスターv0.3から登録。区分013 ﾌﾟﾚｽ、仕上
+0130060,合同会社エムティーエフ,FACTORY,FINISHING,PAUSED,false,013,B-070名寄せマスターv0.3から登録。区分013 ﾌﾟﾚｽ、仕上
+0130070,BPS㈱,FACTORY,FINISHING,PAUSED,false,013,B-070名寄せマスターv0.3から登録。区分013 ﾌﾟﾚｽ、仕上
+0130080,株式会社P・HOUSE,FACTORY,FINISHING,PAUSED,false,013,B-070名寄せマスターv0.3から登録。区分013 ﾌﾟﾚｽ、仕上。表記ゆれ:㈱P・HOUSE
+0130090,プログレスユーコー㈱,FACTORY,FINISHING,PAUSED,false,013,B-070名寄せマスターv0.3から登録。区分013 ﾌﾟﾚｽ、仕上
+0130100,合同会社ふくら,FACTORY,FINISHING,ACTIVE,false,013,B-070名寄せマスターv0.3から登録。区分013 ﾌﾟﾚｽ、仕上。支払先は別コード0350092(合同会社ふくら)
+0130110,株式会社Sun-flower,FACTORY,FINISHING,PAUSED,false,013,B-070名寄せマスターv0.3から登録。区分013 ﾌﾟﾚｽ、仕上。支払先は別コード0350093(株式会社Sun-flower)
+0140000,武藤早苗,FACTORY,OTHER,PAUSED,false,014,B-070名寄せマスターv0.3から登録。区分014 内職、ﾘﾒｲｸ
+0140010,藤井翔也,FACTORY,OTHER,PAUSED,false,014,B-070名寄せマスターv0.3から登録。区分014 内職、ﾘﾒｲｸ
+0140020,夏目　正弘,FACTORY,OTHER,PAUSED,false,014,B-070名寄せマスターv0.3から登録。区分014 内職、ﾘﾒｲｸ
+0140030,㈲ジャンピンジャップフラッシュ,FACTORY,OTHER,PAUSED,false,014,B-070名寄せマスターv0.3から登録。区分014 内職、ﾘﾒｲｸ
+0140040,鵜沼 怜美,FACTORY,OTHER,PAUSED,false,014,B-070名寄せマスターv0.3から登録。区分014 内職、ﾘﾒｲｸ
+0140050,山元タイム,FACTORY,OTHER,PAUSED,false,014,B-070名寄せマスターv0.3から登録。区分014 内職、ﾘﾒｲｸ
+0140060,VTA,FACTORY,OTHER,PAUSED,false,014,B-070名寄せマスターv0.3から登録。区分014 内職、ﾘﾒｲｸ
+0140070,TOKYO　NEEDLES,FACTORY,OTHER,PAUSED,false,014,B-070名寄せマスターv0.3から登録。区分014 内職、ﾘﾒｲｸ
+0140080,株式会社yuyu,FACTORY,OTHER,PAUSED,false,014,B-070名寄せマスターv0.3から登録。区分014 内職、ﾘﾒｲｸ。重複候補：どちらを残すか要確認
+0140090,NEGISHI DESIGN Lab.,FACTORY,OTHER,PAUSED,false,014,B-070名寄せマスターv0.3から登録。区分014 内職、ﾘﾒｲｸ
+0150000,㈱グリッパー亀岡,FACTORY,ASSEMBLY,PAUSED,false,015,B-070名寄せマスターv0.3から登録。区分015 附属付工場（付属打
+0150010,松永㈱,FACTORY,ASSEMBLY,PAUSED,false,015,B-070名寄せマスターv0.3から登録。区分015 附属付工場（付属打
+0150020,㈲東横穴カガリ工業所,FACTORY,ASSEMBLY,PAUSED,false,015,B-070名寄せマスターv0.3から登録。区分015 附属付工場（付属打
+0160000,小髙莫大小工業㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160010,フジサキテキスタイル㈱,SUPPLIER,FABRIC,ACTIVE,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160020,双日ファッション㈱本社,SUPPLIER,FABRIC,ACTIVE,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160030,双日ファッション㈱,SUPPLIER,FABRIC,ACTIVE,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160040,柴屋㈱,SUPPLIER,FABRIC,ACTIVE,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160050,㈱オリエントコーポレーション,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160060,㈱サンウェル,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160070,第一織物㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160090,㈱ジャパンブルー,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160100,㈱香取商店,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160110,㈲美鈴テキスタイル,SUPPLIER,FABRIC,ACTIVE,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160120,須磨商事㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160130,㈱有延商店,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160140,㈱おちあい,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160150,㈱岡本テキスタイル,SUPPLIER,FABRIC,ACTIVE,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160160,日本リフレクト化学工業㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160170,小原屋繊維㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160180,㈱カゲヤマ,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160190,北高㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160200,ロロ・ピアーナ　ジャパン㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160210,㈱オールブルー,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160220,村田長㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160230,仙田㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160240,㈱エムアンドエス,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160250,アルファテキスタイル㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160260,三井物産テクノプロダクツ㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160270,㈲コヤマインターナショナル,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160280,マスダ㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160290,マスダ㈱　東京支店,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160300,㈲小川テキスタイル,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160310,川越政㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160320,赤堀産業㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160340,宇仁繊維㈱,SUPPLIER,FABRIC,ACTIVE,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160350,ニシムラ㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160360,㈱シムラ,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160370,㈱鈴木工芸所,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160380,森菊㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160390,㈱ウッディパレス,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160391,㈱ウッディパレス　千駄ヶ谷事務所,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160400,明和産業㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160410,㈱トゥルーアイ,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160420,テクノビジョンウェイズ㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160430,有限会社　中山商店,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地。表記ゆれ:㈲中山商店
+0160431,有限会社　中山商店　東京営業所,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160440,㈱槙田商店,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160450,京美染色㈱,SUPPLIER,FABRIC,ACTIVE,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160460,㈱日本ハイパイル,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160470,永井撚糸㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160480,㈱ドーコーボウ,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160490,㈲紀南莫大小工場,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160500,㈱BICHO,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160510,㈱ROKAL,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160520,スタイルテックス㈱,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0160530,㈲日新社,SUPPLIER,FABRIC,PAUSED,false,016,B-070名寄せマスターv0.3から登録。区分016 生地
+0170000,㈱久保柳商店,SUPPLIER,OTHER,PAUSED,false,017,B-070名寄せマスターv0.3から登録。区分017 革屋
+0170010,㈲田村光商店,SUPPLIER,OTHER,PAUSED,false,017,B-070名寄せマスターv0.3から登録。区分017 革屋
+0180000,㈱リキニット,SUPPLIER,THREAD,PAUSED,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180010,三幸毛糸紡績㈱,SUPPLIER,THREAD,PAUSED,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180020,佐藤繊維㈱,SUPPLIER,THREAD,ACTIVE,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180030,東洋紡糸工業㈱,SUPPLIER,THREAD,PAUSED,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180040,丸安毛糸㈱,SUPPLIER,THREAD,ACTIVE,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180050,深喜毛織㈱,SUPPLIER,THREAD,PAUSED,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180060,三山㈱,SUPPLIER,THREAD,ACTIVE,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180070,㈱滝善,SUPPLIER,THREAD,ACTIVE,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180080,東和毛織㈱,SUPPLIER,THREAD,PAUSED,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180090,堀田丸正㈱,SUPPLIER,THREAD,PAUSED,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180100,近藤㈱,SUPPLIER,THREAD,PAUSED,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180120,小金毛織㈱,SUPPLIER,THREAD,ACTIVE,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180130,綾部紡績㈱,SUPPLIER,THREAD,PAUSED,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0180140,㈱タルティ,SUPPLIER,THREAD,PAUSED,false,018,B-070名寄せマスターv0.3から登録。区分018 糸
+0190000,㈱ノート,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190010,㈱イーストン,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190020,㈱丸東,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190030,朝日ファスナー㈱,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190040,㈲ケー・エム・アール,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190050,㈲フルカワ,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190080,㈱０１,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190090,㈱クロップオザキ,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190100,滝清㈱,SUPPLIER,TRIM|ACCESSORY,ACTIVE,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190110,㈱永廣堂本店,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190120,㈲オフィスエレガンスワン,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190130,㈱田中ケース,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190150,㈱アプラス,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190160,島田商事,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190170,清原㈱,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190180,杉原産業㈱,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190190,㈱クロスポイント,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料。表記ゆれ:クロスポイント（㈱"
+0190200,㈱三景,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190210,㈱サント,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190220,㈱渡辺繊維,SUPPLIER,TRIM|ACCESSORY,ACTIVE,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190230,東京吉岡株式会社,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料。重複候補：どちらを残すか要確認"
+0190240,株式会社イブロ,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190250,エルミタージュ㈱,SUPPLIER,TRIM|ACCESSORY,ACTIVE,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190260,株式会社アスカ,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190270,㈱ムラタ,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190280,熊谷商事㈱,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190290,fantasma company,SUPPLIER,TRIM|ACCESSORY,PAUSED,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料"
+0190300,有限会社田中商店,SUPPLIER,TRIM|ACCESSORY,ACTIVE,false,019,"B-070名寄せマスターv0.3から登録。区分019 附属,材料。表記ゆれ:㈲田中商店"
+0200000,㈱ラックンドック,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200010,日本ストレッチ㈱,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200020,トムス㈱,SUPPLIER,BODY,ACTIVE,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200030,康貿易商事㈱,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200040,キャブ㈱,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200050,フェリック㈱,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200060,㈲やまもと,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200070,VIA TRANSPORTS,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入。表記ゆれ:㈱ビアトランスポーツ
+0200080,㈲アフリカンスクエアー,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200090,㈱食と関係価値研究所,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200100,㈱Mr.Clean,SUPPLIER,BODY,ACTIVE,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200110,BER BER JIN,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200120,㈱ＤＡＱ,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200130,㈱ｐｈｉｌｉｐ,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200140,㈱DESERT SNOW,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200150,㈱イチオクネット,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200160,楽天パーティグッズ,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200170,㈲マザーリップ,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200180,㈱松栄シルク,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200190,ＦＩＲＳＴ　ＳＴＥＰ,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200200,（株）garden,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200210,合同会社BRACKETS,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200220,CHAPPIE株式会社,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200230,㈲デザートスノー,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200240,㈱鈴可,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200250,三浦商事㈱,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0200260,Sunway International㈱,SUPPLIER,BODY,PAUSED,false,020,B-070名寄せマスターv0.3から登録。区分020 BODY 仕入
+0210000,モデリストファクトリー㈱,CONTRACTOR,PATTERN_MAKING,PAUSED,false,021,B-070名寄せマスターv0.3から登録。区分021 パターン
+0210010,㈱トワル,CONTRACTOR,PATTERN_MAKING,ACTIVE,false,021,B-070名寄せマスターv0.3から登録。区分021 パターン
+0210020,㈱糸,CONTRACTOR,PATTERN_MAKING,PAUSED,false,021,B-070名寄せマスターv0.3から登録。区分021 パターン
+0210030,三浦勇太,CONTRACTOR,PATTERN_MAKING,PAUSED,false,021,B-070名寄せマスターv0.3から登録。区分021 パターン
+0210040,㈱ませぎ型紙製作印,CONTRACTOR,PATTERN_MAKING,PAUSED,false,021,B-070名寄せマスターv0.3から登録。区分021 パターン
+0210050,ツヨシエトワールジャポン,CONTRACTOR,PATTERN_MAKING,PAUSED,false,021,B-070名寄せマスターv0.3から登録。区分021 パターン
+0210060,渋谷地下街㈱,CONTRACTOR,PATTERN_MAKING,PAUSED,false,021,B-070名寄せマスターv0.3から登録。区分021 パターン
+0210070,㈱ライフサイズプラス,CONTRACTOR,PATTERN_MAKING,PAUSED,false,021,B-070名寄せマスターv0.3から登録。区分021 パターン
+0210080,㈱MODELISM,CONTRACTOR,PATTERN_MAKING,PAUSED,false,021,B-070名寄せマスターv0.3から登録。区分021 パターン
+0210090,㈱日本アパレルシステムサイエンス,CONTRACTOR,PATTERN_MAKING,PAUSED,false,021,B-070名寄せマスターv0.3から登録。区分021 パターン
+0220000,㈱ヴェスト,SUPPLIER,LABEL,PAUSED,false,022,B-070名寄せマスターv0.3から登録。区分022 ネーム
+0220010,テンタック㈱,SUPPLIER,LABEL,PAUSED,false,022,B-070名寄せマスターv0.3から登録。区分022 ネーム
+0220020,㈲クイックマウス,SUPPLIER,LABEL,PAUSED,false,022,B-070名寄せマスターv0.3から登録。区分022 ネーム
+0220030,増成織ネーム㈱,SUPPLIER,LABEL,ACTIVE,false,022,B-070名寄せマスターv0.3から登録。区分022 ネーム
+0220040,国際文化ネーム㈱,SUPPLIER,LABEL,PAUSED,false,022,B-070名寄せマスターv0.3から登録。区分022 ネーム
+0220060,有限会社マイティー,SUPPLIER,LABEL,ACTIVE,false,022,B-070名寄せマスターv0.3から登録。区分022 ネーム。重複候補：どちらを残すか要確認
+0220080,㈲ﾚｲﾝﾎﾞｰﾜｰｸｽ,SUPPLIER,LABEL,PAUSED,false,022,B-070名寄せマスターv0.3から登録。区分022 ネーム
+0220100,セブン商事株式会社,SUPPLIER,LABEL,PAUSED,false,022,B-070名寄せマスターv0.3から登録。区分022 ネーム
+0220110,㈱シャトラス,SUPPLIER,LABEL,PAUSED,false,022,B-070名寄せマスターv0.3から登録。区分022 ネーム
+0230000,豊田通商㈱ ㈱ＰＡＬ　Lui's事業部,SUPPLIER,OTHER,PAUSED,false,023,B-070名寄せマスターv0.3から登録。区分023 商社
+0230010,伊藤忠ファッションシステム株式会社,SUPPLIER,OTHER,PAUSED,false,023,B-070名寄せマスターv0.3から登録。区分023 商社
+0240000,佐川急便㈱,SUPPLIER,OTHER,ACTIVE,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240010,㈱G.TPLANNING,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240020,ヤマト運輸㈱,SUPPLIER,OTHER,ACTIVE,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240030,チャリンコブラザーズ　柴崎大洋,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240040,ﾊﾟﾅﾙﾋﾟﾅ ﾜｰﾙﾄﾞﾄﾗﾝｽﾎﾟｰﾄｼﾞｬﾊﾟﾝ,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240050,㈱スコアジャパン,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240060,㈲エムジェイキュー,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240070,伊藤忠ロジスティクス㈱,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240080,ＤＨＬジャパン㈱,SUPPLIER,OTHER,ACTIVE,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240090,ＳＧＨグローバル・ジャパン㈱,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240100,㈱OCS,SUPPLIER,OTHER,ACTIVE,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240110,東京納品代行㈱,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240120,㈱ライズ,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240130,㈱HANA　EXPRESS,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240160,澁澤ワールドトランスポート㈱,SUPPLIER,OTHER,ACTIVE,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240170,㈱リベロ・ヴィアッジ,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240180,株式会社LOGIWORKS.JAPAN,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240190,Fedex合同会社,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240200,㈱日新,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240210,㈱JW EXPRESS,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240220,GF㈱,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社。表記ゆれ:ジーエフ㈱
+0240230,ユーピーエス・ジャパン㈱,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0240240,ブリリアントトランスポート㈱,SUPPLIER,OTHER,PAUSED,false,024,B-070名寄せマスターv0.3から登録。区分024 運送会社
+0250000,㈱帆風,SUPPLIER,OTHER,PAUSED,false,025,B-070名寄せマスターv0.3から登録。区分025 印刷、紙器
+0250010,㈱千葉印刷,SUPPLIER,OTHER,PAUSED,false,025,B-070名寄せマスターv0.3から登録。区分025 印刷、紙器
+0250020,㈱アースダンボール,SUPPLIER,OTHER,PAUSED,false,025,B-070名寄せマスターv0.3から登録。区分025 印刷、紙器
+0250030,昭栄印刷㈱,SUPPLIER,OTHER,PAUSED,false,025,B-070名寄せマスターv0.3から登録。区分025 印刷、紙器
+0250040,（株）　藤田,SUPPLIER,OTHER,PAUSED,false,025,B-070名寄せマスターv0.3から登録。区分025 印刷、紙器
+0260000,ブランド支給,SUPPLIER,OTHER,PAUSED,false,026,B-070名寄せマスターv0.3から登録。区分026 ブランド支
+0270000,㈱Ｈａｎｘ　山田光弘,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270010,IQCworks山下晃敬,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270030,㈱ａｄｏｎｕｓｔ,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270040,㈱フォーライト,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270060,蒲地満,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270070,㈲アボカド,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270090,STYLIST豊島猛,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270100,清田　佳未,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270110,松平浩市,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270120,room4合同会社,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270130,㈱ENKEL,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270140,zigen写真事務所（テラシタ　タカシ）,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270150,株式会社SUNデザイン研究所,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270160,Stylist　TEPPEI,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270170,Hair&Make up NORI,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270180,小北麻由,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270190,今城薫,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270210,野田祐一郎,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270220,Mote Sinabel,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270230,森岡　祐介,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270240,武正　竜馬,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270250,（一社）日本ファッションウイーク推進機構,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270260,株式会社VELBED.,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0270270,小沼　孝太朗,SUPPLIER,OTHER,PAUSED,false,027,B-070名寄せマスターv0.3から登録。区分027 広告宣伝
+0280000,㈱見真ビル,SUPPLIER,OTHER,ACTIVE,false,028,B-070名寄せマスターv0.3から登録。区分028 家賃その他
+0280010,原宿パークマンション,SUPPLIER,OTHER,PAUSED,false,028,B-070名寄せマスターv0.3から登録。区分028 家賃その他
+0280020,オフィスカスミ,SUPPLIER,OTHER,PAUSED,false,028,B-070名寄せマスターv0.3から登録。区分028 家賃その他
+0280030,UBM JAPAN株式会社,SUPPLIER,OTHER,PAUSED,false,028,B-070名寄せマスターv0.3から登録。区分028 家賃その他
+0290000,㈱ラクーン,FACTORY,OTHER,PAUSED,false,029,B-070名寄せマスターv0.3から登録。区分029 その他工場
+0290010,GRASSE TOKYO,FACTORY,OTHER,PAUSED,false,029,B-070名寄せマスターv0.3から登録。区分029 その他工場
+0290020,ｃａｍｃｏ　嘉村,FACTORY,OTHER,PAUSED,false,029,B-070名寄せマスターv0.3から登録。区分029 その他工場
+0290030,一般財団法人カケンテストセンター,FACTORY,OTHER,ACTIVE,false,029,B-070名寄せマスターv0.3から登録。区分029 その他工場
+0290040,佐藤造園設計,FACTORY,OTHER,ACTIVE,false,029,B-070名寄せマスターv0.3から登録。区分029 その他工場
+0290050,㈱WEED HEIGHTS,FACTORY,OTHER,PAUSED,false,029,B-070名寄せマスターv0.3から登録。区分029 その他工場
+0290060,株式会社工芸社,FACTORY,OTHER,PAUSED,false,029,B-070名寄せマスターv0.3から登録。区分029 その他工場
+0290070,株式会社ソスウ,FACTORY,OTHER,PAUSED,false,029,B-070名寄せマスターv0.3から登録。区分029 その他工場
+0290080,一般財団法人　ボーケン品質評価機構　東京,FACTORY,OTHER,PAUSED,false,029,B-070名寄せマスターv0.3から登録。区分029 その他工場
+0290090,㈲阿部キルテング,FACTORY,OTHER,PAUSED,false,029,B-070名寄せマスターv0.3から登録。区分029 その他工場
+0300000,工場手配,FACTORY,OTHER,PAUSED,false,030,B-070名寄せマスターv0.3から登録。区分030 工場手配
+0310000,グローバライズ株式会社,SUPPLIER,OTHER,PAUSED,false,031,B-070名寄せマスターv0.3から登録。区分031 WEB関連
+0350000,Mao simmons,SUPPLIER,OTHER,PAUSED,false,035,B-070名寄せマスターv0.3から登録。区分035 ライセンス
+0350010,有限会社ガイア,SUPPLIER,OTHER,PAUSED,false,035,B-070名寄せマスターv0.3から登録。区分035 ライセンス
+0350020,上田歩武,SUPPLIER,OTHER,PAUSED,false,035,B-070名寄せマスターv0.3から登録。区分035 ライセンス
+0350030,デイビットカッパー モンスターポウ,SUPPLIER,OTHER,PAUSED,false,035,B-070名寄せマスターv0.3から登録。区分035 ライセンス
+0350040,守矢努,SUPPLIER,OTHER,PAUSED,false,035,B-070名寄せマスターv0.3から登録。区分035 ライセンス
+0350050,SALOTEZUMO　岡野寿樹様,SUPPLIER,OTHER,PAUSED,false,035,B-070名寄せマスターv0.3から登録。区分035 ライセンス
+0350060,一般社団法人 日本美術著作権協会,SUPPLIER,OTHER,PAUSED,false,035,B-070名寄せマスターv0.3から登録。区分035 ライセンス
+0350070,本郷　誠,SUPPLIER,OTHER,PAUSED,false,035,B-070名寄せマスターv0.3から登録。区分035 ライセンス
+0350080,ユニバーサルミュージック合同会社,SUPPLIER,OTHER,ACTIVE,false,035,B-070名寄せマスターv0.3から登録。区分035 ライセンス
+0350090,株式会社バディーズ,SUPPLIER,OTHER,PAUSED,false,035,B-070名寄せマスターv0.3から登録。区分035 ライセンス。表記ゆれ:㈱バディーズ
+0350091,WARNER MUSIC INTERNATIONAL SERVICES LTD,SUPPLIER,OTHER,PAUSED,false,035,B-070名寄せマスターv0.3から登録。区分035 ライセンス
+0500010,木村賢正,CONTRACTOR,OTHER,ACTIVE,true,050,B-070名寄せマスターv0.3から登録。区分050 契約スタッ
+0500020,豊田理光,CONTRACTOR,OTHER,PAUSED,true,050,B-070名寄せマスターv0.3から登録。区分050 契約スタッ。※レガシー側の支払先マスタは名称が入れ替わったまま(要レガシー側修正)
+0500030,佐藤　宏,CONTRACTOR,OTHER,ACTIVE,true,050,B-070名寄せマスターv0.3から登録。区分050 契約スタッ。※レガシー側の支払先マスタは名称が入れ替わったまま(要レガシー側修正)
+0500040,小林　南海子,CONTRACTOR,OTHER,PAUSED,true,050,B-070名寄せマスターv0.3から登録。区分050 契約スタッ
+0500050,永嶌　智行,CONTRACTOR,OTHER,PAUSED,true,050,B-070名寄せマスターv0.3から登録。区分050 契約スタッ
+0500060,長谷川　周平,CONTRACTOR,OTHER,PAUSED,true,050,B-070名寄せマスターv0.3から登録。区分050 契約スタッ
+0500070,岡本　有加,CONTRACTOR,OTHER,PAUSED,true,050,B-070名寄せマスターv0.3から登録。区分050 契約スタッ
+0500080,瓜田のどか,CONTRACTOR,OTHER,PAUSED,true,050,B-070名寄せマスターv0.3から登録。区分050 契約スタッ
+5000010,会社　経費,SUPPLIER,OTHER,PAUSED,false,500,B-070名寄せマスターv0.3から登録。区分500 経費 ※名称マスタ未登録のため補完
+5000020,生産　経費,SUPPLIER,OTHER,PAUSED,false,500,B-070名寄せマスターv0.3から登録。区分500 経費 ※名称マスタ未登録のため補完
+5000030,セールス　経費,SUPPLIER,OTHER,PAUSED,false,500,B-070名寄せマスターv0.3から登録。区分500 経費 ※名称マスタ未登録のため補完
+5000031,セールス　経費（撮影分）,SUPPLIER,OTHER,PAUSED,false,500,B-070名寄せマスターv0.3から登録。区分500 経費 ※名称マスタ未登録のため補完
+5000032,セールス　経費（ショー分）,SUPPLIER,OTHER,PAUSED,false,500,B-070名寄せマスターv0.3から登録。区分500 経費 ※名称マスタ未登録のため補完
+5000033,セールス　経費(展示会分）,SUPPLIER,OTHER,PAUSED,false,500,B-070名寄せマスターv0.3から登録。区分500 経費 ※名称マスタ未登録のため補完
+7000000,一般社団法人　日本商事仲裁協会,SUPPLIER,OTHER,PAUSED,false,700,B-070名寄せマスターv0.3から登録。区分700 (未分類)
+9990000,㈱shunya,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990001,sAagara SHOWROOM,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990002,SwTRAS,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990010,奥村　渉,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990020,大洋交易㈱,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990030,㈱庚伸,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990040,㈱ケイ・エム・クロージング,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990050,㈱チトシハキクマ,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990060,㈱ＳＥＬＦ,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990070,くれ会計事務所,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990080,アスクル㈱,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990090,海野　愛,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990100,池端　ゆいこ,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990110,㈲トキタ商会,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990120,㈱ＵＰ　ＢＥＡＴ,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990130,濱口事務所,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990150,㈱スパイス,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990160,㈱三陽商会,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990170,㈱Donuts,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990180,㈱アベイル,SUPPLIER,OTHER,ACTIVE,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990190,㈲フラワーヘブン,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990200,㈱アイドマ・ホールディングス,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990210,㈱Studio 4,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990220,㈱ディースリー,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990230,㈱一期一会,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990240,㈱ＭＡＩＤＡＳ,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990250,obstinacy,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990270,㈱メディアバックオフィス,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990290,GMOペイメントゲートウエイ㈱,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990320,㈱RainbowCloud,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990340,国際特許商標事務所　大谷寛（ﾏﾄﾞﾌﾟﾛ申請）,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990360,現金材料仕入,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990370,gf.E㈱,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990380,BLIND MAN TOGS,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990390,㈱Sandbox,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990400,㈲ナッシュ,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
+9990410,肥沼沙,SUPPLIER,OTHER,PAUSED,false,999,B-070名寄せマスターv0.3から登録。区分999 その他仕入
