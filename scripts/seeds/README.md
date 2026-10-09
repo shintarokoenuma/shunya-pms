@@ -84,3 +84,46 @@ SEED_COMPANY_ID=xxxx-xxxx-xxxx npx tsx scripts/seed-categories.ts --target=all
 
 `shunya` テナントへの初期投入を想定しているため、本スクリプトは production DB に対して直接書き込む。
 事故防止のため、本番 `DATABASE_URL` を指している場合は必ず `--dry-run` で確認してから実投入すること。
+
+## B-070 名寄せマスター（仕入先・工場・外注先の一括登録・B-212 付帯）
+
+`scripts/seed-b070-master.ts`（dev）/ `scripts/seed-b070-master-prod.ts`（本番）で、B-070（請求書インテーク）の名寄せマスター v0.3 から
+Supplier / Factory / Contractor を一括登録する。ロジックは `scripts/seeds/b070-master-core.ts`。データは `scripts/seeds/b070-master-seed-v0_3.csv`
+（UTF-8 BOM 付き・見出し 1 行・541 行・md5 `7f1262d56b9e736aa1f6dd2cf65eccc5`）。
+
+カラム:
+
+| 列 | 説明 |
+|---|---|
+| code | B-070 の仕入先コード（7 桁数字）。そのまま supplierCode / factoryCode / contractorCode に入れる（`/^[A-Z0-9-_]+$/`・50 文字以内） |
+| name | 社名（読み取ったまま・255 文字以内） |
+| target | `SUPPLIER` / `FACTORY` / `CONTRACTOR` |
+| types | 「\|」区切りの enum 値（SUPPLIER→SupplierType、FACTORY→FactoryType、CONTRACTOR→ContractorSpecialty） |
+| status | `ACTIVE`（最近の取引先）/ `PAUSED`（それ以外） |
+| isIndividual | `true` / `false`（CONTRACTOR だけ使う） |
+| kubun | B-070 の区分コード（notes にも入っている） |
+| notes | 「B-070名寄せマスターv0.3から登録。区分NNN …」 |
+
+決まり:
+
+- 1 行でも不正（code の形・name の長さ・types の enum・status）があれば、書き込みを始める前に全件を出して失敗する
+- CSV 内で code が重複、または社名（NFKC → 空白除去 → 法人の種類を除く）が重複していれば失敗する
+- 既存（削除済みを含む）に **同じ code が同じマスター**にあればスキップ（UPDATE しない）。**別マスターに同じ code** があればスキップして一覧に出す。
+  **社名が同じ既存**（コード違い・3 マスター横断）があれば作らずに一覧に出す（重複登録の防止・人が後で決める）
+- 作る列は最小（code・name・種別・status・notes・country JP・外注先は isIndividual と contractType PER_TASK）。取引条件・住所・口座・主担当は入れない
+- 1 行ごとに create と AuditLog（CREATE・entityType "Supplier" / "Factory" / "Contractor"・afterData に `source: "seed-b070-master-v0_3"`）を 1 つの $transaction で書く。userId は OWNER
+- 冪等（2 回流しても件数は増えない）
+
+使い方（★必ず `--dry-run` を先に流して、作成予定と「社名が同じ既存あり」の一覧を見る）:
+
+```bash
+# dev（DATABASE_URL が hopper.proxy.rlwy.net:12921 以外なら止まる。本番ホストは常に止まる）
+npx tsx scripts/seed-b070-master.ts --dry-run
+npx tsx scripts/seed-b070-master.ts
+
+# 本番（三重ガード: CONFIRM_PROD_SEED=B070_MASTER_541・shuttle.proxy.rlwy.net:16099 必須・対話で yes）。実行は慎太郎さん
+DATABASE_URL=<本番 URL> CONFIRM_PROD_SEED=B070_MASTER_541 npx tsx scripts/seed-b070-master-prod.ts --dry-run
+DATABASE_URL=<本番 URL> CONFIRM_PROD_SEED=B070_MASTER_541 npx tsx scripts/seed-b070-master-prod.ts
+```
+
+`--file=<path>` で CSV を変えられる。本番への投入は PR の merge とは別の操作（merge しても本番には何も入らない）。
