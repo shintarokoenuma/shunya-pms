@@ -4167,6 +4167,9 @@ model PoItem {
   assetStorageStartDate  DateTime?              @map("asset_storage_start_date") @db.Date
   assetStorageExpiryDate DateTime?              @map("asset_storage_expiry_date") @db.Date
 
+  /// B-211 PR-2 / B-110 D-12・D-13: 海外発送（輸出インボイスに載せる行）の印
+  isForExport Boolean @default(false) @map("is_for_export")
+
   // メモ
   notes String? @db.Text
 

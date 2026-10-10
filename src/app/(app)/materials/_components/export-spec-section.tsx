@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react"
 import { useWatch, type UseFormReturn } from "react-hook-form"
 import { AlertTriangle, Plus, Trash2 } from "lucide-react"
+import { CompositionRows, toCompositionData, type CompositionRowInput } from "./composition-rows"
 import type { MaterialType } from "@prisma/client"
 import type { MaterialBaseInput } from "@/lib/validators/material"
 import type { HsReferenceMaterial } from "@/lib/actions/materials"
@@ -10,8 +11,6 @@ import {
   EXPORT_SPEC_FIELDS,
   FABRIC_FORMS,
   FABRIC_FORM_LABELS,
-  FIBERS,
-  FIBER_LABELS,
   FINISHES,
   FINISH_LABELS,
   TRIM_FORMS,
@@ -22,11 +21,9 @@ import {
   WEAVE_LABELS,
   YARN_TYPES,
   YARN_TYPE_LABELS,
-  compositionDataSchema,
   compositionTotal,
   type CompositionData,
   type ExportSpecInput,
-  type Fiber,
 } from "@/lib/hs/export-spec"
 import {
   canAdoptCandidate,
@@ -112,8 +109,6 @@ type Props = {
   excludeId?: string | null
 }
 
-type CompositionRowInput = { fiber: Fiber; percent: string | number }
-
 function toNumber(v: unknown): number | null {
   if (v === null || v === undefined || v === "") return null
   const n = typeof v === "number" ? v : Number(v)
@@ -142,15 +137,8 @@ export function ExportSpecSection({ form, excludeId }: Props) {
   const fabricWidth = toNumber(fabricWidthRaw)
 
   /** 入力途中の混率を数値化（壊れた行は落とす） */
-  const composition: CompositionData = useMemo(() => {
-    const parsed = compositionDataSchema.safeParse(rows)
-    if (parsed.success) return parsed.data
-    return rows
-      .map((r) => ({ fiber: r.fiber, percent: toNumber(r.percent) }))
-      .filter((r): r is { fiber: Fiber; percent: number } => r.percent !== null)
-  }, [rows])
+  const composition: CompositionData = useMemo(() => toCompositionData(rows), [rows])
   const total = compositionTotal(composition)
-  const totalWarn = composition.length > 0 && Math.abs(total - 100) > 0.01
   const rowErrors = form.formState.errors.compositionData as
     | { message?: string; [i: number]: { percent?: { message?: string }; fiber?: { message?: string } } | undefined }
     | undefined
@@ -281,93 +269,14 @@ export function ExportSpecSection({ form, excludeId }: Props) {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="space-y-6">
-            {/* 2. 混率 */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm">混率</Label>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setRows([...rows, { fiber: "COTTON", percent: "" }])}
-                >
-                  <Plus className="mr-1 h-3 w-3" />
-                  行を足す
-                </Button>
-              </div>
-              {rows.length === 0 && (
-                <p className="text-xs text-muted-foreground">
-                  繊維と % を行で入れる（例: 綿 100）。既存の「組成」の文字欄はそのまま残る
-                </p>
-              )}
-              {rows.map((row, i) => (
-                <div key={i} className="flex flex-wrap items-center gap-2">
-                  <Select
-                    value={row.fiber}
-                    onValueChange={(v) => {
-                      const next = rows.map((r, j) => (j === i ? { ...r, fiber: v as Fiber } : r))
-                      setRows(next)
-                    }}
-                  >
-                    <SelectTrigger className="w-[200px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {FIBERS.map((f) => (
-                        <SelectItem key={f} value={f}>
-                          {FIBER_LABELS[f]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    max={100}
-                    step="0.1"
-                    className="w-[110px]"
-                    value={row.percent === null || row.percent === undefined ? "" : String(row.percent)}
-                    onChange={(e) => {
-                      const next = rows.map((r, j) => (j === i ? { ...r, percent: e.target.value } : r))
-                      setRows(next)
-                    }}
-                    aria-label={`${FIBER_LABELS[row.fiber]} の %`}
-                  />
-                  <span className="text-sm text-muted-foreground">%</span>
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => setRows(rows.filter((_, j) => j !== i))}
-                    aria-label="行を消す"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                  {(rowErrors?.[i]?.percent?.message || rowErrors?.[i]?.fiber?.message) && (
-                    <p className="w-full text-xs text-destructive">
-                      {rowErrors?.[i]?.percent?.message ?? rowErrors?.[i]?.fiber?.message}
-                    </p>
-                  )}
-                </div>
-              ))}
-              {typeof rowErrors?.message === "string" && (
-                <p className="text-xs text-destructive">{rowErrors.message}</p>
-              )}
-              {rows.length > 0 && (
-                <p
-                  className={
-                    totalWarn
-                      ? "flex items-center gap-1 text-xs text-amber-700"
-                      : "text-xs text-muted-foreground"
-                  }
-                >
-                  {totalWarn && <AlertTriangle className="h-3 w-3" />}
-                  合計 {Number.isInteger(total) ? total : total.toFixed(1)}%
-                  {totalWarn && "（100% になっていません。保存はできます）"}
-                </p>
-              )}
-            </div>
+            {/* 2. 混率（部品は composition-rows.tsx・発注の「HS を決める」と共有） */}
+            <CompositionRows
+              rows={rows}
+              onChange={setRows}
+              total={total}
+              rowErrors={rowErrors}
+              emptyHint="繊維と % を行で入れる（例: 綿 100）。既存の「組成」の文字欄はそのまま残る"
+            />
 
             {/* 3. 規格（素材タイプで出し分け） */}
             {isFabric && (

@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { isValidCountry } from "@/lib/constants/countries"
 import { normalizeSupplierColorCode } from "@/lib/color-code"
 import { Currency, BillingClassification, PurchaseOrderStatus } from "@prisma/client"
 
@@ -94,6 +95,14 @@ export const poItemInputSchema = z
     isPhysicalAsset: z.boolean().default(false),
     assetStorageStartDate: optionalDateString,
     assetStorageExpiryDate: optionalDateString,
+    // B-211 PR-2（P2-D2）: 海外発送の印と、印の行の HS コード・原産国（空でも保存は止めない）
+    isForExport: z.boolean().default(false),
+    hsCode: optionalString(20),
+    originCountry: z
+      .string()
+      .trim()
+      .default("")
+      .refine((v) => v === "" || (v.length === 2 && isValidCountry(v)), "原産国の国コードが不正です"),
   })
   .refine(
     (d) => !!d.materialId || (d.customItemName?.trim().length ?? 0) > 0,
@@ -102,6 +111,8 @@ export const poItemInputSchema = z
       path: ["customItemName"],
     },
   )
+  // 海外発送でない行の HS コード・原産国は捨てる（P2-D2）
+  .transform((d) => (d.isForExport ? d : { ...d, hsCode: "", originCountry: "" }))
 
 export type PoItemInput = z.infer<typeof poItemInputSchema>
 

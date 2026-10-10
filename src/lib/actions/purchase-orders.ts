@@ -92,6 +92,9 @@ export type MaterialOption = {
   materialCode: string
   materialName: string
   unit: string
+  /** B-211 PR-2: 「海外発送」を付けた行に写す材料の HS・原産国 */
+  hsCode: string | null
+  originCountry: string | null
 }
 
 export async function listActiveSuppliersForPoSelect(): Promise<SupplierOption[]> {
@@ -142,7 +145,7 @@ export async function listActiveMaterialsForPoSelect(): Promise<MaterialOption[]
   if (!sess.ok) return []
   return prisma.material.findMany({
     where: { companyId: sess.companyId, deletedAt: null, status: MaterialStatus.ACTIVE },
-    select: { id: true, materialCode: true, materialName: true, unit: true },
+    select: { id: true, materialCode: true, materialName: true, unit: true, hsCode: true, originCountry: true },
     orderBy: [{ materialCode: "asc" }],
   })
 }
@@ -493,6 +496,10 @@ function buildItemRows(
       assetStorageExpiryDate: it.assetStorageExpiryDate
         ? new Date(it.assetStorageExpiryDate)
         : null,
+      // B-211 PR-2（P2-D2）: 海外発送の印。印が無い行の HS・原産国は validator が空にしている（ここでも null に落とす）
+      isForExport: it.isForExport,
+      hsCode: it.isForExport ? it.hsCode || null : null,
+      originCountry: it.isForExport ? it.originCountry || null : null,
     }
   })
 }

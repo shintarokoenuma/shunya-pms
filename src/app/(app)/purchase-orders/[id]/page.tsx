@@ -1,12 +1,13 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ChevronLeft, Pencil } from "lucide-react"
+import { AlertTriangle, ChevronLeft, Pencil } from "lucide-react"
 import { CounterpartType } from "@prisma/client"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { checkPeriodLock } from "@/lib/period-close/lock"
 import { toYmd } from "@/lib/calc/invoice-period"
 import { formatColorCode } from "@/lib/color-code"
+import { COUNTRY_OPTIONS } from "@/lib/constants/countries"
 import { PeriodLockBanner } from "@/components/period-close/period-lock-banner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -25,6 +26,10 @@ import {
 } from "../_components/labels"
 
 type Params = Promise<{ id: string }>
+
+const COUNTRY_LABEL_BY_VALUE: Record<string, string> = Object.fromEntries(
+  COUNTRY_OPTIONS.map((c) => [c.value, c.label]),
+)
 
 function fmt(value: unknown): string {
   if (value === null || value === undefined) return "—"
@@ -65,6 +70,10 @@ export default async function PurchaseOrderDetailPage({
         .filter((v): v is string => !!v),
     ),
   ]
+  // B-211 PR-2（P2-D4）: 海外発送の行と HS 未入力の行の数
+  const exportRows = po.items.filter((it) => it.isForExport).length
+  const exportMissingHs = po.items.filter((it) => it.isForExport && !it.hsCode).length
+
   const colorwayById = new Map<string, { name: string; code: string }>()
   if (colorwayIds.length > 0) {
     const cws = await prisma.productColorway.findMany({
@@ -204,6 +213,19 @@ export default async function PurchaseOrderDetailPage({
           <CardTitle className="text-base">明細</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
+          {/* B-211 PR-2（P2-D4）: 海外発送の要約（印の行がある発注だけ） */}
+          {exportRows > 0 && (
+            <div
+              className={
+                exportMissingHs > 0
+                  ? "flex items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                  : "rounded-md border px-3 py-2 text-sm"
+              }
+            >
+              {exportMissingHs > 0 && <AlertTriangle className="h-4 w-4 shrink-0" />}
+              海外発送 {exportRows} 行（HS 未入力 {exportMissingHs} 行）
+            </div>
+          )}
           {po.items.map((it, i) => {
             const cw = it.productColorwayId
               ? colorwayById.get(it.productColorwayId)
@@ -225,9 +247,14 @@ export default async function PurchaseOrderDetailPage({
                     </Badge>
                   )}
                 </span>
-                {it.isPhysicalAsset && (
-                  <Badge variant="outline" className="text-xs">現物資産</Badge>
-                )}
+                <span className="flex items-center gap-2">
+                  {it.isForExport && (
+                    <Badge variant="outline" className="border-sky-300 text-sky-700 text-xs">海外発送</Badge>
+                  )}
+                  {it.isPhysicalAsset && (
+                    <Badge variant="outline" className="text-xs">現物資産</Badge>
+                  )}
+                </span>
               </div>
               <div className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 md:grid-cols-4">
                 <Cell label="仕入先品番" value={it.supplierItemCode ?? "—"} />
@@ -279,6 +306,36 @@ export default async function PurchaseOrderDetailPage({
                       : "—"
                   }
                 />
+                {it.isForExport && (
+                  <>
+                    <Cell
+                      label="HS コード"
+                      value={
+                        it.hsCode ? (
+                          <span className="font-mono">{it.hsCode}</span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-amber-700">
+                            <AlertTriangle className="h-3 w-3" />
+                            HS コードが未入力（輸出インボイスに載せられません）
+                          </span>
+                        )
+                      }
+                    />
+                    <Cell
+                      label="原産国"
+                      value={
+                        it.originCountry ? (
+                          <span>
+                            <span className="font-mono text-xs text-muted-foreground mr-2">{it.originCountry}</span>
+                            {COUNTRY_LABEL_BY_VALUE[it.originCountry] ?? ""}
+                          </span>
+                        ) : (
+                          "—"
+                        )
+                      }
+                    />
+                  </>
+                )}
                 {it.specification && (
                   <div className="col-span-2 md:col-span-4">
                     <div className="text-xs text-muted-foreground">仕様・規格</div>

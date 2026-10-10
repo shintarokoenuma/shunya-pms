@@ -10,7 +10,7 @@ import {
 import { zodResolver } from "@hookform/resolvers/zod"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
-import { Loader2, Plus, Trash2 } from "lucide-react"
+import { AlertTriangle, Loader2, Plus, Trash2 } from "lucide-react"
 import { Currency } from "@prisma/client"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -58,6 +58,13 @@ import {
   EXTERNAL_COST_CATEGORY_ORDER,
 } from "@/lib/constants/cost-category-types"
 import { BILLING_CLASSIFICATION_OPTIONS } from "./labels"
+import { COUNTRY_OPTIONS } from "@/lib/constants/countries"
+import { HsDecideDialog, type HsDecided } from "./hs-decide-dialog"
+
+// B-211 PR-2: 原産国は schema が VarChar(2) なので "OTHER"（4 文字）は出さない（材料フォームと同じ）
+const ORIGIN_COUNTRY_OPTIONS = COUNTRY_OPTIONS.filter((c) => c.value !== "OTHER")
+/** 行の材料の HS・原産国（ダイアログで決めた値で上書きできるよう、materials の値と別に持つ） */
+type MaterialHs = { hsCode: string | null; originCountry: string | null }
 
 const NONE = "__none__"
 
@@ -117,6 +124,10 @@ function emptyItem(
     isPhysicalAsset: false,
     assetStorageStartDate: "",
     assetStorageExpiryDate: "",
+    // B-211 PR-2: 海外発送の印（既定オフ）・HS・原産国
+    isForExport: false,
+    hsCode: "",
+    originCountry: "",
   }
 }
 
@@ -175,6 +186,27 @@ export function PurchaseOrderForm(props: Props) {
     control: form.control,
     name: "items",
   })
+
+  // B-211 PR-2（P2-D3）: 「HS を決める」ダイアログ（フォームに 1 つ）。決めた HS は同じ材料の印の行すべてに入れる
+  const [hsOverrides, setHsOverrides] = useState<Record<string, MaterialHs>>({})
+  const [hsDialog, setHsDialog] = useState<{ materialId: string; rowOriginCountry: string | null } | null>(null)
+  const materialHsOf = (materialId: string | null | undefined): MaterialHs | null => {
+    if (!materialId) return null
+    const o = hsOverrides[materialId]
+    if (o) return o
+    const m = props.materials.find((mm) => mm.id === materialId)
+    return m ? { hsCode: m.hsCode, originCountry: m.originCountry } : null
+  }
+  const onHsDecided = (d: HsDecided) => {
+    setHsOverrides((prev) => ({ ...prev, [d.materialId]: { hsCode: d.hsCode, originCountry: d.originCountry } }))
+    form.getValues("items").forEach((it, i) => {
+      if (it.materialId !== d.materialId || !it.isForExport) return
+      form.setValue(`items.${i}.hsCode`, d.hsCode, { shouldDirty: true, shouldValidate: true })
+      if (!it.originCountry && d.originCountry) {
+        form.setValue(`items.${i}.originCountry`, d.originCountry, { shouldDirty: true })
+      }
+    })
+  }
 
   const [preview, setPreview] = useState("")
   const [previewLoading, setPreviewLoading] = useState(props.mode === "create")
@@ -478,8 +510,19 @@ export function PurchaseOrderForm(props: Props) {
                 }
                 onRemove={() => (fields.length > 1 ? remove(idx) : null)}
                 canRemove={fields.length > 1}
+                materialHsOf={materialHsOf}
+                onDecideHs={(materialId, rowOriginCountry) => setHsDialog({ materialId, rowOriginCountry })}
               />
             ))}
+            <HsDecideDialog
+              open={hsDialog !== null}
+              onOpenChange={(o) => {
+                if (!o) setHsDialog(null)
+              }}
+              materialId={hsDialog?.materialId ?? null}
+              rowOriginCountry={hsDialog?.rowOriginCountry ?? null}
+              onDecided={onHsDecided}
+            />
           </CardContent>
         </Card>
 
@@ -510,6 +553,8 @@ function ItemRow({
   colorwayNames,
   onRemove,
   canRemove,
+  materialHsOf,
+  onDecideHs,
 }: {
   idx: number
   form: ReturnType<typeof useForm<PurchaseOrderFormValues>>
@@ -518,10 +563,16 @@ function ItemRow({
   colorwayNames?: Record<string, string>
   onRemove: () => void
   canRemove: boolean
+  materialHsOf: (materialId: string | null | undefined) => MaterialHs | null
+  onDecideHs: (materialId: string, rowOriginCountry: string | null) => void
 }) {
   const base = `items.${idx}` as const
   const isPhysicalAsset = form.watch(`items.${idx}.isPhysicalAsset`)
   const materialId = form.watch(`items.${idx}.materialId`)
+  // B-211 PR-2: 海外発送の印・行の HS・材料の HS
+  const isForExport = form.watch(`items.${idx}.isForExport`)
+  const rowHsCode = form.watch(`items.${idx}.hsCode`)
+  const materialHs = materialHsOf(materialId)
   // B-065/(B): 生成された色別明細のカラーウェイを読み取り専用バッジで温存表示。
   const productColorwayId = form.watch(`items.${idx}.productColorwayId`)
   const colorwayLabel = productColorwayId
@@ -973,6 +1024,121 @@ function ItemRow({
               </FormItem>
             )}
           />
+        </div>
+      )}
+
+      {/* B-211 PR-2（P2-D2）: 海外発送の印。付けた行だけ HS コード・原産国 */}
+      <FormField
+        control={form.control}
+        name={`${base}.isForExport`}
+        render={({ field }) => (
+          <FormItem>
+            <label className="flex items-center gap-2 text-sm">
+              <Checkbox
+                checked={field.value === true}
+                onCheckedChange={(c) => {
+                  const on = c === true
+                  field.onChange(on)
+                  if (on) {
+                    // 材料に HS があれば行に写す（行で直せる）
+                    if (materialHs?.hsCode && !form.getValues(`items.${idx}.hsCode`)) {
+                      form.setValue(`items.${idx}.hsCode`, materialHs.hsCode, { shouldDirty: true })
+                    }
+                    if (materialHs?.originCountry && !form.getValues(`items.${idx}.originCountry`)) {
+                      form.setValue(`items.${idx}.originCountry`, materialHs.originCountry, { shouldDirty: true })
+                    }
+                  } else {
+                    // 外したら HS・原産国は保存しない
+                    form.setValue(`items.${idx}.hsCode`, "", { shouldDirty: true })
+                    form.setValue(`items.${idx}.originCountry`, "", { shouldDirty: true })
+                  }
+                }}
+              />
+              海外発送（輸出インボイスに載せる）
+            </label>
+          </FormItem>
+        )}
+      />
+      {isForExport && (
+        <div className="space-y-2 rounded-md border border-sky-200 bg-sky-50/40 p-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name={`${base}.hsCode`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>HS コード</FormLabel>
+                  <div className="flex items-center gap-2">
+                    <FormControl>
+                      <Input
+                        placeholder="例：5208.33"
+                        maxLength={20}
+                        className="font-mono"
+                        value={field.value ?? ""}
+                        onChange={(e) => field.onChange(e.target.value)}
+                        onBlur={field.onBlur}
+                        name={field.name}
+                        ref={field.ref}
+                      />
+                    </FormControl>
+                    {materialId && !materialHs?.hsCode && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => onDecideHs(materialId, form.getValues(`items.${idx}.originCountry`) || null)}
+                      >
+                        HS を決める
+                      </Button>
+                    )}
+                  </div>
+                  <FormDescription>
+                    {materialId
+                      ? materialHs?.hsCode
+                        ? `材料の HS コード ${materialHs.hsCode} を写しました（行で直せます）`
+                        : "材料に HS コードがありません。「HS を決める」で質問に答えるか、手で入力"
+                      : "材料なしの行は手で入力"}
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name={`${base}.originCountry`}
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>原産国</FormLabel>
+                  <Select
+                    value={field.value && field.value !== "" ? field.value : NONE}
+                    onValueChange={(v) => field.onChange(v === NONE ? "" : v)}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="（未選択）" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value={NONE}>（未選択）</SelectItem>
+                      {ORIGIN_COUNTRY_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>
+                          <span className="font-mono text-xs text-muted-foreground mr-2">{o.value}</span>
+                          {o.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          {!rowHsCode && (
+            <p className="flex items-center gap-1 text-xs text-amber-700">
+              <AlertTriangle className="h-3 w-3" />
+              HS コードが未入力（輸出インボイスに載せられません）。保存はできます
+            </p>
+          )}
         </div>
       )}
     </div>
