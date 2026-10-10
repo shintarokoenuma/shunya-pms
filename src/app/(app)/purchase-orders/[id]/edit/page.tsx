@@ -101,6 +101,10 @@ export default async function EditPurchaseOrderPage({
       isPhysicalAsset: it.isPhysicalAsset,
       assetStorageStartDate: toDateInput(it.assetStorageStartDate),
       assetStorageExpiryDate: toDateInput(it.assetStorageExpiryDate),
+      // B-211 PR-2: 海外発送の印・HS・原産国
+      isForExport: it.isForExport,
+      hsCode: it.hsCode ?? "",
+      originCountry: it.originCountry ?? "",
     })),
   }
 
