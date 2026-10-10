@@ -233,6 +233,49 @@ export async function uploadOrderSourceFile(
   }
 }
 
+export type UploadMaterialEvidenceFileParams = {
+  companyId: string
+  materialId: string
+  fileName: string
+  /** MIME。PDF / PNG / JPG / EML / MSG を許すため呼び出し側が渡す。 */
+  contentType: string
+  buffer: Buffer
+}
+
+/**
+ * B-211 PR-1: 材料の根拠ファイル（規格書 PDF・画像・メール .eml/.msg）を GCS に保存する。
+ * パス規約は uploadOrderSourceFile を踏襲し識別子を材料用に置換:
+ *   material-evidence/{companyId}/{materialId}/{yyyyMMdd-HHmmss}-{fileName}
+ * 履歴保持・上書きなし。取り消しは SharedFile の論理削除で、GCS 実体は削除しない（既存系と同じ作法）。
+ * 失敗/未設定は null（graceful degradation・例外は投げない）。
+ */
+export async function uploadMaterialEvidenceFile(
+  params: UploadMaterialEvidenceFileParams,
+): Promise<{ gcsPath: string } | null> {
+  const ctx = getStorageContext()
+  if (!ctx) return null
+
+  const stamp = timestampJst(new Date())
+  const safeName = params.fileName.replace(/[^\w.\-]+/g, "_")
+  const objectPath = `material-evidence/${params.companyId}/${params.materialId}/${stamp}-${safeName}`
+  try {
+    await ctx.storage
+      .bucket(ctx.bucketName)
+      .file(objectPath)
+      .save(params.buffer, {
+        contentType: params.contentType,
+        resumable: false,
+      })
+    return { gcsPath: `gs://${ctx.bucketName}/${objectPath}` }
+  } catch (e) {
+    console.error(
+      `[gcs] 材料の根拠ファイルのアップロードに失敗しました (${objectPath}):`,
+      e instanceof Error ? e.message : "unknown error",
+    )
+    return null
+  }
+}
+
 /**
  * gs://bucket/object 形式のパスから署名付き読み取りURL（有効期限15分）を生成する。
  * バケットは非公開のためダウンロード/プレビューはこれ経由。失敗/未設定は null。

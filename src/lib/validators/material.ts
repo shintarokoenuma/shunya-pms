@@ -1,5 +1,10 @@
 import { z } from "zod"
 import { Currency, MaterialStatus, MaterialType } from "@prisma/client"
+import {
+  compositionDataSchema,
+  exportSpecSchema,
+  referenceUrlsSchema,
+} from "@/lib/hs/export-spec"
 
 /**
  * Phase 1A-13a + 1A-13b: 素材（Material）バリデータ
@@ -10,7 +15,8 @@ import { Currency, MaterialStatus, MaterialType } from "@prisma/client"
  *           規格・標準 (standardUsage / standardLossRate) +
  *           貿易 (hsCode / originCountry) +
  *           画像 (imageUrl) を追加
- * - JSON 列 (compositionData / availableColors) は Phase 2 送り
+ * - JSON 列: compositionData / exportSpec / referenceUrls は B-211 PR-1 で追加（src/lib/hs/export-spec.ts）。
+ *   availableColors は Phase 2 送り
  * - materialCode は手動入力（自動採番なし）。多様なフォーマットを許容するため
  *   英数字 + ハイフン + アンダースコア + スラッシュ + ピリオドを許可
  * - 必須: materialCode / materialName / materialType / primarySupplierId / unit
@@ -150,6 +156,11 @@ export const materialBaseSchema = z.object({
 
   // 画像（Phase 1A-13b、UI では基本情報カード末尾に配置）
   imageUrl: optionalHttpUrl,
+
+  // 輸出用の規格（B-211 PR-1）。未入力（null / 空配列）でも保存できる
+  compositionData: compositionDataSchema.nullable().default(null), // 混率 [{ fiber, percent }]
+  exportSpec: exportSpecSchema.nullable().default(null), // 規格と判定の記録
+  referenceUrls: referenceUrlsSchema.nullable().default(null), // 参考 URL [{ label, url }]
 
   // メモ
   specification: optionalString(10000),

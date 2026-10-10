@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ChevronLeft, Pencil } from "lucide-react"
+import { AlertTriangle, ChevronLeft, Pencil } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Badge } from "@/components/ui/badge"
@@ -21,6 +21,17 @@ import {
   MATERIAL_TYPE_BADGE_VARIANT,
 } from "../_components/labels"
 import { COUNTRY_OPTIONS } from "@/lib/constants/countries"
+import { listMaterialEvidenceFiles } from "@/lib/actions/material-evidence"
+import {
+  HS_SOURCE_LABELS,
+  formatComposition,
+  parseCompositionData,
+  parseExportSpec,
+  parseReferenceUrls,
+  summarizeExportSpec,
+} from "@/lib/hs/export-spec"
+import { EvidenceSection } from "../_components/evidence-section"
+import { candidateDiffersFromHsCode, classifyHs } from "@/lib/hs/classify"
 
 const COUNTRY_LABEL_BY_VALUE: Record<string, string> = Object.fromEntries(
   COUNTRY_OPTIONS.map((c) => [c.value, c.label]),
@@ -60,6 +71,31 @@ export default async function MaterialDetailPage({
     select: { tenantType: true },
   })
   const isMasterAdmin = company?.tenantType === "MASTER_ADMIN"
+
+  // B-211 PR-1: 輸出用の規格・根拠
+  const compositionData = parseCompositionData(item.compositionData)
+  const exportSpec = parseExportSpec(item.exportSpec)
+  const specSummary = summarizeExportSpec(exportSpec)
+  const referenceUrls = parseReferenceUrls(item.referenceUrls)
+  // FIX-1 B-4: 保存されている規格から候補を計算し、HS コードと違えば注意を出す
+  const candidate = classifyHs({
+    materialType: item.materialType,
+    compositionData,
+    exportSpec,
+    fabricWeight: item.fabricWeight === null ? null : Number(item.fabricWeight),
+    fabricWidth: item.fabricWidth === null ? null : Number(item.fabricWidth),
+  })
+  const hsMismatch = candidateDiffersFromHsCode(candidate, item.hsCode)
+  const evidence = await listMaterialEvidenceFiles(id)
+  const evidenceFiles = evidence.ok ? evidence.data : []
+  const copiedFrom =
+    exportSpec?.hsSource === "COPIED" && exportSpec.copiedFromMaterialId
+      ? await prisma.material.findFirst({
+          where: { id: exportSpec.copiedFromMaterialId, companyId: session.user.companyId },
+          select: { materialCode: true },
+        })
+      : null
+  const copiedFromLabel = copiedFrom?.materialCode ?? "（削除済みの材料）"
 
   // B-243 PR-4（D4-3）: マスターの取引条件・編集が見えない役割は「見るだけ」。単価のカード・編集・メニューを出さない
   const canEditMaster = !item.termsHidden
@@ -329,17 +365,70 @@ export default async function MaterialDetailPage({
         </CardContent>
       </Card>
 
-      {/* Phase 1A-13b 貿易 */}
+      {/* B-211 PR-1 輸出用の規格（Phase 1A-13b の「貿易」をここに統合） */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">貿易</CardTitle>
+          <CardTitle className="text-base">輸出用の規格</CardTitle>
+          <CardDescription>
+            輸出インボイスと HS コードの判定に使う。判定の木は照合前のため HS コードには「要確認」の札が付く
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          <DetailRow
+            label="混率"
+            value={
+              compositionData.length > 0
+                ? formatComposition(compositionData)
+                : item.composition
+                  ? <span className="text-muted-foreground">{item.composition}（文字のみ）</span>
+                  : "—"
+            }
+          />
+          <DetailRow
+            label="規格"
+            value={specSummary.length > 0 ? specSummary.join(" / ") : "—"}
+          />
+          <DetailRow
+            label="目付"
+            value={
+              item.fabricWeight !== null && item.fabricWeight !== undefined
+                ? `${formatDecimal(item.fabricWeight)} g/㎡`
+                : "—"
+            }
+          />
+          <DetailRow
+            label="幅"
+            value={
+              item.fabricWidth !== null && item.fabricWidth !== undefined
+                ? `${formatDecimal(item.fabricWidth)} cm`
+                : "—"
+            }
+          />
           <DetailRow
             label="HS コード"
             value={
               item.hsCode ? (
-                <span className="font-mono">{item.hsCode}</span>
+                <span className="flex flex-wrap items-center gap-2">
+                  <span className="font-mono">{item.hsCode}</span>
+                  <Badge variant="outline" title="判定の木は澁澤WT と照合前。照合が済むまで「要確認」">
+                    要確認
+                  </Badge>
+                  {exportSpec?.hsSource && (
+                    <span className="text-xs text-muted-foreground">
+                      {exportSpec.hsSource === "COPIED" && exportSpec.copiedFromMaterialId
+                        ? `${copiedFromLabel} から写した`
+                        : HS_SOURCE_LABELS[exportSpec.hsSource]}
+                      {exportSpec.decidedAt &&
+                        `（${new Date(exportSpec.decidedAt).toLocaleDateString("ja-JP")}）`}
+                    </span>
+                  )}
+                  {hsMismatch && (
+                    <span className="flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-900">
+                      <AlertTriangle className="h-3 w-3" />
+                      候補と今の HS コードが違います（規格からの候補 {candidate.code}）
+                    </span>
+                  )}
+                </span>
               ) : (
                 "—"
               )
@@ -363,6 +452,24 @@ export default async function MaterialDetailPage({
         </CardContent>
       </Card>
 
+      {/* B-211 PR-1 根拠（SharedFile・referenceUrls） */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">根拠</CardTitle>
+          <CardDescription>
+            HS コードや規格の根拠になる規格書・メール・メーカーの URL
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <EvidenceSection
+            materialId={item.id}
+            files={evidenceFiles}
+            referenceUrls={referenceUrls}
+            canEdit={canEditMaster}
+          />
+        </CardContent>
+      </Card>
+
       {/* Phase 1A-13c で追加されるセクション */}
       <Card>
         <CardHeader>
@@ -374,7 +481,6 @@ export default async function MaterialDetailPage({
         <CardContent className="space-y-2 text-sm text-muted-foreground">
           <p>・ 色展開（availableColors）→ Phase 1A-13c</p>
           <p>・ 多言語（materialNameZh / materialNameVi）→ Phase 1A-13c</p>
-          <p>・ 構造化組成（compositionData）→ Phase 2</p>
         </CardContent>
       </Card>
 
