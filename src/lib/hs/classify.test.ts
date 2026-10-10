@@ -1,7 +1,14 @@
 /**
  * B-211 PR-1（§4）: classify.ts の検証（テストランナー非依存・DB 非接続）。手動実行: npx tsx src/lib/hs/classify.test.ts
  */
-import { classifyHs, displayHsCandidate, type ClassifyInput } from "./classify"
+import {
+  candidateDiffersFromHsCode,
+  candidateNote,
+  classifyHs,
+  displayHsCandidate,
+  type ClassifyInput,
+} from "./classify"
+import { buildCopyFromReference } from "./copy-from-reference"
 import {
   compositionDataSchema,
   exportSpecSchema,
@@ -96,7 +103,8 @@ const linen100: CompositionData = [{ fiber: "LINEN", percent: 100 }]
   assert(r.code === null, `④-1 code null → ${r.code}`)
   assert(r.heading !== null && r.heading.includes("5210") && r.heading.includes("5212"), `④-2 heading → ${r.heading}`)
   assert(r.missing.includes("composition"), `④-3 missing → ${JSON.stringify(r.missing)}`)
-  assert(displayHsCandidate(r) === "5210〜5212..", `④-4 表示 → ${displayHsCandidate(r)}`)
+  assert(displayHsCandidate(r) === "5210〜5212", `④-4 範囲の表示に「..」を付けない → ${displayHsCandidate(r)}`)
+  assert(candidateNote(r) === "項の候補が複数（号は手入力）", `④-5 注記 → ${candidateNote(r)}`)
   passed++
 }
 
@@ -245,6 +253,61 @@ const linen100: CompositionData = [{ fiber: "LINEN", percent: 100 }]
   assert(p?.fiber === "COTTON" && p.tie === false, "⑬-10 主素材")
   assert(referenceUrlsSchema.safeParse([{ label: "メーカー", url: "https://example.com/x" }]).success, "⑬-11 URL ok")
   assert(!referenceUrlsSchema.safeParse([{ label: "", url: "ftp://x" }]).success, "⑬-12 http(s) 以外は弾く")
+  passed++
+}
+
+// ⑭ FIX-1 B-2: 表示の印。項 1 つは「5208..」・範囲／複数は印なし・code ありはそのまま・無ければ「—」
+{
+  const h = run("FABRIC", cotton100, { fabricForm: "WOVEN", weave: "TWILL_3_4", finish: "DYED" }, null)
+  assert(h.heading === "5208／5209" && displayHsCandidate(h) === "5208／5209", `⑭-1 → ${displayHsCandidate(h)}`)
+  const one = run("FABRIC", cotton100, { fabricForm: "WOVEN", weave: "TWILL_3_4" }, 162)
+  assert(one.heading === "5208" && displayHsCandidate(one) === "5208..", `⑭-2 → ${displayHsCandidate(one)}`)
+  assert(candidateNote(one) === "項まで（号は手入力）", `⑭-3 → ${candidateNote(one)}`)
+  const wool = run("FABRIC", [{ fiber: "WOOL", percent: 100 }], { fabricForm: "WOVEN" })
+  assert(displayHsCandidate(wool) === "5111／5112", `⑭-4 → ${displayHsCandidate(wool)}`)
+  const ok = run("FABRIC", cotton100, { fabricForm: "WOVEN", weave: "TWILL_3_4", finish: "DYED" }, 162)
+  assert(displayHsCandidate(ok) === "5208.33" && candidateNote(ok) === null, "⑭-5 code あり")
+  const none = run("POLYBAG", null, null)
+  assert(displayHsCandidate(none) === "—" && candidateNote(none) === null, "⑭-6 無し")
+  passed++
+}
+
+// ⑮ FIX-1 B-4: 候補と今の HS コードが違う
+{
+  const r = run("FABRIC", linen100, { fabricForm: "WOVEN", weave: "PLAIN", finish: "YARN_DYED" })
+  assert(r.code === "5309.19", "⑮-0 前提")
+  assert(candidateDiffersFromHsCode(r, "5309.29") === true, "⑮-1 違う")
+  assert(candidateDiffersFromHsCode(r, "5309.19") === false, "⑮-2 同じ")
+  assert(candidateDiffersFromHsCode(r, "") === false && candidateDiffersFromHsCode(r, null) === false, "⑮-3 HS が空なら注意しない")
+  const h = run("FABRIC", cotton100, { fabricForm: "WOVEN", weave: "TWILL_3_4" }, 162)
+  assert(candidateDiffersFromHsCode(h, "5208.33") === false, "⑮-4 候補の code が無ければ注意しない")
+  passed++
+}
+
+// ⑯ FIX-1 B-1: 似た材料から写す（混率は写し先が空のときだけ）
+{
+  const ref = {
+    id: "m-004",
+    materialCode: "MT-004",
+    materialType: "FABRIC" as const,
+    compositionData: linen100,
+    exportSpec: { version: 1 as const, fabricForm: "WOVEN" as const, weave: "PLAIN" as const, finish: "YARN_DYED" as const, hsSource: "CANDIDATE" as const, decidedAt: "2026-10-10T00:00:00.000Z" },
+    hsCode: "5309.19",
+    fabricWeight: 162,
+    fabricWidth: null,
+  }
+  const a = buildCopyFromReference({ materialType: "FABRIC", compositionData: [], fabricWeight: 162, fabricWidth: null }, ref)
+  assert(a.compositionData !== null && a.compositionData.length === 1 && a.compositionData[0].fiber === "LINEN", "⑯-1 写し先が空なら混率も写る")
+  assert(a.hsCode === "5309.19" && a.exportSpec.hsSource === "COPIED" && a.exportSpec.copiedFromMaterialId === "m-004", "⑯-2 hsCode・COPIED")
+  assert(a.exportSpec.fabricForm === "WOVEN" && a.exportSpec.finish === "YARN_DYED", "⑯-3 規格を写す")
+  assert(!("decidedAt" in a.exportSpec), "⑯-4 判定の記録は写さない")
+  assert(a.diffs.length === 0, `⑯-5 違う所なし → ${JSON.stringify(a.diffs)}`)
+  const b = buildCopyFromReference({ materialType: "FABRIC", compositionData: [{ fiber: "LINEN", percent: 80 }, { fiber: "COTTON", percent: 20 }], fabricWeight: 230, fabricWidth: null }, ref)
+  assert(b.compositionData === null, "⑯-6 写し先に混率があれば写さない")
+  assert(b.diffs.some((d) => d.startsWith("混率:")) && b.diffs.some((d) => d.startsWith("目付:")), `⑯-7 違う所に混率・目付 → ${JSON.stringify(b.diffs)}`)
+  const c = buildCopyFromReference({ materialType: "LINING", compositionData: [], fabricWeight: null, fabricWidth: null }, { ...ref, compositionData: [] }, (t) => `[${t}]`)
+  assert(c.compositionData === null, "⑯-8 写し元も空なら変えない")
+  assert(c.diffs.some((d) => d.includes("[FABRIC]") && d.includes("[LINING]")) && c.diffs.some((d) => d.includes("未入力")), `⑯-9 → ${JSON.stringify(c.diffs)}`)
   passed++
 }
 

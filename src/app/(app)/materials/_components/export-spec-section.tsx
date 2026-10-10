@@ -24,12 +24,18 @@ import {
   YARN_TYPE_LABELS,
   compositionDataSchema,
   compositionTotal,
-  formatComposition,
   type CompositionData,
   type ExportSpecInput,
   type Fiber,
 } from "@/lib/hs/export-spec"
-import { canAdoptCandidate, classifyHs, displayHsCandidate } from "@/lib/hs/classify"
+import {
+  canAdoptCandidate,
+  candidateDiffersFromHsCode,
+  candidateNote,
+  classifyHs,
+  displayHsCandidate,
+} from "@/lib/hs/classify"
+import { buildCopyFromReference } from "@/lib/hs/copy-from-reference"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
@@ -122,7 +128,7 @@ export function ExportSpecSection({ form, excludeId }: Props) {
   const fabricWidthRaw = useWatch({ control: form.control, name: "fabricWidth" })
   const hsCode = useWatch({ control: form.control, name: "hsCode" })
 
-  const [copiedFrom, setCopiedFrom] = useState<{ code: string; diffs: string[] } | null>(null)
+  const [copiedFrom, setCopiedFrom] = useState<{ code: string; diffs: string[]; copiedComposition: boolean } | null>(null)
 
   const rows: CompositionRowInput[] = useMemo(
     () => (Array.isArray(compositionRaw) ? (compositionRaw as CompositionRowInput[]) : []),
@@ -190,34 +196,16 @@ export function ExportSpecSection({ form, excludeId }: Props) {
   }
 
   const copyFrom = (ref: HsReferenceMaterial) => {
-    const patch: Partial<ExportSpecInput> = {}
-    for (const k of EXPORT_SPEC_FIELDS) {
-      const v = ref.exportSpec?.[k]
-      if (v !== undefined && v !== null) (patch as Record<string, unknown>)[k] = v
-    }
-    const next: ExportSpecInput = {
-      version: 1,
-      ...patch,
-      hsSource: "COPIED",
-      copiedFromMaterialId: ref.id,
-    }
-    form.setValue("exportSpec", next, { shouldDirty: true, shouldValidate: false })
-    form.setValue("hsCode", ref.hsCode, { shouldDirty: true, shouldValidate: true })
-
-    const diffs: string[] = []
-    if (ref.materialType !== materialType) {
-      diffs.push(`素材タイプ: ${MATERIAL_TYPE_LABELS[ref.materialType]} ↔ ${MATERIAL_TYPE_LABELS[materialType]}`)
-    }
-    const mineComp = formatComposition(composition)
-    const theirComp = formatComposition(ref.compositionData)
-    if (theirComp && mineComp !== theirComp) diffs.push(`混率: ${theirComp} ↔ ${mineComp || "未入力"}`)
-    if (ref.fabricWeight !== null && ref.fabricWeight !== fabricWeight) {
-      diffs.push(`目付: ${ref.fabricWeight} g/㎡ ↔ ${fabricWeight !== null ? `${fabricWeight} g/㎡` : "未入力"}`)
-    }
-    if (ref.fabricWidth !== null && ref.fabricWidth !== fabricWidth) {
-      diffs.push(`幅: ${ref.fabricWidth} cm ↔ ${fabricWidth !== null ? `${fabricWidth} cm` : "未入力"}`)
-    }
-    setCopiedFrom({ code: ref.materialCode, diffs })
+    // FIX-1 B-1: 純関数で組み立てる。写し先の混率が空なら写し元の混率も写す
+    const r = buildCopyFromReference(
+      { materialType, compositionData: composition, fabricWeight, fabricWidth },
+      ref,
+      (t) => MATERIAL_TYPE_LABELS[t],
+    )
+    form.setValue("exportSpec", r.exportSpec, { shouldDirty: true, shouldValidate: false })
+    form.setValue("hsCode", r.hsCode, { shouldDirty: true, shouldValidate: true })
+    if (r.compositionData) setRows(r.compositionData)
+    setCopiedFrom({ code: ref.materialCode, diffs: r.diffs, copiedComposition: r.compositionData !== null })
   }
 
   const onHsCodeManualChange = (value: string) => {
@@ -276,7 +264,9 @@ export function ExportSpecSection({ form, excludeId }: Props) {
         />
         {copiedFrom && (
           <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            <p className="font-medium">{copiedFrom.code} から規格と HS コードを写しました（保存で確定）</p>
+            <p className="font-medium">
+              {copiedFrom.code} から規格と HS コード{copiedFrom.copiedComposition && "と混率"}を写しました（保存で確定）
+            </p>
             {copiedFrom.diffs.length > 0 ? (
               <ul className="mt-1 list-disc pl-5 text-xs">
                 {copiedFrom.diffs.map((d) => (
@@ -437,8 +427,19 @@ export function ExportSpecSection({ form, excludeId }: Props) {
                 要確認
               </Badge>
             </div>
-            <div className="text-2xl font-mono">{displayHsCandidate(result)}</div>
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="text-2xl font-mono">{displayHsCandidate(result)}</span>
+              {candidateNote(result) && (
+                <span className="text-xs text-muted-foreground">{candidateNote(result)}</span>
+              )}
+            </div>
             <p className="text-sm">{result.label}</p>
+            {candidateDiffersFromHsCode(result, hsCode) && (
+              <div className="flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs text-amber-900">
+                <AlertTriangle className="h-3 w-3" />
+                候補と今の HS コードが違います（候補 {result.code}・今 {hsCode}）。保存はできます
+              </div>
+            )}
             {result.reasons.length > 0 && (
               <ul className="list-disc space-y-0.5 pl-5 text-xs text-muted-foreground">
                 {result.reasons.map((r, i) => (

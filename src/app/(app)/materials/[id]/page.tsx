@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { notFound, redirect } from "next/navigation"
-import { ChevronLeft, Pencil } from "lucide-react"
+import { AlertTriangle, ChevronLeft, Pencil } from "lucide-react"
 import { auth } from "@/lib/auth"
 import { prisma } from "@/lib/prisma"
 import { Badge } from "@/components/ui/badge"
@@ -31,6 +31,7 @@ import {
   summarizeExportSpec,
 } from "@/lib/hs/export-spec"
 import { EvidenceSection } from "../_components/evidence-section"
+import { candidateDiffersFromHsCode, classifyHs } from "@/lib/hs/classify"
 
 const COUNTRY_LABEL_BY_VALUE: Record<string, string> = Object.fromEntries(
   COUNTRY_OPTIONS.map((c) => [c.value, c.label]),
@@ -76,6 +77,15 @@ export default async function MaterialDetailPage({
   const exportSpec = parseExportSpec(item.exportSpec)
   const specSummary = summarizeExportSpec(exportSpec)
   const referenceUrls = parseReferenceUrls(item.referenceUrls)
+  // FIX-1 B-4: 保存されている規格から候補を計算し、HS コードと違えば注意を出す
+  const candidate = classifyHs({
+    materialType: item.materialType,
+    compositionData,
+    exportSpec,
+    fabricWeight: item.fabricWeight === null ? null : Number(item.fabricWeight),
+    fabricWidth: item.fabricWidth === null ? null : Number(item.fabricWidth),
+  })
+  const hsMismatch = candidateDiffersFromHsCode(candidate, item.hsCode)
   const evidence = await listMaterialEvidenceFiles(id)
   const evidenceFiles = evidence.ok ? evidence.data : []
   const copiedFrom =
@@ -410,6 +420,12 @@ export default async function MaterialDetailPage({
                         : HS_SOURCE_LABELS[exportSpec.hsSource]}
                       {exportSpec.decidedAt &&
                         `（${new Date(exportSpec.decidedAt).toLocaleDateString("ja-JP")}）`}
+                    </span>
+                  )}
+                  {hsMismatch && (
+                    <span className="flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-xs text-amber-900">
+                      <AlertTriangle className="h-3 w-3" />
+                      候補と今の HS コードが違います（規格からの候補 {candidate.code}）
                     </span>
                   )}
                 </span>

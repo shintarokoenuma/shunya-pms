@@ -521,11 +521,28 @@ function classifyThread(rows: CompositionData, spec: ExportSpec | null): HsResul
   return b.done(null, null, "手入力（v1 の木に無い糸）")
 }
 
-/** 画面の表示用: code が無ければ heading に「..」を付けて返す */
+/**
+ * 画面の表示用の番号。
+ * - code があればそのまま（例 "5208.33"）
+ * - 項が 4 桁 1 つだけなら「5208..」（号は手入力の印）
+ * - 範囲・複数（"5210〜5212"・"5111／5112"）は「..」を付けずそのまま（FIX-1 B-2）
+ */
 export function displayHsCandidate(r: HsResult): string {
   if (r.code) return r.code
-  if (r.heading) return `${r.heading}..`
+  if (r.heading) return /^\d{4}$/.test(r.heading) ? `${r.heading}..` : r.heading
   return "—"
+}
+
+/** 画面に添える一言: 号まで決まらないときの案内（code が無く heading があるときだけ） */
+export function candidateNote(r: HsResult): string | null {
+  if (r.code || !r.heading) return null
+  return /^\d{4}$/.test(r.heading) ? "項まで（号は手入力）" : "項の候補が複数（号は手入力）"
+}
+
+/** 今の HS コードと候補の code が両方あって違うか（FIX-1 B-4 の注意に使う） */
+export function candidateDiffersFromHsCode(r: HsResult, hsCode: string | null | undefined): boolean {
+  const current = (hsCode ?? "").trim()
+  return current !== "" && r.code !== null && current !== r.code
 }
 
 /** 画面の表示用: 候補を HS コード欄に入れられるか */
