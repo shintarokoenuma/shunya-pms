@@ -48,11 +48,7 @@ import {
   MATERIAL_TYPE_OPTIONS,
   CURRENCY_OPTIONS,
 } from "./labels"
-import { COUNTRY_OPTIONS } from "@/lib/constants/countries"
-
-const NO_ORIGIN_COUNTRY = "__none__"
-// 原産国は schema が VarChar(2) なので "OTHER" (4 文字) は使えない
-const ORIGIN_COUNTRY_OPTIONS = COUNTRY_OPTIONS.filter((c) => c.value !== "OTHER")
+import { ExportSpecSection } from "./export-spec-section"
 
 export type SupplierSelectOption = {
   id: string
@@ -106,6 +102,10 @@ const CREATE_DEFAULTS: MaterialBaseInput = {
   hsCode: "",
   originCountry: "",
   imageUrl: null,
+  // B-211 PR-1: 輸出用の規格（空のまま保存できる）
+  compositionData: [],
+  exportSpec: { version: 1 },
+  referenceUrls: [],
   specification: "",
   notes: "",
   status: MaterialStatus.ACTIVE,
@@ -626,81 +626,11 @@ export function MaterialForm(props: Props) {
           </CardContent>
         </Card>
 
-        {/* ───────────────────── カード 6: 貿易（Phase 1A-13b） ───────────────────── */}
-        <Card>
-          <CardHeader>
-            <CardTitle>貿易</CardTitle>
-            <CardDescription>
-              輸入時の通関で使用。任意項目
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="hsCode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>HS コード</FormLabel>
-                    <FormControl>
-                      <Input
-                        placeholder="例：5208.21"
-                        maxLength={20}
-                        {...field}
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      関税分類コード（任意・形式は緩い）
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="originCountry"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>原産国</FormLabel>
-                    <Select
-                      value={
-                        field.value && field.value !== ""
-                          ? field.value
-                          : NO_ORIGIN_COUNTRY
-                      }
-                      onValueChange={(v) =>
-                        field.onChange(v === NO_ORIGIN_COUNTRY ? "" : v)
-                      }
-                    >
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="（未選択）" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        <SelectItem value={NO_ORIGIN_COUNTRY}>
-                          （未選択）
-                        </SelectItem>
-                        {ORIGIN_COUNTRY_OPTIONS.map((o) => (
-                          <SelectItem key={o.value} value={o.value}>
-                            <span className="font-mono text-xs text-muted-foreground mr-2">
-                              {o.value}
-                            </span>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormDescription>
-                      ISO 3166-1 alpha-2（任意）
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </CardContent>
-        </Card>
+        {/* ───────────────────── カード 6: 輸出用の規格（B-211 PR-1・HS コード・原産国はここへ移動） ───────────────────── */}
+        <ExportSpecSection
+          form={form}
+          excludeId={props.mode === "edit" ? props.id : null}
+        />
 
         {/* ───────────────────── カード 7: メモ・ステータス ───────────────────── */}
         <Card>

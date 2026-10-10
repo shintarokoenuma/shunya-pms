@@ -15,7 +15,20 @@ import { runWithoutTenantContext } from "@/lib/tenant-context"
 import {
   materialBaseSchema,
   type MaterialInput,
+  type MaterialBaseOutput,
 } from "@/lib/validators/material"
+import {
+  normalizeCompositionData,
+  normalizeExportSpec,
+  normalizeReferenceUrls,
+  parseCompositionData,
+  parseExportSpec,
+  primaryFiber,
+  summarizeExportSpec,
+  type CompositionData,
+  type ExportSpec,
+  type HsSource,
+} from "@/lib/hs/export-spec"
 
 /**
  * Phase 1A-13a + 1A-13b: 素材（Material）Server Actions
@@ -320,6 +333,36 @@ export async function getMaterial(
 }
 
 // =============================================================================
+// B-211 PR-1: 輸出用の規格の保存前の整形
+// =============================================================================
+/**
+ * exportSpec を保存する形に整える。
+ * - 空の規格は null（DB は NULL）
+ * - hsCode が変わったときだけ decidedAt / decidedByUserId を書く（P1-D5）
+ * - hsCode があるのに hsSource が無ければ MANUAL（手入力）とみなす
+ * - hsCode を消したら hsSource / copiedFromMaterialId も落とす
+ */
+function buildExportSpecForSave(
+  data: MaterialBaseOutput,
+  userId: string,
+  previousHsCode: string | null,
+): ExportSpec | null {
+  const spec: ExportSpec = { ...(normalizeExportSpec(data.exportSpec) ?? { version: 1 }) }
+  const newHsCode = data.hsCode || null
+  if (newHsCode !== previousHsCode) {
+    spec.decidedAt = new Date().toISOString()
+    spec.decidedByUserId = userId
+  }
+  if (newHsCode) {
+    if (!spec.hsSource) spec.hsSource = "MANUAL"
+  } else {
+    delete spec.hsSource
+    delete spec.copiedFromMaterialId
+  }
+  return normalizeExportSpec(spec)
+}
+
+// =============================================================================
 // 3. 新規作成
 // =============================================================================
 export async function createMaterial(
@@ -396,6 +439,10 @@ export async function createMaterial(
         specification: data.specification || null,
         notes: data.notes || null,
         status: data.status,
+        // B-211 PR-1: 輸出用の規格（混率・規格・参考 URL）
+        compositionData: normalizeCompositionData(data.compositionData) ?? Prisma.DbNull,
+        exportSpec: buildExportSpecForSave(data, sess.userId, null) ?? Prisma.DbNull,
+        referenceUrls: normalizeReferenceUrls(data.referenceUrls) ?? Prisma.DbNull,
       },
       select: { id: true },
     })
@@ -413,6 +460,11 @@ export async function createMaterial(
           materialType: data.materialType,
           primarySupplierId: data.primarySupplierId,
           status: data.status,
+          // B-211 PR-1
+          hsCode: data.hsCode || null,
+          compositionData: normalizeCompositionData(data.compositionData),
+          exportSpec: buildExportSpecForSave(data, sess.userId, null),
+          referenceUrls: normalizeReferenceUrls(data.referenceUrls),
         },
       },
     })
@@ -522,6 +574,10 @@ export async function updateMaterial(
         specification: data.specification || null,
         notes: data.notes || null,
         status: data.status,
+        // B-211 PR-1: 輸出用の規格（混率・規格・参考 URL）。hsCode が変わったときだけ decidedAt / decidedByUserId
+        compositionData: normalizeCompositionData(data.compositionData) ?? Prisma.DbNull,
+        exportSpec: buildExportSpecForSave(data, sess.userId, existing.hsCode) ?? Prisma.DbNull,
+        referenceUrls: normalizeReferenceUrls(data.referenceUrls) ?? Prisma.DbNull,
       },
     })
 
@@ -560,6 +616,8 @@ export async function updateMaterial(
       hsCode: existing.hsCode,
       originCountry: existing.originCountry,
       availableColors: existing.availableColors,
+      exportSpec: existing.exportSpec,
+      referenceUrls: existing.referenceUrls,
       imageUrl: existing.imageUrl,
       swatchImageUrl: existing.swatchImageUrl,
       notes: existing.notes,
@@ -591,6 +649,8 @@ export async function updateMaterial(
       hsCode: updated.hsCode,
       originCountry: updated.originCountry,
       availableColors: updated.availableColors,
+      exportSpec: updated.exportSpec,
+      referenceUrls: updated.referenceUrls,
       imageUrl: updated.imageUrl,
       swatchImageUrl: updated.swatchImageUrl,
       notes: updated.notes,
@@ -835,6 +895,116 @@ export async function deleteMaterialPermanently(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "物理削除に失敗しました",
+    }
+  }
+}
+
+// =============================================================================
+// B-211 PR-1（P1-D4）: 似た材料（HS コードが入っている材料）を近い順に返す
+// =============================================================================
+export type HsReferenceMaterial = {
+  id: string
+  materialCode: string
+  materialName: string
+  materialType: MaterialType
+  composition: string | null
+  compositionData: CompositionData
+  exportSpec: ExportSpec | null
+  /** 規格の日本語（組織・仕上げなど） */
+  specSummary: string[]
+  fabricWeight: number | null
+  fabricWidth: number | null
+  hsCode: string
+  hsSource: HsSource | null
+  originCountry: string | null
+}
+
+export type ListHsReferenceMaterialsInput = {
+  materialType: MaterialType
+  compositionData: CompositionData | null
+  /** 編集中の材料（自分）は除く */
+  excludeId?: string | null
+}
+
+const HS_REFERENCE_LIMIT = 10
+
+/**
+ * 同じ会社・deletedAt null・hsCode が空でない材料（自分を除く）を、
+ * ①同じ materialType ②主素材が同じ ③主素材の混率の差 ④目付の差 ⑤更新の新しさ の順で並べて上位 10 件。
+ */
+export async function listHsReferenceMaterials(
+  input: ListHsReferenceMaterialsInput,
+): Promise<ActionResult<HsReferenceMaterial[]>> {
+  try {
+    const sess = await requireSession()
+    if (!sess.ok) return sess
+
+    const rows = await prisma.material.findMany({
+      where: {
+        companyId: sess.companyId,
+        deletedAt: null,
+        hsCode: { not: null },
+        NOT: [{ hsCode: "" }, ...(input.excludeId ? [{ id: input.excludeId }] : [])],
+      },
+      select: {
+        id: true,
+        materialCode: true,
+        materialName: true,
+        materialType: true,
+        composition: true,
+        compositionData: true,
+        exportSpec: true,
+        fabricWeight: true,
+        fabricWidth: true,
+        hsCode: true,
+        originCountry: true,
+        updatedAt: true,
+      },
+    })
+
+    const mine = primaryFiber(input.compositionData ?? [])
+    const scored = rows
+      .filter((r): r is typeof r & { hsCode: string } => typeof r.hsCode === "string" && r.hsCode.trim() !== "")
+      .map((r) => {
+        const comp = parseCompositionData(r.compositionData)
+        const spec = parseExportSpec(r.exportSpec)
+        const theirs = primaryFiber(comp)
+        const sameType = r.materialType === input.materialType ? 0 : 1
+        const sameFiber = mine && theirs && mine.fiber === theirs.fiber ? 0 : 1
+        const pctDiff = mine && theirs && mine.fiber === theirs.fiber ? Math.abs(mine.percent - theirs.percent) : 1000
+        const weight = r.fabricWeight === null ? null : Number(r.fabricWeight)
+        return {
+          sortKey: { sameType, sameFiber, pctDiff, weight, updatedAt: r.updatedAt.getTime() },
+          item: {
+            id: r.id,
+            materialCode: r.materialCode,
+            materialName: r.materialName,
+            materialType: r.materialType,
+            composition: r.composition,
+            compositionData: comp,
+            exportSpec: spec,
+            specSummary: summarizeExportSpec(spec),
+            fabricWeight: weight,
+            fabricWidth: r.fabricWidth === null ? null : Number(r.fabricWidth),
+            hsCode: r.hsCode,
+            hsSource: spec?.hsSource ?? null,
+            originCountry: r.originCountry,
+          } satisfies HsReferenceMaterial,
+        }
+      })
+
+    // 目付の差は呼び出し側の目付が無いので「同じ主素材の中で」更新順の前に置かない（目付は画面で「違う」と出す）
+    scored.sort((a, b) => {
+      if (a.sortKey.sameType !== b.sortKey.sameType) return a.sortKey.sameType - b.sortKey.sameType
+      if (a.sortKey.sameFiber !== b.sortKey.sameFiber) return a.sortKey.sameFiber - b.sortKey.sameFiber
+      if (a.sortKey.pctDiff !== b.sortKey.pctDiff) return a.sortKey.pctDiff - b.sortKey.pctDiff
+      return b.sortKey.updatedAt - a.sortKey.updatedAt
+    })
+    return { ok: true, data: scored.slice(0, HS_REFERENCE_LIMIT).map((s) => s.item) }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "似た材料の取得に失敗しました",
     }
   }
 }

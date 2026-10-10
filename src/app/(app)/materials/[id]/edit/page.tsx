@@ -10,6 +10,11 @@ import {
 import { listAllActiveMaterialCategoriesForSelect } from "@/lib/actions/material-categories"
 import { MaterialForm } from "../../_components/material-form"
 import type { MaterialBaseInput } from "@/lib/validators/material"
+import {
+  parseCompositionData,
+  parseExportSpec,
+  parseReferenceUrls,
+} from "@/lib/hs/export-spec"
 
 type Params = Promise<{ id: string }>
 
@@ -75,6 +80,10 @@ export default async function EditMaterialPage({
     hsCode: item.hsCode ?? "",
     originCountry: item.originCountry ?? "",
     imageUrl: item.imageUrl,
+    // B-211 PR-1: 輸出用の規格（Json 列を型に読む。壊れていれば空）
+    compositionData: parseCompositionData(item.compositionData),
+    exportSpec: parseExportSpec(item.exportSpec) ?? { version: 1 },
+    referenceUrls: parseReferenceUrls(item.referenceUrls),
     specification: item.specification ?? "",
     notes: item.notes ?? "",
     status: item.status,

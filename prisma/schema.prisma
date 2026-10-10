@@ -1201,6 +1201,11 @@ model Material {
   // メモ
   notes String? @db.Text
 
+  /// B-211: 輸出用の規格（HS の判定に使う）。形は src/lib/hs/export-spec.ts の ExportSpec（version 1）
+  exportSpec    Json?  @map("export_spec")
+  /// B-211 / B-125: メーカーサイトなどの参考 URL [{ label, url }]
+  referenceUrls Json?  @map("reference_urls")
+
   // ステータス（Phase 1A-13a で enum 化、ModelCode と同じ 4 値）
   status MaterialStatus @default(ACTIVE)
 
